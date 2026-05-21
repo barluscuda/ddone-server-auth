@@ -26,7 +26,7 @@ func main() {
 	}()
 
 	// Connect to PostgreSQL before serving requests.
-	db, err := database.New(cfg.DatabaseDSN(), cfg.App.Debug)
+	db, err := database.New(cfg.Database, cfg.App.Debug)
 	if err != nil {
 		logger.Fatal("failed to connect database", zap.Error(err))
 	}

@@ -15,21 +15,23 @@ type Config struct {
 		Debug bool
 		Port  int
 	}
-	Database struct {
-		URL             string
-		Host            string
-		Port            int
-		Name            string
-		Username        string
-		Password        string
-		SSLMode         string
-		TimeZone        string
-		ConnectTimeout  int
-		MaxOpenConns    int
-		MaxIdleConns    int
-		ConnMaxLifetime time.Duration
-		ConnMaxIdleTime time.Duration
-	}
+	Database DatabaseConfig
+}
+
+type DatabaseConfig struct {
+	URL             string
+	Host            string
+	Port            int
+	Name            string
+	Username        string
+	Password        string
+	SSLMode         string
+	TimeZone        string
+	ConnectTimeout  int
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
 }
 
 func Load() (*Config, error) {
@@ -40,7 +42,7 @@ func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./config")
-	
+
 	viper.SetDefault("app.debug", false)
 	viper.SetDefault("app.port", 3000)
 	viper.SetDefault("database.port", 5432)
@@ -121,19 +123,23 @@ func (c Config) validate() error {
 }
 
 func (c Config) DatabaseDSN() string {
-	if c.Database.URL != "" {
-		return c.Database.URL
+	return c.Database.DSN()
+}
+
+func (c DatabaseConfig) DSN() string {
+	if c.URL != "" {
+		return c.URL
 	}
 
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s&timezone=%s&connect_timeout=%d",
-		url.QueryEscape(c.Database.Username),
-		url.QueryEscape(c.Database.Password),
-		c.Database.Host,
-		c.Database.Port,
-		c.Database.Name,
-		url.QueryEscape(c.Database.SSLMode),
-		url.QueryEscape(c.Database.TimeZone),
-		c.Database.ConnectTimeout,
+		url.QueryEscape(c.Username),
+		url.QueryEscape(c.Password),
+		c.Host,
+		c.Port,
+		c.Name,
+		url.QueryEscape(c.SSLMode),
+		url.QueryEscape(c.TimeZone),
+		c.ConnectTimeout,
 	)
 }

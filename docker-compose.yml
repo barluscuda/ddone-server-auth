@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ddone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DDONE_DATABASE_NAME:-ddone_auth}
+      POSTGRES_USER: ${DDONE_DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DDONE_DATABASE_PASSWORD:-postgres}
+      TZ: ${DDONE_DATABASE_TIMEZONE:-UTC}
+    ports:
+      - "${DDONE_DATABASE_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DDONE_DATABASE_USERNAME:-postgres} -d ${DDONE_DATABASE_NAME:-ddone_auth}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ddone-redis
+    restart: unless-stopped
+    ports:
+      - "${DDONE_REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres_data:
+  redis_data:
