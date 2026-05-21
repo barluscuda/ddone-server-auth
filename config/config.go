@@ -16,6 +16,7 @@ type Config struct {
 		Port  int
 	}
 	Database DatabaseConfig
+	Redis    RedisConfig
 }
 
 type DatabaseConfig struct {
@@ -32,6 +33,20 @@ type DatabaseConfig struct {
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
+}
+
+type RedisConfig struct {
+	URL          string
+	Host         string
+	Port         int
+	Username     string
+	Password     string
+	DB           int
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	PoolSize     int
+	MinIdleConns int
 }
 
 func Load() (*Config, error) {
@@ -53,6 +68,13 @@ func Load() (*Config, error) {
 	viper.SetDefault("database.max_idle_conns", 5)
 	viper.SetDefault("database.conn_max_lifetime", "30m")
 	viper.SetDefault("database.conn_max_idle_time", "15m")
+	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.dial_timeout", "5s")
+	viper.SetDefault("redis.read_timeout", "3s")
+	viper.SetDefault("redis.write_timeout", "3s")
+	viper.SetDefault("redis.pool_size", 10)
+	viper.SetDefault("redis.min_idle_conns", 2)
 
 	viper.SetEnvPrefix("DDONE")
 	viper.SetEnvKeyReplacer(
@@ -75,6 +97,17 @@ func Load() (*Config, error) {
 	viper.BindEnv("database.max_idle_conns", "DDONE_DATABASE_MAX_IDLE_CONNS")
 	viper.BindEnv("database.conn_max_lifetime", "DDONE_DATABASE_CONN_MAX_LIFETIME")
 	viper.BindEnv("database.conn_max_idle_time", "DDONE_DATABASE_CONN_MAX_IDLE_TIME")
+	viper.BindEnv("redis.url", "DDONE_REDIS_URL")
+	viper.BindEnv("redis.host", "DDONE_REDIS_HOST")
+	viper.BindEnv("redis.port", "DDONE_REDIS_PORT")
+	viper.BindEnv("redis.username", "DDONE_REDIS_USERNAME")
+	viper.BindEnv("redis.password", "DDONE_REDIS_PASSWORD")
+	viper.BindEnv("redis.db", "DDONE_REDIS_DB")
+	viper.BindEnv("redis.dial_timeout", "DDONE_REDIS_DIAL_TIMEOUT")
+	viper.BindEnv("redis.read_timeout", "DDONE_REDIS_READ_TIMEOUT")
+	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
+	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
+	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -99,24 +132,34 @@ func (c Config) validate() error {
 		return fmt.Errorf("app.port must be greater than 0")
 	}
 
-	if c.Database.URL != "" {
-		return nil
+	if c.Database.URL == "" {
+		if c.Database.Host == "" {
+			return fmt.Errorf("database.host is required when database.url is empty")
+		}
+		if c.Database.Port <= 0 {
+			return fmt.Errorf("database.port must be greater than 0")
+		}
+		if c.Database.Name == "" {
+			return fmt.Errorf("database.name is required when database.url is empty")
+		}
+		if c.Database.Username == "" {
+			return fmt.Errorf("database.username is required when database.url is empty")
+		}
+		if c.Database.SSLMode == "" {
+			return fmt.Errorf("database.sslmode is required")
+		}
 	}
 
-	if c.Database.Host == "" {
-		return fmt.Errorf("database.host is required when database.url is empty")
-	}
-	if c.Database.Port <= 0 {
-		return fmt.Errorf("database.port must be greater than 0")
-	}
-	if c.Database.Name == "" {
-		return fmt.Errorf("database.name is required when database.url is empty")
-	}
-	if c.Database.Username == "" {
-		return fmt.Errorf("database.username is required when database.url is empty")
-	}
-	if c.Database.SSLMode == "" {
-		return fmt.Errorf("database.sslmode is required")
+	if c.Redis.URL == "" {
+		if c.Redis.Host == "" {
+			return fmt.Errorf("redis.host is required when redis.url is empty")
+		}
+		if c.Redis.Port <= 0 {
+			return fmt.Errorf("redis.port must be greater than 0")
+		}
+		if c.Redis.DB < 0 {
+			return fmt.Errorf("redis.db must be greater than or equal to 0")
+		}
 	}
 
 	return nil
@@ -142,4 +185,12 @@ func (c DatabaseConfig) DSN() string {
 		url.QueryEscape(c.TimeZone),
 		c.ConnectTimeout,
 	)
+}
+
+func (c Config) RedisAddr() string {
+	return c.Redis.Addr()
+}
+
+func (c RedisConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }

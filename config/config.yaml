@@ -15,3 +15,15 @@ database:
   max_idle_conns: 5
   conn_max_lifetime: 30m
   conn_max_idle_time: 15m
+
+redis:
+  host: localhost
+  port: 6380
+  username: ""
+  password: ""
+  db: 0
+  dial_timeout: 5s
+  read_timeout: 3s
+  write_timeout: 3s
+  pool_size: 10
+  min_idle_conns: 2
