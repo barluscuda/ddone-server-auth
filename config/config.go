@@ -15,8 +15,9 @@ type Config struct {
 		Debug bool
 		Port  int
 	}
-	Database DatabaseConfig
-	Redis    RedisConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	WenovaAPI WenovaAPIConfig
 }
 
 type DatabaseConfig struct {
@@ -47,6 +48,10 @@ type RedisConfig struct {
 	WriteTimeout time.Duration
 	PoolSize     int
 	MinIdleConns int
+}
+
+type WenovaAPIConfig struct {
+	Token string
 }
 
 func Load() (*Config, error) {
@@ -108,6 +113,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
 	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
 	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
+	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

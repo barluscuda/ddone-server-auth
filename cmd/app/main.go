@@ -8,6 +8,7 @@ import (
 	"ddone-server-auth/internal/domain/account"
 
 	"go.uber.org/zap"
+	"github.com/barluscuda/dextools"
 )
 
 func main() {
@@ -49,6 +50,10 @@ func main() {
 		logger.Fatal("failed to migrate account tables", zap.Error(err))
 	}
 	logger.Info("account tables migrated")
+	
+	// Wenova Client
+	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
+	_ = wnvClient
 
 	// Start the HTTP server once dependencies are ready.
 	httpServer := newHTTPServer(cfg, logger)
