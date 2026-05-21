@@ -2,15 +2,21 @@ package main
 
 import (
 	"ddone-server-auth/config"
+	"ddone-server-auth/internal/adapters/database"
 	"ddone-server-auth/internal/bootstrap/logging"
+	"ddone-server-auth/internal/domain/account"
+
+	"go.uber.org/zap"
 )
 
 func main() {
+	// Load runtime configuration.
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
 
+	// Initialize the application logger.
 	logger, err := logging.New(cfg.App.Debug)
 	if err != nil {
 		panic(err)
@@ -19,6 +25,20 @@ func main() {
 		_ = logger.Sync()
 	}()
 
+	// Connect to PostgreSQL before serving requests.
+	db, err := database.New(cfg.DatabaseDSN(), cfg.App.Debug)
+	if err != nil {
+		logger.Fatal("failed to connect database", zap.Error(err))
+	}
+	logger.Info("connected to database")
+
+	// Migrate account tables after the database is available.
+	if err := account.Migrate(db); err != nil {
+		logger.Fatal("failed to migrate account tables", zap.Error(err))
+	}
+	logger.Info("account tables migrated")
+
+	// Start the HTTP server once dependencies are ready.
 	httpServer := newHTTPServer(cfg, logger)
 	run(httpServer, logger)
 }
