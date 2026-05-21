@@ -2,6 +2,7 @@ package main
 
 import (
 	"ddone-server-auth/config"
+	"ddone-server-auth/internal/adapters/cache"
 	"ddone-server-auth/internal/adapters/database"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"ddone-server-auth/internal/domain/account"
@@ -31,6 +32,17 @@ func main() {
 		logger.Fatal("failed to connect database", zap.Error(err))
 	}
 	logger.Info("connected to database")
+
+	redisClient, err := cache.New(cfg.Redis, cfg.App.Debug)
+	if err != nil {
+		logger.Fatal("failed to connect redis", zap.Error(err))
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Warn("failed to close redis client", zap.Error(err))
+		}
+	}()
+	logger.Info("connected to redis")
 
 	// Migrate account tables after the database is available.
 	if err := account.Migrate(db); err != nil {
