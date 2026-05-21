@@ -4,11 +4,12 @@ import (
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/cache"
 	"ddone-server-auth/internal/adapters/database"
+	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"ddone-server-auth/internal/domain/account"
 
-	"go.uber.org/zap"
 	"github.com/barluscuda/dextools"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -53,7 +54,8 @@ func main() {
 	
 	// Wenova Client
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
-	_ = wnvClient
+	smsClient := sms.NewSMS(&wnvClient)
+	_ = smsClient
 
 	// Start the HTTP server once dependencies are ready.
 	httpServer := newHTTPServer(cfg, logger)
