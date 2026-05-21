@@ -1,3 +1,17 @@
 app:
-  - debug: true
-  - port: 3000
+  debug: true
+  port: 3000
+
+database:
+  host: localhost
+  port: 5432
+  name: ddone_auth
+  username: postgres
+  password: postgres
+  sslmode: disable
+  timezone: UTC
+  connect_timeout: 10
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 15m
