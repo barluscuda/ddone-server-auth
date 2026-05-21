@@ -5,6 +5,7 @@ import (
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/handler"
 	"ddone-server-auth/internal/adapters/middleware"
+	"ddone-server-auth/internal/services"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,7 +17,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func newHTTPServer(cfg *config.Config, logger *zap.Logger) *http.Server {
+func newHTTPServer(
+	cfg *config.Config,
+	logger *zap.Logger,
+	registerService *services.RegisterService,
+) *http.Server {
 	if cfg.App.Debug {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -32,6 +37,11 @@ func newHTTPServer(cfg *config.Config, logger *zap.Logger) *http.Server {
 	app.NoRoute(middleware.NoRoute())
 	app.NoMethod(middleware.NoMethod())
 	app.GET("/healthz", handler.Healthz)
+
+	authHandler := handler.NewAuthHandler(registerService)
+	authRoutes := app.Group("/auth/register")
+	authRoutes.POST("/request-otp", authHandler.RequestRegisterOTP)
+	authRoutes.POST("/verify-otp", authHandler.VerifyRegisterOTP)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),

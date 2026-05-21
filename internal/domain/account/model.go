@@ -13,6 +13,7 @@ type AccountModel struct {
 }
 
 type RegisterModel struct {
+	Username     *string   `json:"username"`
 	PhoneNumber  string    `json:"phone_number"`
 	OTPCode      string    `json:"otp_code"`
 	OTPExpiresAt time.Time `json:"otp_expires_at"`

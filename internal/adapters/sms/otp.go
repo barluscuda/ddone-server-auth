@@ -2,7 +2,11 @@ package sms
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"math/big"
+	"time"
 
 	"github.com/barluscuda/dextools/wenova"
 )
@@ -13,11 +17,43 @@ func (s SMS) SendOTP(ctx context.Context, phoneNumber string, msg string) error 
 	}
 
 	req := wenova.SendSMSRequest{
-		Header: "WNV-OTP",
+		Header:      "WNV-OTP",
 		PhoneNumber: phoneNumber,
-		Message: msg,
+		Message:     msg,
 	}
 
 	_, err := s.wnv.SendSMS(ctx, req)
 	return err
+}
+
+func GenerateOTP(length int) (string, error) {
+	if length <= 0 {
+		return "", errors.New("otp length must be greater than zero")
+	}
+
+	code := make([]byte, length)
+	for i := range code {
+		n, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			return "", err
+		}
+
+		code[i] = byte('0') + byte(n.Int64())
+	}
+
+	return string(code), nil
+}
+
+func RegisterOTPMessage(code string, expiresIn time.Duration) string {
+	minutes := int(expiresIn.Minutes())
+	if minutes <= 0 {
+		minutes = 1
+	}
+
+	suffix := ""
+	if minutes > 1 {
+		suffix = "s"
+	}
+
+	return fmt.Sprintf("Your DDONE OTP is %s. It expires in %d minute%s.", code, minutes, suffix)
 }

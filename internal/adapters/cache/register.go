@@ -1,0 +1,55 @@
+package cache
+
+import (
+	"context"
+	"ddone-server-auth/internal/domain/account"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type RegisterStore struct {
+	client *redis.Client
+}
+
+func NewRegisterStore(client *redis.Client) *RegisterStore {
+	return &RegisterStore{client: client}
+}
+
+func (s *RegisterStore) Save(ctx context.Context, registration *account.RegisterModel, ttl time.Duration) error {
+	payload, err := json.Marshal(registration)
+	if err != nil {
+		return err
+	}
+
+	return s.client.Set(ctx, registerKey(registration.PhoneNumber), payload, ttl).Err()
+}
+
+func (s *RegisterStore) Get(ctx context.Context, phoneNumber string) (*account.RegisterModel, error) {
+	payload, err := s.client.Get(ctx, registerKey(phoneNumber)).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, account.ErrPendingRegistrationNotFound
+		}
+
+		return nil, err
+	}
+
+	var registration account.RegisterModel
+	if err := json.Unmarshal([]byte(payload), &registration); err != nil {
+		return nil, err
+	}
+
+	return &registration, nil
+}
+
+func (s *RegisterStore) Delete(ctx context.Context, phoneNumber string) error {
+	return s.client.Del(ctx, registerKey(phoneNumber)).Err()
+}
+
+func registerKey(phoneNumber string) string {
+	return fmt.Sprintf("register:otp:%s", phoneNumber)
+}

@@ -4,9 +4,11 @@ import (
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/cache"
 	"ddone-server-auth/internal/adapters/database"
+	"ddone-server-auth/internal/adapters/repository"
 	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/services"
 
 	"github.com/barluscuda/dextools"
 	"go.uber.org/zap"
@@ -51,13 +53,16 @@ func main() {
 		logger.Fatal("failed to migrate account tables", zap.Error(err))
 	}
 	logger.Info("account tables migrated")
-	
+
 	// Wenova Client
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
 	smsClient := sms.NewSMS(&wnvClient)
-	_ = smsClient
+
+	accountRepository := repository.NewAccountRepository(db)
+	registerStore := cache.NewRegisterStore(redisClient)
+	registerService := services.NewRegisterService(accountRepository, registerStore, smsClient)
 
 	// Start the HTTP server once dependencies are ready.
-	httpServer := newHTTPServer(cfg, logger)
+	httpServer := newHTTPServer(cfg, logger, registerService)
 	run(httpServer, logger)
 }

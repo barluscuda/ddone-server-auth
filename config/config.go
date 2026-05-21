@@ -113,7 +113,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
 	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
 	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
-	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN")
+	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN", "DDONE_WENOVA_TOKEN")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

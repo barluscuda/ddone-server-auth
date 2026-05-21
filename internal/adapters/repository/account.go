@@ -50,6 +50,19 @@ func (r *AccountRepository) GetByPhoneNumber(ctx context.Context, phoneNumber st
 	return &accountModel, nil
 }
 
+func (r *AccountRepository) GetByUsername(ctx context.Context, username string) (*account.AccountModel, error) {
+	var accountModel account.AccountModel
+
+	err := r.preloadProviders(r.baseQuery(ctx)).
+		First(&accountModel, "username = ?", username).
+		Error
+	if err != nil {
+		return nil, translateAccountError(err)
+	}
+
+	return &accountModel, nil
+}
+
 func (r *AccountRepository) GetByProvider(
 	ctx context.Context,
 	provider account.AuthProvider,
