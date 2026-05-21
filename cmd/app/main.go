@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func main()  {
+func main() {
 	app := gin.New()
 	cfg, err := config.Load()
 	if err != nil {
