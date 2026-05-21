@@ -10,7 +10,8 @@ import (
 
 func Healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ResHealthz{
-		Active: true,
+		Message:    "server is healthy",
+		Active:     true,
 		ServerTime: time.Now(),
 	})
 }

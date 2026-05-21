@@ -24,10 +24,13 @@ func newHTTPServer(cfg *config.Config, logger *zap.Logger) *http.Server {
 	}
 
 	app := gin.New()
+	app.HandleMethodNotAllowed = true
 	app.Use(
 		middleware.Recovery(logger),
 		middleware.RequestLogger(logger),
 	)
+	app.NoRoute(middleware.NoRoute())
+	app.NoMethod(middleware.NoMethod())
 	app.GET("/healthz", handler.Healthz)
 
 	return &http.Server{
