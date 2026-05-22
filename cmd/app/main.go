@@ -9,28 +9,31 @@ import (
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"ddone-server-auth/internal/domain/account"
+	"net/http"
 
 	"github.com/barluscuda/dextools"
 	"go.uber.org/zap"
 )
 
 func main() {
-	// Load runtime configuration.
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
 	}
 
-	// Initialize the application logger.
 	logger, err := logging.New(cfg.App.Debug)
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		_ = logger.Sync()
-	}()
+	defer syncLogger(logger)
 
-	// Connect to PostgreSQL before serving requests.
+	httpServer, cleanup := bootstrapApplication(cfg, logger)
+	defer cleanup()
+
+	run(httpServer, logger)
+}
+
+func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server, func()) {
 	db, err := database.New(cfg.Database, cfg.App.Debug)
 	if err != nil {
 		logger.Fatal("failed to connect database", zap.Error(err))
@@ -41,28 +44,26 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to connect redis", zap.Error(err))
 	}
-	defer func() {
-		if err := redisClient.Close(); err != nil {
-			logger.Warn("failed to close redis client", zap.Error(err))
-		}
-	}()
 	logger.Info("connected to redis")
 
-	// Migrate account tables after the database is available.
 	if err := account.Migrate(db); err != nil {
 		logger.Fatal("failed to migrate account tables", zap.Error(err))
 	}
 	logger.Info("account tables migrated")
 
-	// Wenova Client
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
 	smsClient := sms.NewSMS(&wnvClient)
-
 	accountRepository := repository.NewAccountRepository(db)
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewRegisterService(accountRepository, registerStore, smsClient)
 
-	// Start the HTTP server once dependencies are ready.
-	httpServer := newHTTPServer(cfg, logger, registerService)
-	run(httpServer, logger)
+	return newHTTPServer(cfg, logger, registerService), func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Warn("failed to close redis client", zap.Error(err))
+		}
+	}
+}
+
+func syncLogger(logger *zap.Logger) {
+	_ = logger.Sync()
 }

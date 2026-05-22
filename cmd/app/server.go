@@ -17,8 +17,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const apiV1Prefix = "/v1"
-
 func newHTTPServer(
 	cfg *config.Config,
 	logger *zap.Logger,
@@ -41,7 +39,6 @@ func newHTTPServer(
 	registerHandler := handler.NewRegisterHandler(registerService)
 
 	registerRoutes(app, registerHandler)
-	registerRoutes(app.Group(apiV1Prefix), registerHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
