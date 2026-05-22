@@ -14,13 +14,15 @@ type AccountModel struct {
 }
 
 type RegisterModel struct {
-	TicketID     string    `json:"ticket_id"`
-	Username     *string   `json:"username"`
-	PasswordHash string    `json:"password_hash"`
-	PhoneNumber  string    `json:"phone_number"`
-	OTPCodeHash  string    `json:"otp_code_hash"`
-	OTPExpiresAt time.Time `json:"otp_expires_at"`
-	CreatedAt    time.Time `json:"created_at"`
+	TicketID      string    `json:"ticket_id"`
+	Username      *string   `json:"username"`
+	PasswordHash  string    `json:"password_hash"`
+	PhoneNumber   string    `json:"phone_number"`
+	OTPCodeHash   string    `json:"otp_code_hash"`
+	OTPExpiresAt  time.Time `json:"otp_expires_at"`
+	ResendCount   int       `json:"resend_count"`
+	LastOTPSentAt time.Time `json:"last_otp_sent_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type AccountProviderModel struct {

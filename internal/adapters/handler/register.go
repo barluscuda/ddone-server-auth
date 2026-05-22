@@ -68,6 +68,29 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 	})
 }
 
+func (h *RegisterHandler) ResendOTP(c *gin.Context) {
+	var req dto.ReqResendRegisterOTP
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
+		return
+	}
+
+	result, err := h.register.ResendRegisterOTP(c.Request.Context(), services.ResendRegisterOTPInput{
+		TicketID: req.TicketID,
+		ClientID: c.ClientIP(),
+	})
+	if err != nil {
+		handleRegisterError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, dto.ResRegister{
+		Message:   "otp resent successfully",
+		TicketID:  result.TicketID,
+		ExpiresAt: result.ExpiresAt,
+	})
+}
+
 func handleRegisterError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrPhoneNumberRequired),
@@ -78,6 +101,8 @@ func handleRegisterError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrPendingRegistrationInvalid):
 		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
 	case errors.Is(err, services.ErrRegisterRateLimited),
+		errors.Is(err, services.ErrResendRateLimited),
+		errors.Is(err, services.ErrResendCooldownActive),
 		errors.Is(err, services.ErrVerifyRateLimited):
 		c.JSON(http.StatusTooManyRequests, dto.ResMessage{Message: err.Error()})
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered),

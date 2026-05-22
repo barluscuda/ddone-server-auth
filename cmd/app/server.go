@@ -40,6 +40,7 @@ func newHTTPServer(
 
 	registerHandler := handler.NewRegisterHandler(registerService)
 	app.POST("/register", registerHandler.Register)
+	app.POST("/register/resend", registerHandler.ResendOTP)
 	app.POST("/register/verify", registerHandler.VerifyRegister)
 
 	return &http.Server{

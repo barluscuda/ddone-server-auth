@@ -307,25 +307,196 @@ func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
 	sender := &fakeOTPSender{}
 	service := NewRegisterService(repo, store, sender)
 	service.otpGenerator = func(int) (string, error) { return "123456", nil }
-	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b", "reg_c", "reg_d")
-	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b", "user_c", "user_d")
-
-	for i := 0; i < maxPhoneRequests; i++ {
-		_, err := service.Register(context.Background(), RegisterInput{
-			PhoneNumber: "+8562012345678",
-			Password:    "secretpass",
-		})
-		if err != nil {
-			t.Fatalf("unexpected register error on attempt %d: %v", i+1, err)
-		}
-	}
+	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b")
+	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b")
 
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
 		Password:    "secretpass",
 	})
+	if err != nil {
+		t.Fatalf("unexpected register error on first attempt: %v", err)
+	}
+
+	_, err = service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+	})
 	if !errors.Is(err, ErrRegisterRateLimited) {
 		t.Fatalf("expected ErrRegisterRateLimited, got %v", err)
+	}
+}
+
+func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"reg_fixed123": {
+				TicketID:      "reg_fixed123",
+				Username:      stringPtr("user_fixed123"),
+				PasswordHash:  "hashed-password",
+				PhoneNumber:   "2012345678",
+				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
+				OTPExpiresAt:  time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC),
+				LastOTPSentAt: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+				CreatedAt:     time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+	now := time.Date(2026, 5, 21, 10, 1, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	service.otpGenerator = func(int) (string, error) { return "654321", nil }
+
+	result, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
+		TicketID: "reg_fixed123",
+		ClientID: "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("ResendRegisterOTP returned error: %v", err)
+	}
+
+	if result.TicketID != "reg_fixed123" {
+		t.Fatalf("expected ticket id %q, got %q", "reg_fixed123", result.TicketID)
+	}
+
+	if got, want := result.ExpiresAt, now.Add(registerOTPTTL); !got.Equal(want) {
+		t.Fatalf("expected expiry %v, got %v", want, got)
+	}
+
+	registration, err := store.Get(context.Background(), "reg_fixed123")
+	if err != nil {
+		t.Fatalf("expected stored registration: %v", err)
+	}
+
+	if registration.OTPCodeHash != hashRegisterOTP("reg_fixed123", "654321") {
+		t.Fatalf("expected refreshed otp hash, got %q", registration.OTPCodeHash)
+	}
+
+	if !registration.OTPExpiresAt.Equal(now.Add(registerOTPTTL)) {
+		t.Fatalf("expected refreshed otp expiry, got %v", registration.OTPExpiresAt)
+	}
+	if registration.ResendCount != 1 {
+		t.Fatalf("expected resend count %d, got %d", 1, registration.ResendCount)
+	}
+	if !registration.LastOTPSentAt.Equal(now) {
+		t.Fatalf("expected last otp sent at %v, got %v", now, registration.LastOTPSentAt)
+	}
+
+	if sender.phoneNumber != "2012345678" {
+		t.Fatalf("expected resend sms phone number %q, got %q", "2012345678", sender.phoneNumber)
+	}
+
+	if !strings.Contains(sender.message, "654321") {
+		t.Fatalf("expected resend sms message to contain otp code, got %q", sender.message)
+	}
+}
+
+func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"reg_fixed123": {
+				TicketID:      "reg_fixed123",
+				Username:      stringPtr("user_fixed123"),
+				PasswordHash:  "hashed-password",
+				PhoneNumber:   "2012345678",
+				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
+				OTPExpiresAt:  time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC),
+				LastOTPSentAt: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+				CreatedAt:     time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
+	service := NewRegisterService(repo, store, sender)
+	now := time.Date(2026, 5, 21, 10, 1, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	service.otpGenerator = func(int) (string, error) { return "654321", nil }
+
+	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
+		TicketID: "reg_fixed123",
+		ClientID: "127.0.0.1",
+	})
+	if err == nil {
+		t.Fatal("expected sms failure")
+	}
+
+	registration, getErr := store.Get(context.Background(), "reg_fixed123")
+	if getErr != nil {
+		t.Fatalf("expected registration to be restored: %v", getErr)
+	}
+
+	if registration.OTPCodeHash != hashRegisterOTP("reg_fixed123", "123456") {
+		t.Fatalf("expected previous otp hash to be restored, got %q", registration.OTPCodeHash)
+	}
+
+	if !registration.OTPExpiresAt.Equal(time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC)) {
+		t.Fatalf("expected previous expiry to be restored, got %v", registration.OTPExpiresAt)
+	}
+	if registration.ResendCount != 0 {
+		t.Fatalf("expected resend count to be restored, got %d", registration.ResendCount)
+	}
+	if !registration.LastOTPSentAt.Equal(time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected last otp sent at to be restored, got %v", registration.LastOTPSentAt)
+	}
+}
+
+func TestRegisterServiceResendRegisterOTPEnforcesCooldown(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	now := time.Date(2026, 5, 21, 10, 0, 30, 0, time.UTC)
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"reg_fixed123": {
+				TicketID:      "reg_fixed123",
+				Username:      stringPtr("user_fixed123"),
+				PasswordHash:  "hashed-password",
+				PhoneNumber:   "2012345678",
+				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
+				OTPExpiresAt:  now.Add(4 * time.Minute),
+				LastOTPSentAt: now.Add(-30 * time.Second),
+				CreatedAt:     now.Add(-time.Minute),
+			},
+		},
+	}
+	service := NewRegisterService(repo, store, &fakeOTPSender{})
+	service.now = func() time.Time { return now }
+
+	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
+		TicketID: "reg_fixed123",
+	})
+	if !errors.Is(err, ErrResendCooldownActive) {
+		t.Fatalf("expected ErrResendCooldownActive, got %v", err)
+	}
+}
+
+func TestRegisterServiceResendRegisterOTPRateLimitsAfterThreeResends(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	now := time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC)
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"reg_fixed123": {
+				TicketID:      "reg_fixed123",
+				Username:      stringPtr("user_fixed123"),
+				PasswordHash:  "hashed-password",
+				PhoneNumber:   "2012345678",
+				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
+				OTPExpiresAt:  now.Add(time.Minute),
+				ResendCount:   3,
+				LastOTPSentAt: now.Add(-2 * time.Minute),
+				CreatedAt:     now.Add(-5 * time.Minute),
+			},
+		},
+	}
+	service := NewRegisterService(repo, store, &fakeOTPSender{})
+	service.now = func() time.Time { return now }
+
+	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
+		TicketID: "reg_fixed123",
+	})
+	if !errors.Is(err, ErrResendRateLimited) {
+		t.Fatalf("expected ErrResendRateLimited, got %v", err)
 	}
 }
 
@@ -466,6 +637,20 @@ func TestRegisterServiceVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "      ",
 		OTPCode:  "123456",
+	})
+	if !errors.Is(err, ErrRegisterTicketRequired) {
+		t.Fatalf("expected ErrRegisterTicketRequired, got %v", err)
+	}
+}
+
+func TestRegisterServiceResendRegisterOTPRejectsWhitespaceTicketID(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
+		TicketID: "      ",
 	})
 	if !errors.Is(err, ErrRegisterTicketRequired) {
 		t.Fatalf("expected ErrRegisterTicketRequired, got %v", err)

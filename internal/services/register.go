@@ -20,11 +20,11 @@ import (
 const (
 	registerOTPLength    = 6
 	registerOTPTTL       = 5 * time.Minute
-	registerPhoneWindow  = 10 * time.Minute
-	registerClientWindow = 10 * time.Minute
+	registerPhoneWindow  = 5 * time.Minute
+	resendOTPCooldown    = 60 * time.Second
 	verifyAttemptWindow  = registerOTPTTL
-	maxPhoneRequests     = 3
-	maxClientRequests    = 20
+	maxPhoneRequests     = 1
+	maxRegisterResends   = 3
 	maxVerifyAttempts    = 5
 	registerTicketPrefix = "reg_"
 	registerTicketBytes  = 12
@@ -40,6 +40,8 @@ var ErrOTPCodeRequired = errors.New("otp code is required")
 var ErrPasswordRequired = errors.New("password is required")
 var ErrPendingRegistrationInvalid = errors.New("pending registration is invalid, request otp again")
 var ErrRegisterRateLimited = errors.New("too many registration requests, try again later")
+var ErrResendRateLimited = errors.New("too many otp resend requests, request a new registration")
+var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 
 type RegisterService struct {
@@ -62,6 +64,11 @@ type RegisterInput struct {
 type RegisterResult struct {
 	TicketID  string
 	ExpiresAt time.Time
+}
+
+type ResendRegisterOTPInput struct {
+	TicketID string
+	ClientID string
 }
 
 type VerifyRegisterInput struct {
@@ -101,7 +108,7 @@ func (s *RegisterService) Register(
 	if strings.TrimSpace(input.Password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.enforceRegisterRateLimits(ctx, phoneNumber, input.ClientID); err != nil {
+	if err := s.enforceRegisterRateLimits(ctx, phoneNumber); err != nil {
 		return nil, err
 	}
 
@@ -133,13 +140,15 @@ func (s *RegisterService) Register(
 
 	now := s.now()
 	pendingRegistration := &account.RegisterModel{
-		TicketID:     ticketID,
-		Username:     username,
-		PasswordHash: passwordHash,
-		PhoneNumber:  phoneNumber,
-		OTPCodeHash:  otpCodeHash,
-		OTPExpiresAt: now.Add(registerOTPTTL),
-		CreatedAt:    now,
+		TicketID:      ticketID,
+		Username:      username,
+		PasswordHash:  passwordHash,
+		PhoneNumber:   phoneNumber,
+		OTPCodeHash:   otpCodeHash,
+		OTPExpiresAt:  now.Add(registerOTPTTL),
+		ResendCount:   0,
+		LastOTPSentAt: now,
+		CreatedAt:     now,
 	}
 	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
 		return nil, err
@@ -249,25 +258,90 @@ func (s *RegisterService) VerifyRegister(
 	return accountModel, nil
 }
 
-func (s *RegisterService) enforceRegisterRateLimits(ctx context.Context, phoneNumber string, clientID string) error {
+func (s *RegisterService) ResendRegisterOTP(
+	ctx context.Context,
+	input ResendRegisterOTPInput,
+) (*RegisterResult, error) {
+	ticketID := strings.TrimSpace(input.TicketID)
+	if ticketID == "" {
+		return nil, ErrRegisterTicketRequired
+	}
+
+	pendingRegistration, err := s.store.Get(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := s.now()
+	if now.After(pendingRegistration.OTPExpiresAt) {
+		_ = s.store.Delete(ctx, ticketID)
+		_ = s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID))
+		return nil, account.ErrOTPExpired
+	}
+	if pendingRegistration.PasswordHash == "" || pendingRegistration.PhoneNumber == "" || pendingRegistration.OTPCodeHash == "" {
+		_ = s.store.Delete(ctx, ticketID)
+		_ = s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID))
+		return nil, ErrPendingRegistrationInvalid
+	}
+
+	if _, err := s.accounts.GetByPhoneNumber(ctx, pendingRegistration.PhoneNumber); err == nil {
+		_ = s.store.Delete(ctx, ticketID)
+		_ = s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID))
+		return nil, account.ErrPhoneNumberAlreadyRegistered
+	} else if !errors.Is(err, account.ErrAccountNotFound) {
+		return nil, err
+	}
+
+	if pendingRegistration.ResendCount >= maxRegisterResends {
+		return nil, ErrResendRateLimited
+	}
+
+	lastOTPSentAt := pendingRegistration.LastOTPSentAt
+	if lastOTPSentAt.IsZero() {
+		lastOTPSentAt = pendingRegistration.CreatedAt
+	}
+	if !lastOTPSentAt.IsZero() && now.Sub(lastOTPSentAt) < resendOTPCooldown {
+		return nil, ErrResendCooldownActive
+	}
+
+	otpCode, err := s.otpGenerator(registerOTPLength)
+	if err != nil {
+		return nil, err
+	}
+
+	previousRegistration := *pendingRegistration
+	previousTTL := pendingRegistration.OTPExpiresAt.Sub(now)
+
+	pendingRegistration.OTPCodeHash = hashRegisterOTP(ticketID, otpCode)
+	pendingRegistration.OTPExpiresAt = now.Add(registerOTPTTL)
+	pendingRegistration.ResendCount++
+	pendingRegistration.LastOTPSentAt = now
+
+	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
+		return nil, err
+	}
+
+	message := sms.RegisterOTPMessage(otpCode, registerOTPTTL)
+	if err := s.sender.SendOTP(ctx, pendingRegistration.PhoneNumber, message); err != nil {
+		if restoreErr := s.store.Save(ctx, &previousRegistration, previousTTL); restoreErr != nil {
+			return nil, restoreErr
+		}
+
+		return nil, err
+	}
+
+	return &RegisterResult{
+		TicketID:  ticketID,
+		ExpiresAt: pendingRegistration.OTPExpiresAt,
+	}, nil
+}
+
+func (s *RegisterService) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
 	phoneCount, err := s.store.IncrementCounter(ctx, registerPhoneRateKey(phoneNumber), registerPhoneWindow)
 	if err != nil {
 		return err
 	}
 	if phoneCount > maxPhoneRequests {
-		return ErrRegisterRateLimited
-	}
-
-	clientID = strings.TrimSpace(clientID)
-	if clientID == "" {
-		return nil
-	}
-
-	clientCount, err := s.store.IncrementCounter(ctx, registerClientRateKey(clientID), registerClientWindow)
-	if err != nil {
-		return err
-	}
-	if clientCount > maxClientRequests {
 		return ErrRegisterRateLimited
 	}
 
@@ -375,10 +449,6 @@ func matchRegisterOTP(expectedHash string, ticketID string, otpCode string) bool
 
 func registerPhoneRateKey(phoneNumber string) string {
 	return fmt.Sprintf("register:rate:phone:%s", phoneNumber)
-}
-
-func registerClientRateKey(clientID string) string {
-	return fmt.Sprintf("register:rate:client:%s", clientID)
 }
 
 func verifyAttemptKey(ticketID string) string {

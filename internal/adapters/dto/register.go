@@ -12,6 +12,10 @@ type ReqVerifyRegister struct {
 	OTPCode  string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
+type ReqResendRegisterOTP struct {
+	TicketID string `json:"ticket_id" binding:"required"`
+}
+
 type ResRegister struct {
 	Message   string    `json:"message"`
 	TicketID  string    `json:"ticket_id"`
