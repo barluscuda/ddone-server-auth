@@ -55,5 +55,10 @@ func RegisterOTPMessage(code string, expiresIn time.Duration) string {
 		suffix = "s"
 	}
 
-	return fmt.Sprintf("Your DDONE OTP is %s. It expires in %d minute%s.", code, minutes, suffix)
+	return fmt.Sprintf(
+		"DDONE Verification Code\n\nCode: %s\nValid for: %d minute%s\n\nFor your security, do not share this code with anyone. If you did not request this code, please ignore this message.",
+		code,
+		minutes,
+		suffix,
+	)
 }
