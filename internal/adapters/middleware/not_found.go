@@ -10,6 +10,8 @@ import (
 func NoRoute() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusNotFound, dto.ResMessage{
+			Success: false,
+			Code:    "route_not_found",
 			Message: "route not found",
 		})
 	}
@@ -18,6 +20,8 @@ func NoRoute() gin.HandlerFunc {
 func NoMethod() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusMethodNotAllowed, dto.ResMessage{
+			Success: false,
+			Code:    "method_not_allowed",
 			Message: "method not allowed",
 		})
 	}

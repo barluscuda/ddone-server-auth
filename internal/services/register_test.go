@@ -148,6 +148,9 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	if result.TicketID != "reg_fixed123" {
 		t.Fatalf("expected returned ticket id %q, got %q", "reg_fixed123", result.TicketID)
 	}
+	if result.RemainingResendCount != maxRegisterResends {
+		t.Fatalf("expected remaining resend count %d, got %d", maxRegisterResends, result.RemainingResendCount)
+	}
 
 	registration, err := store.Get(context.Background(), "reg_fixed123")
 	if err != nil {
@@ -359,6 +362,9 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 
 	if result.TicketID != "reg_fixed123" {
 		t.Fatalf("expected ticket id %q, got %q", "reg_fixed123", result.TicketID)
+	}
+	if result.RemainingResendCount != maxRegisterResends-1 {
+		t.Fatalf("expected remaining resend count %d, got %d", maxRegisterResends-1, result.RemainingResendCount)
 	}
 
 	if got, want := result.ExpiresAt, now.Add(registerOTPTTL); !got.Equal(want) {

@@ -171,8 +171,17 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 		t.Fatalf("unmarshal response body: %v", err)
 	}
 
-	if res.TicketID == "" {
+	if !res.Success {
+		t.Fatal("expected success response")
+	}
+	if res.Code != "register_otp_sent" {
+		t.Fatalf("expected code %q, got %q", "register_otp_sent", res.Code)
+	}
+	if res.Data.TicketID == "" {
 		t.Fatal("expected ticket id in register response")
+	}
+	if res.Data.RemainingResendCount != 3 {
+		t.Fatalf("expected remaining resend count %d, got %d", 3, res.Data.RemainingResendCount)
 	}
 }
 
@@ -277,8 +286,17 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 		t.Fatalf("unmarshal response body: %v", err)
 	}
 
-	if res.TicketID != "reg_fixed123" {
-		t.Fatalf("expected ticket id %q, got %q", "reg_fixed123", res.TicketID)
+	if !res.Success {
+		t.Fatal("expected success response")
+	}
+	if res.Code != "register_otp_resent" {
+		t.Fatalf("expected code %q, got %q", "register_otp_resent", res.Code)
+	}
+	if res.Data.TicketID != "reg_fixed123" {
+		t.Fatalf("expected ticket id %q, got %q", "reg_fixed123", res.Data.TicketID)
+	}
+	if res.Data.RemainingResendCount != 2 {
+		t.Fatalf("expected remaining resend count %d, got %d", 2, res.Data.RemainingResendCount)
 	}
 }
 
@@ -320,6 +338,18 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 
 	if recorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, recorder.Code)
+	}
+
+	var res dto.ResMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if res.Success {
+		t.Fatal("expected error response")
+	}
+	if res.Code != "resend_cooldown_active" {
+		t.Fatalf("expected code %q, got %q", "resend_cooldown_active", res.Code)
 	}
 }
 

@@ -62,8 +62,9 @@ type RegisterInput struct {
 }
 
 type RegisterResult struct {
-	TicketID  string
-	ExpiresAt time.Time
+	TicketID             string
+	ExpiresAt            time.Time
+	RemainingResendCount int
 }
 
 type ResendRegisterOTPInput struct {
@@ -161,8 +162,9 @@ func (s *RegisterService) Register(
 	}
 
 	return &RegisterResult{
-		TicketID:  ticketID,
-		ExpiresAt: pendingRegistration.OTPExpiresAt,
+		TicketID:             ticketID,
+		ExpiresAt:            pendingRegistration.OTPExpiresAt,
+		RemainingResendCount: maxRegisterResends,
 	}, nil
 }
 
@@ -331,8 +333,9 @@ func (s *RegisterService) ResendRegisterOTP(
 	}
 
 	return &RegisterResult{
-		TicketID:  ticketID,
-		ExpiresAt: pendingRegistration.OTPExpiresAt,
+		TicketID:             ticketID,
+		ExpiresAt:            pendingRegistration.OTPExpiresAt,
+		RemainingResendCount: maxRegisterResends - pendingRegistration.ResendCount,
 	}, nil
 }
 
