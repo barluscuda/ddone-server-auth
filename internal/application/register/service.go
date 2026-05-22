@@ -1,11 +1,10 @@
-package services
+package register
 
 import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/domain/account"
 	"ddone-server-auth/internal/ports"
 	"encoding/hex"
@@ -43,6 +42,12 @@ var ErrRegisterRateLimited = errors.New("too many registration requests, try aga
 var ErrResendRateLimited = errors.New("too many otp resend requests, request a new registration")
 var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
+
+type UseCase interface {
+	Register(ctx context.Context, input RegisterInput) (*RegisterResult, error)
+	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*account.AccountModel, error)
+	ResendRegisterOTP(ctx context.Context, input ResendRegisterOTPInput) (*RegisterResult, error)
+}
 
 type RegisterService struct {
 	accounts          ports.AccountRepository
@@ -88,7 +93,7 @@ func NewRegisterService(
 		store:             store,
 		sender:            sender,
 		now:               func() time.Time { return time.Now().UTC() },
-		otpGenerator:      sms.GenerateOTP,
+		otpGenerator:      GenerateOTP,
 		ticketGenerator:   generateRegisterTicket,
 		usernameGenerator: generateUsername,
 		passwordHasher:    hashPassword,
@@ -155,7 +160,7 @@ func (s *RegisterService) Register(
 		return nil, err
 	}
 
-	message := sms.RegisterOTPMessage(otpCode, registerOTPTTL)
+	message := RegisterOTPMessage(otpCode, registerOTPTTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber, message); err != nil {
 		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
@@ -323,7 +328,7 @@ func (s *RegisterService) ResendRegisterOTP(
 		return nil, err
 	}
 
-	message := sms.RegisterOTPMessage(otpCode, registerOTPTTL)
+	message := RegisterOTPMessage(otpCode, registerOTPTTL)
 	if err := s.sender.SendOTP(ctx, pendingRegistration.PhoneNumber, message); err != nil {
 		if restoreErr := s.store.Save(ctx, &previousRegistration, previousTTL); restoreErr != nil {
 			return nil, restoreErr

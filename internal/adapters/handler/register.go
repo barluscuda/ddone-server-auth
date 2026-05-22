@@ -2,8 +2,8 @@ package handler
 
 import (
 	"ddone-server-auth/internal/adapters/dto"
+	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/account"
-	"ddone-server-auth/internal/services"
 	"errors"
 	"net/http"
 
@@ -40,10 +40,10 @@ const (
 )
 
 type RegisterHandler struct {
-	register *services.RegisterService
+	register appregister.UseCase
 }
 
-func NewRegisterHandler(register *services.RegisterService) *RegisterHandler {
+func NewRegisterHandler(register appregister.UseCase) *RegisterHandler {
 	return &RegisterHandler{register: register}
 }
 
@@ -54,7 +54,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 		return
 	}
 
-	result, err := h.register.Register(c.Request.Context(), services.RegisterInput{
+	result, err := h.register.Register(c.Request.Context(), appregister.RegisterInput{
 		PhoneNumber: req.PhoneNumber,
 		Password:    req.Password,
 		ClientID:    c.ClientIP(),
@@ -85,7 +85,7 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 		return
 	}
 
-	accountModel, err := h.register.VerifyRegister(c.Request.Context(), services.VerifyRegisterInput{
+	accountModel, err := h.register.VerifyRegister(c.Request.Context(), appregister.VerifyRegisterInput{
 		TicketID: req.TicketID,
 		OTPCode:  req.OTPCode,
 		ClientID: c.ClientIP(),
@@ -116,7 +116,7 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 		return
 	}
 
-	result, err := h.register.ResendRegisterOTP(c.Request.Context(), services.ResendRegisterOTPInput{
+	result, err := h.register.ResendRegisterOTP(c.Request.Context(), appregister.ResendRegisterOTPInput{
 		TicketID: req.TicketID,
 		ClientID: c.ClientIP(),
 	})
@@ -141,18 +141,18 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 
 func handleRegisterError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, services.ErrPhoneNumberRequired),
-		errors.Is(err, services.ErrRegisterTicketRequired),
-		errors.Is(err, services.ErrPasswordRequired),
-		errors.Is(err, services.ErrPendingRegistrationInvalid):
+	case errors.Is(err, appregister.ErrPhoneNumberRequired),
+		errors.Is(err, appregister.ErrRegisterTicketRequired),
+		errors.Is(err, appregister.ErrPasswordRequired),
+		errors.Is(err, appregister.ErrPendingRegistrationInvalid):
 		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
-	case errors.Is(err, services.ErrInvalidPhoneNumber),
-		errors.Is(err, services.ErrOTPCodeRequired):
+	case errors.Is(err, appregister.ErrInvalidPhoneNumber),
+		errors.Is(err, appregister.ErrOTPCodeRequired):
 		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
-	case errors.Is(err, services.ErrRegisterRateLimited),
-		errors.Is(err, services.ErrResendRateLimited),
-		errors.Is(err, services.ErrResendCooldownActive),
-		errors.Is(err, services.ErrVerifyRateLimited):
+	case errors.Is(err, appregister.ErrRegisterRateLimited),
+		errors.Is(err, appregister.ErrResendRateLimited),
+		errors.Is(err, appregister.ErrResendCooldownActive),
+		errors.Is(err, appregister.ErrVerifyRateLimited):
 		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered),
 		errors.Is(err, account.ErrUsernameAlreadyRegistered):
@@ -176,25 +176,25 @@ func respondError(c *gin.Context, statusCode int, code string, message string) {
 
 func registerErrorCode(err error) string {
 	switch {
-	case errors.Is(err, services.ErrPhoneNumberRequired):
+	case errors.Is(err, appregister.ErrPhoneNumberRequired):
 		return codePhoneNumberRequired
-	case errors.Is(err, services.ErrInvalidPhoneNumber):
+	case errors.Is(err, appregister.ErrInvalidPhoneNumber):
 		return codeInvalidPhoneNumber
-	case errors.Is(err, services.ErrRegisterTicketRequired):
+	case errors.Is(err, appregister.ErrRegisterTicketRequired):
 		return codeRegisterTicketRequired
-	case errors.Is(err, services.ErrOTPCodeRequired):
+	case errors.Is(err, appregister.ErrOTPCodeRequired):
 		return codeOTPCodeRequired
-	case errors.Is(err, services.ErrPasswordRequired):
+	case errors.Is(err, appregister.ErrPasswordRequired):
 		return codePasswordRequired
-	case errors.Is(err, services.ErrPendingRegistrationInvalid):
+	case errors.Is(err, appregister.ErrPendingRegistrationInvalid):
 		return codePendingRegistrationState
-	case errors.Is(err, services.ErrRegisterRateLimited):
+	case errors.Is(err, appregister.ErrRegisterRateLimited):
 		return codeRegisterRateLimited
-	case errors.Is(err, services.ErrResendRateLimited):
+	case errors.Is(err, appregister.ErrResendRateLimited):
 		return codeResendRateLimited
-	case errors.Is(err, services.ErrResendCooldownActive):
+	case errors.Is(err, appregister.ErrResendCooldownActive):
 		return codeResendCooldownActive
-	case errors.Is(err, services.ErrVerifyRateLimited):
+	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return codeVerifyRateLimited
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered):
 		return codePhoneAlreadyRegistered
@@ -213,25 +213,25 @@ func registerErrorCode(err error) string {
 
 func registerErrorMessage(err error) string {
 	switch {
-	case errors.Is(err, services.ErrPhoneNumberRequired):
+	case errors.Is(err, appregister.ErrPhoneNumberRequired):
 		return "phone number is required"
-	case errors.Is(err, services.ErrInvalidPhoneNumber):
+	case errors.Is(err, appregister.ErrInvalidPhoneNumber):
 		return "phone number format is invalid"
-	case errors.Is(err, services.ErrRegisterTicketRequired):
+	case errors.Is(err, appregister.ErrRegisterTicketRequired):
 		return "ticket id is required"
-	case errors.Is(err, services.ErrOTPCodeRequired):
+	case errors.Is(err, appregister.ErrOTPCodeRequired):
 		return "otp code is required"
-	case errors.Is(err, services.ErrPasswordRequired):
+	case errors.Is(err, appregister.ErrPasswordRequired):
 		return "password is required"
-	case errors.Is(err, services.ErrPendingRegistrationInvalid):
+	case errors.Is(err, appregister.ErrPendingRegistrationInvalid):
 		return "pending registration is invalid, please request a new otp"
-	case errors.Is(err, services.ErrRegisterRateLimited):
+	case errors.Is(err, appregister.ErrRegisterRateLimited):
 		return "too many registration requests, please try again later"
-	case errors.Is(err, services.ErrResendRateLimited):
+	case errors.Is(err, appregister.ErrResendRateLimited):
 		return "resend limit reached, please start a new registration"
-	case errors.Is(err, services.ErrResendCooldownActive):
+	case errors.Is(err, appregister.ErrResendCooldownActive):
 		return "please wait before requesting another otp"
-	case errors.Is(err, services.ErrVerifyRateLimited):
+	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return "too many invalid otp attempts, please request a new code"
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered):
 		return "phone number is already registered"

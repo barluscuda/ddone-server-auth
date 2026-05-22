@@ -5,7 +5,7 @@ import (
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/handler"
 	"ddone-server-auth/internal/adapters/middleware"
-	"ddone-server-auth/internal/services"
+	appregister "ddone-server-auth/internal/application/register"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,7 +22,7 @@ const apiV1Prefix = "/v1"
 func newHTTPServer(
 	cfg *config.Config,
 	logger *zap.Logger,
-	registerService *services.RegisterService,
+	registerService appregister.UseCase,
 ) *http.Server {
 	if cfg.App.Debug {
 		gin.SetMode(gin.DebugMode)

@@ -6,9 +6,9 @@ import (
 	"ddone-server-auth/internal/adapters/database"
 	"ddone-server-auth/internal/adapters/repository"
 	"ddone-server-auth/internal/adapters/sms"
+	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"ddone-server-auth/internal/domain/account"
-	"ddone-server-auth/internal/services"
 
 	"github.com/barluscuda/dextools"
 	"go.uber.org/zap"
@@ -60,7 +60,7 @@ func main() {
 
 	accountRepository := repository.NewAccountRepository(db)
 	registerStore := cache.NewRegisterStore(redisClient)
-	registerService := services.NewRegisterService(accountRepository, registerStore, smsClient)
+	registerService := appregister.NewRegisterService(accountRepository, registerStore, smsClient)
 
 	// Start the HTTP server once dependencies are ready.
 	httpServer := newHTTPServer(cfg, logger, registerService)
