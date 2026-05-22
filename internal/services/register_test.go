@@ -179,12 +179,58 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 		t.Fatalf("expected password hash to match original password: %v", err)
 	}
 
-	if sender.phoneNumber != "+8562012345678" {
+	if sender.phoneNumber != "2012345678" {
 		t.Fatalf("expected sms phone number to be normalized, got %s", sender.phoneNumber)
 	}
 
 	if !strings.Contains(sender.message, "123456") {
 		t.Fatalf("expected sms message to contain otp code, got %q", sender.message)
+	}
+}
+
+func TestNormalizePhoneNumber(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "local with leading zero", input: "02012345678", want: "2012345678"},
+		{name: "local with spaces", input: "020 1234 5678", want: "2012345678"},
+		{name: "country code with plus", input: "+8562012345678", want: "2012345678"},
+		{name: "country code without plus", input: "8562012345678", want: "2012345678"},
+		{name: "country code with international prefix", input: "008562012345678", want: "2012345678"},
+		{name: "country code with extra zero", input: "+85602012345678", want: "2012345678"},
+		{name: "already normalized", input: "2012345678", want: "2012345678"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := normalizePhoneNumber(tc.input)
+			if err != nil {
+				t.Fatalf("normalizePhoneNumber returned error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestNormalizePhoneNumberRejectsInvalidFormat(t *testing.T) {
+	testCases := []string{
+		"201234567",
+		"20123456789",
+		"0212345678",
+		"+85630ABC5678",
+	}
+
+	for _, input := range testCases {
+		t.Run(input, func(t *testing.T) {
+			_, err := normalizePhoneNumber(input)
+			if !errors.Is(err, ErrInvalidPhoneNumber) {
+				t.Fatalf("expected ErrInvalidPhoneNumber, got %v", err)
+			}
+		})
 	}
 }
 

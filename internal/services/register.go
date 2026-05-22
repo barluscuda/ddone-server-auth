@@ -325,14 +325,14 @@ func normalizePhoneNumber(raw string) (string, error) {
 	}
 
 	var builder strings.Builder
-	builder.Grow(len(value) + 1)
+	builder.Grow(len(value))
 
 	for i, r := range value {
 		switch {
 		case r >= '0' && r <= '9':
 			builder.WriteRune(r)
 		case r == '+' && i == 0:
-			builder.WriteRune(r)
+			continue
 		case r == ' ' || r == '-' || r == '(' || r == ')':
 			continue
 		default:
@@ -340,28 +340,27 @@ func normalizePhoneNumber(raw string) (string, error) {
 		}
 	}
 
-	normalized := builder.String()
-	if strings.HasPrefix(normalized, "00") {
-		normalized = "+" + normalized[2:]
-	}
-	if normalized == "" {
+	digits := builder.String()
+	if digits == "" {
 		return "", ErrInvalidPhoneNumber
 	}
-	if normalized[0] != '+' {
-		normalized = "+" + normalized
+
+	switch {
+	case strings.HasPrefix(digits, "00856"):
+		digits = digits[5:]
+	case strings.HasPrefix(digits, "856"):
+		digits = digits[3:]
 	}
 
-	digits := normalized[1:]
-	if len(digits) < 8 || len(digits) > 15 {
+	if strings.HasPrefix(digits, "020") {
+		digits = digits[1:]
+	}
+
+	if len(digits) != 10 || !strings.HasPrefix(digits, "20") {
 		return "", ErrInvalidPhoneNumber
 	}
-	for _, r := range digits {
-		if r < '0' || r > '9' {
-			return "", ErrInvalidPhoneNumber
-		}
-	}
 
-	return normalized, nil
+	return digits, nil
 }
 
 func hashRegisterOTP(ticketID string, otpCode string) string {
