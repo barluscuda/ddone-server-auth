@@ -50,6 +50,25 @@ func (s *RegisterStore) Delete(ctx context.Context, ticketID string) error {
 	return s.client.Del(ctx, registerKey(ticketID)).Err()
 }
 
+func (s *RegisterStore) IncrementCounter(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	count, err := s.client.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+
+	if count == 1 {
+		if err := s.client.Expire(ctx, key, ttl).Err(); err != nil {
+			return 0, err
+		}
+	}
+
+	return count, nil
+}
+
+func (s *RegisterStore) DeleteCounter(ctx context.Context, key string) error {
+	return s.client.Del(ctx, key).Err()
+}
+
 func registerKey(ticketID string) string {
 	return fmt.Sprintf("register:ticket:%s", ticketID)
 }

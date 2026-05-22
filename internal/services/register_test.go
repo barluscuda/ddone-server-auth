@@ -69,6 +69,8 @@ func (r *fakeAccountRepository) Delete(_ context.Context, _ string) error {
 type fakeRegistrationStore struct {
 	values        map[string]*account.RegisterModel
 	deletedTicket string
+	counters      map[string]int64
+	deletedKeys   []string
 }
 
 func (s *fakeRegistrationStore) Save(_ context.Context, registration *account.RegisterModel, _ time.Duration) error {
@@ -93,6 +95,23 @@ func (s *fakeRegistrationStore) Delete(_ context.Context, ticketID string) error
 	return nil
 }
 
+func (s *fakeRegistrationStore) IncrementCounter(_ context.Context, key string, _ time.Duration) (int64, error) {
+	if s.counters == nil {
+		s.counters = map[string]int64{}
+	}
+
+	s.counters[key]++
+	return s.counters[key], nil
+}
+
+func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, key string) error {
+	s.deletedKeys = append(s.deletedKeys, key)
+	if s.counters != nil {
+		delete(s.counters, key)
+	}
+	return nil
+}
+
 type fakeOTPSender struct {
 	phoneNumber string
 	message     string
@@ -110,12 +129,14 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewRegisterService(repo, store, sender)
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
 	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
 	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
 
 	result, err := service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "  +8562012345678  ",
+		PhoneNumber: "  856 20 1234 5678  ",
 		Password:    "secretpass",
+		ClientID:    "127.0.0.1",
 	})
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
@@ -135,6 +156,12 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	if registration.TicketID != "reg_fixed123" {
 		t.Fatalf("expected stored ticket id %q, got %q", "reg_fixed123", registration.TicketID)
 	}
+	if registration.OTPCodeHash == "" {
+		t.Fatal("expected otp hash to be stored")
+	}
+	if registration.OTPCodeHash == "123456" {
+		t.Fatal("expected raw otp code not to be stored")
+	}
 
 	if registration.Username == nil || *registration.Username != "user_fixed123" {
 		t.Fatalf("expected generated username, got %#v", registration.Username)
@@ -152,15 +179,11 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 		t.Fatalf("expected password hash to match original password: %v", err)
 	}
 
-	if len(registration.OTPCode) != registerOTPLength {
-		t.Fatalf("expected otp length %d, got %d", registerOTPLength, len(registration.OTPCode))
-	}
-
 	if sender.phoneNumber != "+8562012345678" {
-		t.Fatalf("expected sms phone number to be trimmed, got %s", sender.phoneNumber)
+		t.Fatalf("expected sms phone number to be normalized, got %s", sender.phoneNumber)
 	}
 
-	if !strings.Contains(sender.message, registration.OTPCode) {
+	if !strings.Contains(sender.message, "123456") {
 		t.Fatalf("expected sms message to contain otp code, got %q", sender.message)
 	}
 }
@@ -170,11 +193,13 @@ func TestRegisterServiceRegisterDeletesCacheWhenSMSFails(t *testing.T) {
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
 	service := NewRegisterService(repo, store, sender)
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
 	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
 
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
 		Password:    "secretpass",
+		ClientID:    "127.0.0.1",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")
@@ -215,6 +240,49 @@ func TestRegisterServiceRegisterRejectsWhitespacePassword(t *testing.T) {
 	}
 }
 
+func TestRegisterServiceRegisterRejectsInvalidPhoneNumber(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+85620ABC5678",
+		Password:    "secretpass",
+	})
+	if !errors.Is(err, ErrInvalidPhoneNumber) {
+		t.Fatalf("expected ErrInvalidPhoneNumber, got %v", err)
+	}
+}
+
+func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b", "reg_c", "reg_d")
+	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b", "user_c", "user_d")
+
+	for i := 0; i < maxPhoneRequests; i++ {
+		_, err := service.Register(context.Background(), RegisterInput{
+			PhoneNumber: "+8562012345678",
+			Password:    "secretpass",
+		})
+		if err != nil {
+			t.Fatalf("unexpected register error on attempt %d: %v", i+1, err)
+		}
+	}
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+	})
+	if !errors.Is(err, ErrRegisterRateLimited) {
+		t.Fatalf("expected ErrRegisterRateLimited, got %v", err)
+	}
+}
+
 func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{
@@ -238,7 +306,7 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 		Username:     &username,
 		PasswordHash: string(passwordHash),
 		PhoneNumber:  "+8562012345678",
-		OTPCode:      "123456",
+		OTPCodeHash:  hashRegisterOTP(ticketID, "123456"),
 		OTPExpiresAt: now.Add(time.Minute),
 		CreatedAt:    now.Add(-time.Minute),
 	}
@@ -270,6 +338,9 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 	if store.deletedTicket != ticketID {
 		t.Fatalf("expected pending registration to be deleted, got %q", store.deletedTicket)
 	}
+	if !containsString(store.deletedKeys, verifyAttemptKey(ticketID)) {
+		t.Fatalf("expected verify counter cleanup for %q", ticketID)
+	}
 }
 
 func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
@@ -278,8 +349,9 @@ func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
 		values: map[string]*account.RegisterModel{
 			"reg_fixed123": {
 				TicketID:     "reg_fixed123",
+				PasswordHash: "hashed-password",
 				PhoneNumber:  "+8562012345678",
-				OTPCode:      "123456",
+				OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
 			},
 		},
@@ -297,6 +369,45 @@ func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
 
 	if repo.created != nil {
 		t.Fatal("did not expect account creation on invalid otp")
+	}
+}
+
+func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"reg_fixed123": {
+				TicketID:     "reg_fixed123",
+				PasswordHash: "hashed-password",
+				PhoneNumber:  "+8562012345678",
+				OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
+				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
+			},
+		},
+	}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	for i := 0; i < maxVerifyAttempts-1; i++ {
+		_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+			TicketID: "reg_fixed123",
+			OTPCode:  "654321",
+		})
+		if !errors.Is(err, account.ErrInvalidOTPCode) {
+			t.Fatalf("expected invalid otp on attempt %d, got %v", i+1, err)
+		}
+	}
+
+	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+		TicketID: "reg_fixed123",
+		OTPCode:  "654321",
+	})
+	if !errors.Is(err, ErrVerifyRateLimited) {
+		t.Fatalf("expected ErrVerifyRateLimited, got %v", err)
+	}
+
+	if store.deletedTicket != "reg_fixed123" {
+		t.Fatalf("expected ticket cleanup after attempt limit, got %q", store.deletedTicket)
 	}
 }
 
@@ -338,7 +449,7 @@ func TestRegisterServiceVerifyRegisterRejectsPendingRegistrationWithoutPasswordH
 				TicketID:     "reg_fixed123",
 				Username:     stringPtr("user_fixed123"),
 				PhoneNumber:  "+8562012345678",
-				OTPCode:      "123456",
+				OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
 			},
 		},
@@ -373,7 +484,7 @@ func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t 
 				Username:     &takenUsername,
 				PasswordHash: "hashed-password",
 				PhoneNumber:  "+8562012345678",
-				OTPCode:      "123456",
+				OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
 			},
 		},
@@ -397,4 +508,42 @@ func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t 
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+func sequentialTicketGenerator(values ...string) func() (string, error) {
+	index := 0
+
+	return func() (string, error) {
+		if index >= len(values) {
+			return "", errors.New("no more ticket values")
+		}
+
+		value := values[index]
+		index++
+		return value, nil
+	}
+}
+
+func sequentialUsernameGenerator(values ...string) func() (string, error) {
+	index := 0
+
+	return func() (string, error) {
+		if index >= len(values) {
+			return "", errors.New("no more username values")
+		}
+
+		value := values[index]
+		index++
+		return value, nil
+	}
 }

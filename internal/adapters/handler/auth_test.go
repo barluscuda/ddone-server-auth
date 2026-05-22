@@ -59,6 +59,14 @@ func (s *fakeRegistrationStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
+func (s *fakeRegistrationStore) IncrementCounter(_ context.Context, _ string, _ time.Duration) (int64, error) {
+	return 1, nil
+}
+
+func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, _ string) error {
+	return nil
+}
+
 type fakeOTPSender struct{}
 
 func (s *fakeOTPSender) SendOTP(_ context.Context, _ string, _ string) error {
@@ -74,6 +82,34 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 
 	body, err := json.Marshal(map[string]string{
 		"phone_number": "        ",
+		"password":     "secretpass",
+	})
+	if err != nil {
+		t.Fatalf("marshal request body: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/register", handler.Register)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
+func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	handler := NewAuthHandler(service)
+
+	body, err := json.Marshal(map[string]string{
+		"phone_number": "+85620ABC5678",
 		"password":     "secretpass",
 	})
 	if err != nil {

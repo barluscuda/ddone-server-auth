@@ -18,7 +18,7 @@ type RegisterModel struct {
 	Username     *string   `json:"username"`
 	PasswordHash string    `json:"password_hash"`
 	PhoneNumber  string    `json:"phone_number"`
-	OTPCode      string    `json:"otp_code"`
+	OTPCodeHash  string    `json:"otp_code_hash"`
 	OTPExpiresAt time.Time `json:"otp_expires_at"`
 	CreatedAt    time.Time `json:"created_at"`
 }
