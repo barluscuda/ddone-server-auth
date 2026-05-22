@@ -17,6 +17,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const apiV1Prefix = "/v1"
+
 func newHTTPServer(
 	cfg *config.Config,
 	logger *zap.Logger,
@@ -36,12 +38,10 @@ func newHTTPServer(
 	)
 	app.NoRoute(middleware.NoRoute())
 	app.NoMethod(middleware.NoMethod())
-	app.GET("/healthz", handler.Healthz)
-
 	registerHandler := handler.NewRegisterHandler(registerService)
-	app.POST("/register", registerHandler.Register)
-	app.POST("/register/resend", registerHandler.ResendOTP)
-	app.POST("/register/verify", registerHandler.VerifyRegister)
+
+	registerRoutes(app, registerHandler)
+	registerRoutes(app.Group(apiV1Prefix), registerHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -77,4 +77,11 @@ func run(server *http.Server, logger *zap.Logger) {
 	}
 
 	logger.Info("server stopped")
+}
+
+func registerRoutes(router gin.IRoutes, registerHandler *handler.RegisterHandler) {
+	router.GET("/healthz", handler.Healthz)
+	router.POST("/register", registerHandler.Register)
+	router.POST("/register/resend", registerHandler.ResendOTP)
+	router.POST("/register/verify", registerHandler.VerifyRegister)
 }
