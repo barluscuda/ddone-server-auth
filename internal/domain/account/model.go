@@ -5,6 +5,7 @@ import "time"
 type AccountModel struct {
 	ID              string                 `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	Username        *string                `gorm:"size:50;uniqueIndex"`
+	PasswordHash    string                 `gorm:"size:255;not null"`
 	PhoneNumber     string                 `gorm:"size:20;not null;uniqueIndex"`
 	PhoneVerifiedAt time.Time              `gorm:"not null"`
 	Providers       []AccountProviderModel `gorm:"foreignKey:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
@@ -14,6 +15,7 @@ type AccountModel struct {
 
 type RegisterModel struct {
 	Username     *string   `json:"username"`
+	PasswordHash string    `json:"password_hash"`
 	PhoneNumber  string    `json:"phone_number"`
 	OTPCode      string    `json:"otp_code"`
 	OTPExpiresAt time.Time `json:"otp_expires_at"`

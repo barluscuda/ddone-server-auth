@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeAccountRepository struct {
@@ -103,19 +105,19 @@ func (s *fakeOTPSender) SendOTP(_ context.Context, phoneNumber string, msg strin
 	return s.err
 }
 
-func TestRegisterServiceRequestOTPSavesRegistrationAndSendsSMS(t *testing.T) {
+func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewRegisterService(repo, store, sender)
+	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
 
-	username := "  alice  "
-	result, err := service.RequestOTP(context.Background(), RequestRegistrationInput{
-		Username:    &username,
+	result, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "  +8562012345678  ",
+		Password:    "secretpass",
 	})
 	if err != nil {
-		t.Fatalf("RequestOTP returned error: %v", err)
+		t.Fatalf("Register returned error: %v", err)
 	}
 
 	if result.ExpiresAt.IsZero() {
@@ -127,8 +129,20 @@ func TestRegisterServiceRequestOTPSavesRegistrationAndSendsSMS(t *testing.T) {
 		t.Fatalf("expected saved registration: %v", err)
 	}
 
-	if registration.Username == nil || *registration.Username != "alice" {
-		t.Fatalf("expected trimmed username, got %#v", registration.Username)
+	if registration.Username == nil || *registration.Username != "user_fixed123" {
+		t.Fatalf("expected generated username, got %#v", registration.Username)
+	}
+
+	if registration.PasswordHash == "" {
+		t.Fatal("expected password hash to be stored")
+	}
+
+	if registration.PasswordHash == "secretpass" {
+		t.Fatal("expected password to be hashed before storage")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(registration.PasswordHash), []byte("secretpass")); err != nil {
+		t.Fatalf("expected password hash to match original password: %v", err)
 	}
 
 	if len(registration.OTPCode) != registerOTPLength {
@@ -144,14 +158,15 @@ func TestRegisterServiceRequestOTPSavesRegistrationAndSendsSMS(t *testing.T) {
 	}
 }
 
-func TestRegisterServiceRequestOTPDeletesCacheWhenSMSFails(t *testing.T) {
+func TestRegisterServiceRegisterDeletesCacheWhenSMSFails(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
 	service := NewRegisterService(repo, store, sender)
 
-	_, err := service.RequestOTP(context.Background(), RequestRegistrationInput{
+	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")
@@ -162,7 +177,37 @@ func TestRegisterServiceRequestOTPDeletesCacheWhenSMSFails(t *testing.T) {
 	}
 }
 
-func TestRegisterServiceVerifyOTPCreatesAccountAndDeletesCache(t *testing.T) {
+func TestRegisterServiceRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "        ",
+		Password:    "secretpass",
+	})
+	if !errors.Is(err, ErrPhoneNumberRequired) {
+		t.Fatalf("expected ErrPhoneNumberRequired, got %v", err)
+	}
+}
+
+func TestRegisterServiceRegisterRejectsWhitespacePassword(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "        ",
+	})
+	if !errors.Is(err, ErrPasswordRequired) {
+		t.Fatalf("expected ErrPasswordRequired, got %v", err)
+	}
+}
+
+func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{
 		values: map[string]*account.RegisterModel{},
@@ -173,21 +218,27 @@ func TestRegisterServiceVerifyOTPCreatesAccountAndDeletesCache(t *testing.T) {
 	now := time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 
-	username := "alice"
+	username := "user_fixed123"
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("generate password hash: %v", err)
+	}
+
 	store.values["+8562012345678"] = &account.RegisterModel{
 		Username:     &username,
+		PasswordHash: string(passwordHash),
 		PhoneNumber:  "+8562012345678",
 		OTPCode:      "123456",
 		OTPExpiresAt: now.Add(time.Minute),
 		CreatedAt:    now.Add(-time.Minute),
 	}
 
-	accountModel, err := service.VerifyOTP(context.Background(), VerifyRegistrationInput{
+	accountModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		PhoneNumber: "+8562012345678",
 		OTPCode:     "123456",
 	})
 	if err != nil {
-		t.Fatalf("VerifyOTP returned error: %v", err)
+		t.Fatalf("VerifyRegister returned error: %v", err)
 	}
 
 	if accountModel.PhoneVerifiedAt != now {
@@ -198,12 +249,20 @@ func TestRegisterServiceVerifyOTPCreatesAccountAndDeletesCache(t *testing.T) {
 		t.Fatal("expected account to be created")
 	}
 
+	if repo.created.Username == nil || *repo.created.Username != username {
+		t.Fatalf("expected generated username to be carried to account, got %#v", repo.created.Username)
+	}
+
+	if repo.created.PasswordHash != string(passwordHash) {
+		t.Fatal("expected password hash to be persisted on account creation")
+	}
+
 	if store.deletedPhone != "+8562012345678" {
 		t.Fatalf("expected pending registration to be deleted, got %q", store.deletedPhone)
 	}
 }
 
-func TestRegisterServiceVerifyOTPRejectsInvalidCode(t *testing.T) {
+func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{
 		values: map[string]*account.RegisterModel{
@@ -217,7 +276,7 @@ func TestRegisterServiceVerifyOTPRejectsInvalidCode(t *testing.T) {
 	sender := &fakeOTPSender{}
 	service := NewRegisterService(repo, store, sender)
 
-	_, err := service.VerifyOTP(context.Background(), VerifyRegistrationInput{
+	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		PhoneNumber: "+8562012345678",
 		OTPCode:     "654321",
 	})
@@ -228,4 +287,86 @@ func TestRegisterServiceVerifyOTPRejectsInvalidCode(t *testing.T) {
 	if repo.created != nil {
 		t.Fatal("did not expect account creation on invalid otp")
 	}
+}
+
+func TestRegisterServiceVerifyRegisterRejectsWhitespaceOTPCode(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+		PhoneNumber: "+8562012345678",
+		OTPCode:     "      ",
+	})
+	if !errors.Is(err, ErrOTPCodeRequired) {
+		t.Fatalf("expected ErrOTPCodeRequired, got %v", err)
+	}
+}
+
+func TestRegisterServiceVerifyRegisterRejectsPendingRegistrationWithoutPasswordHash(t *testing.T) {
+	repo := &fakeAccountRepository{}
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"+8562012345678": {
+				Username:     stringPtr("user_fixed123"),
+				PhoneNumber:  "+8562012345678",
+				OTPCode:      "123456",
+				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
+			},
+		},
+	}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+
+	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+		PhoneNumber: "+8562012345678",
+		OTPCode:     "123456",
+	})
+	if !errors.Is(err, ErrPendingRegistrationInvalid) {
+		t.Fatalf("expected ErrPendingRegistrationInvalid, got %v", err)
+	}
+
+	if store.deletedPhone != "+8562012345678" {
+		t.Fatalf("expected stale pending registration to be deleted, got %q", store.deletedPhone)
+	}
+}
+
+func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t *testing.T) {
+	takenUsername := "user_taken"
+	repo := &fakeAccountRepository{
+		accountsByUser: map[string]*account.AccountModel{
+			takenUsername: {Username: &takenUsername},
+		},
+	}
+	store := &fakeRegistrationStore{
+		values: map[string]*account.RegisterModel{
+			"+8562012345678": {
+				Username:     &takenUsername,
+				PasswordHash: "hashed-password",
+				PhoneNumber:  "+8562012345678",
+				OTPCode:      "123456",
+				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
+			},
+		},
+	}
+	sender := &fakeOTPSender{}
+	service := NewRegisterService(repo, store, sender)
+	service.usernameGenerator = func() (string, error) { return "user_fresh123", nil }
+
+	accountModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+		PhoneNumber: "+8562012345678",
+		OTPCode:     "123456",
+	})
+	if err != nil {
+		t.Fatalf("VerifyRegister returned error: %v", err)
+	}
+
+	if accountModel.Username == nil || *accountModel.Username != "user_fresh123" {
+		t.Fatalf("expected username to be regenerated, got %#v", accountModel.Username)
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

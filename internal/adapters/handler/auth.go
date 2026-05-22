@@ -18,36 +18,36 @@ func NewAuthHandler(register *services.RegisterService) *AuthHandler {
 	return &AuthHandler{register: register}
 }
 
-func (h *AuthHandler) RequestRegisterOTP(c *gin.Context) {
-	var req dto.ReqRegisterOTP
+func (h *AuthHandler) Register(c *gin.Context) {
+	var req dto.ReqRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
 		return
 	}
 
-	result, err := h.register.RequestOTP(c.Request.Context(), services.RequestRegistrationInput{
-		Username:    req.Username,
+	result, err := h.register.Register(c.Request.Context(), services.RegisterInput{
 		PhoneNumber: req.PhoneNumber,
+		Password:    req.Password,
 	})
 	if err != nil {
 		handleRegisterError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, dto.ResRegisterOTPRequested{
+	c.JSON(http.StatusAccepted, dto.ResRegister{
 		Message:   "otp sent successfully",
 		ExpiresAt: result.ExpiresAt,
 	})
 }
 
-func (h *AuthHandler) VerifyRegisterOTP(c *gin.Context) {
-	var req dto.ReqVerifyRegisterOTP
+func (h *AuthHandler) VerifyRegister(c *gin.Context) {
+	var req dto.ReqVerifyRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
 		return
 	}
 
-	accountModel, err := h.register.VerifyOTP(c.Request.Context(), services.VerifyRegistrationInput{
+	accountModel, err := h.register.VerifyRegister(c.Request.Context(), services.VerifyRegisterInput{
 		PhoneNumber: req.PhoneNumber,
 		OTPCode:     req.OTPCode,
 	})
@@ -67,6 +67,11 @@ func (h *AuthHandler) VerifyRegisterOTP(c *gin.Context) {
 
 func handleRegisterError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, services.ErrPhoneNumberRequired),
+		errors.Is(err, services.ErrOTPCodeRequired),
+		errors.Is(err, services.ErrPasswordRequired),
+		errors.Is(err, services.ErrPendingRegistrationInvalid):
+		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered),
 		errors.Is(err, account.ErrUsernameAlreadyRegistered):
 		c.JSON(http.StatusConflict, dto.ResMessage{Message: err.Error()})

@@ -39,9 +39,8 @@ func newHTTPServer(
 	app.GET("/healthz", handler.Healthz)
 
 	authHandler := handler.NewAuthHandler(registerService)
-	authRoutes := app.Group("/auth/register")
-	authRoutes.POST("/request-otp", authHandler.RequestRegisterOTP)
-	authRoutes.POST("/verify-otp", authHandler.VerifyRegisterOTP)
+	app.POST("/register", authHandler.Register)
+	app.POST("/register/verify", authHandler.VerifyRegister)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),

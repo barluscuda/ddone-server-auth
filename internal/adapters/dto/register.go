@@ -2,17 +2,17 @@ package dto
 
 import "time"
 
-type ReqRegisterOTP struct {
-	Username    *string `json:"username" binding:"omitempty,min=3,max=50"`
-	PhoneNumber string  `json:"phone_number" binding:"required,min=8,max=20"`
+type ReqRegister struct {
+	PhoneNumber string `json:"phone_number" binding:"required,min=8,max=20"`
+	Password    string `json:"password" binding:"required,min=8,max=72"`
 }
 
-type ReqVerifyRegisterOTP struct {
+type ReqVerifyRegister struct {
 	PhoneNumber string `json:"phone_number" binding:"required,min=8,max=20"`
 	OTPCode     string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
-type ResRegisterOTPRequested struct {
+type ResRegister struct {
 	Message   string    `json:"message"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
