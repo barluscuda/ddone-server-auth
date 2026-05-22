@@ -33,6 +33,10 @@ const (
 	codeInvalidOTPCode              = "invalid_otp_code"
 	codeOTPExpired                  = "otp_expired"
 	codeInternalServerError         = "internal_server_error"
+	messageInvalidRequestBody       = "invalid request body"
+	messageRegisterOTPSent          = "otp sent successfully"
+	messageRegisterOTPResent        = "otp resent successfully"
+	messageRegisterVerified         = "registration completed successfully"
 )
 
 type RegisterHandler struct {
@@ -46,7 +50,7 @@ func NewRegisterHandler(register *services.RegisterService) *RegisterHandler {
 func (h *RegisterHandler) Register(c *gin.Context) {
 	var req dto.ReqRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, err.Error())
+		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
 		return
 	}
 
@@ -63,7 +67,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusAccepted, dto.ResRegister{
 		Success: true,
 		Code:    codeRegisterOTPSent,
-		Message: "otp sent successfully",
+		Message: messageRegisterOTPSent,
 		Data: dto.ResRegisterTicketData{
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
@@ -77,7 +81,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 	var req dto.ReqVerifyRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, err.Error())
+		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
 		return
 	}
 
@@ -94,7 +98,7 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.ResRegisteredAccount{
 		Success: true,
 		Code:    codeRegisterVerified,
-		Message: "registration completed successfully",
+		Message: messageRegisterVerified,
 		Data: dto.ResRegisteredAccountData{
 			ID:              accountModel.ID,
 			Username:        accountModel.Username,
@@ -108,7 +112,7 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 	var req dto.ReqResendRegisterOTP
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, err.Error())
+		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
 		return
 	}
 
@@ -124,7 +128,7 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 	c.JSON(http.StatusAccepted, dto.ResRegister{
 		Success: true,
 		Code:    codeRegisterOTPResent,
-		Message: "otp resent successfully",
+		Message: messageRegisterOTPResent,
 		Data: dto.ResRegisterTicketData{
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
@@ -141,24 +145,24 @@ func handleRegisterError(c *gin.Context, err error) {
 		errors.Is(err, services.ErrRegisterTicketRequired),
 		errors.Is(err, services.ErrPasswordRequired),
 		errors.Is(err, services.ErrPendingRegistrationInvalid):
-		respondError(c, http.StatusBadRequest, registerErrorCode(err), err.Error())
+		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, services.ErrInvalidPhoneNumber),
 		errors.Is(err, services.ErrOTPCodeRequired):
-		respondError(c, http.StatusBadRequest, registerErrorCode(err), err.Error())
+		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, services.ErrRegisterRateLimited),
 		errors.Is(err, services.ErrResendRateLimited),
 		errors.Is(err, services.ErrResendCooldownActive),
 		errors.Is(err, services.ErrVerifyRateLimited):
-		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), err.Error())
+		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered),
 		errors.Is(err, account.ErrUsernameAlreadyRegistered):
-		respondError(c, http.StatusConflict, registerErrorCode(err), err.Error())
+		respondError(c, http.StatusConflict, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, account.ErrPendingRegistrationNotFound),
 		errors.Is(err, account.ErrInvalidOTPCode),
 		errors.Is(err, account.ErrOTPExpired):
-		respondError(c, http.StatusBadRequest, registerErrorCode(err), err.Error())
+		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	default:
-		respondError(c, http.StatusInternalServerError, codeInternalServerError, "internal server error")
+		respondError(c, http.StatusInternalServerError, codeInternalServerError, registerErrorMessage(err))
 	}
 }
 
@@ -204,5 +208,42 @@ func registerErrorCode(err error) string {
 		return codeOTPExpired
 	default:
 		return codeInternalServerError
+	}
+}
+
+func registerErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, services.ErrPhoneNumberRequired):
+		return "phone number is required"
+	case errors.Is(err, services.ErrInvalidPhoneNumber):
+		return "phone number format is invalid"
+	case errors.Is(err, services.ErrRegisterTicketRequired):
+		return "ticket id is required"
+	case errors.Is(err, services.ErrOTPCodeRequired):
+		return "otp code is required"
+	case errors.Is(err, services.ErrPasswordRequired):
+		return "password is required"
+	case errors.Is(err, services.ErrPendingRegistrationInvalid):
+		return "pending registration is invalid, please request a new otp"
+	case errors.Is(err, services.ErrRegisterRateLimited):
+		return "too many registration requests, please try again later"
+	case errors.Is(err, services.ErrResendRateLimited):
+		return "resend limit reached, please start a new registration"
+	case errors.Is(err, services.ErrResendCooldownActive):
+		return "please wait before requesting another otp"
+	case errors.Is(err, services.ErrVerifyRateLimited):
+		return "too many invalid otp attempts, please request a new code"
+	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered):
+		return "phone number is already registered"
+	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+		return "username is already registered"
+	case errors.Is(err, account.ErrPendingRegistrationNotFound):
+		return "registration session not found"
+	case errors.Is(err, account.ErrInvalidOTPCode):
+		return "invalid otp code"
+	case errors.Is(err, account.ErrOTPExpired):
+		return "otp code has expired"
+	default:
+		return "internal server error"
 	}
 }

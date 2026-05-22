@@ -7,6 +7,7 @@ import (
 	"ddone-server-auth/internal/domain/account"
 	"ddone-server-auth/internal/services"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -109,6 +110,14 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
 	}
+
+	var res dto.ResMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+	if res.Message != "phone number is required" {
+		t.Fatalf("expected safe message %q, got %q", "phone number is required", res.Message)
+	}
 }
 
 func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
@@ -136,6 +145,37 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
+func TestRegisterRejectsInvalidRequestBodyWithSafeMessage(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	handler := NewRegisterHandler(service)
+
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader([]byte(`{`)))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/register", handler.Register)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+
+	var res dto.ResMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+	if res.Code != "invalid_request_body" {
+		t.Fatalf("expected code %q, got %q", "invalid_request_body", res.Code)
+	}
+	if res.Message != "invalid request body" {
+		t.Fatalf("expected safe message %q, got %q", "invalid request body", res.Message)
 	}
 }
 
@@ -350,6 +390,38 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 	}
 	if res.Code != "resend_cooldown_active" {
 		t.Fatalf("expected code %q, got %q", "resend_cooldown_active", res.Code)
+	}
+	if res.Message != "please wait before requesting another otp" {
+		t.Fatalf("expected safe message %q, got %q", "please wait before requesting another otp", res.Message)
+	}
+}
+
+func TestHandleRegisterErrorDoesNotLeakUnexpectedError(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	handleRegisterError(c, errors.New("database connection failed: secret details"))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+
+	var res dto.ResMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if res.Success {
+		t.Fatal("expected error response")
+	}
+	if res.Code != "internal_server_error" {
+		t.Fatalf("expected code %q, got %q", "internal_server_error", res.Code)
+	}
+	if res.Message != "internal server error" {
+		t.Fatalf("expected safe message %q, got %q", "internal server error", res.Message)
 	}
 }
 

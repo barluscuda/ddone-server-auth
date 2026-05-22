@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"ddone-server-auth/internal/adapters/dto"
 	"net/http"
 	"runtime/debug"
 
@@ -20,8 +21,10 @@ func Recovery(logger *zap.Logger) gin.HandlerFunc {
 					zap.String("path", c.Request.URL.Path),
 				)
 
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"message": "internal server error",
+				c.AbortWithStatusJSON(http.StatusInternalServerError, dto.ResMessage{
+					Success: false,
+					Code:    "internal_server_error",
+					Message: "internal server error",
 				})
 			}
 		}()
