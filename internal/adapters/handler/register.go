@@ -10,15 +10,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type AuthHandler struct {
+type RegisterHandler struct {
 	register *services.RegisterService
 }
 
-func NewAuthHandler(register *services.RegisterService) *AuthHandler {
-	return &AuthHandler{register: register}
+func NewRegisterHandler(register *services.RegisterService) *RegisterHandler {
+	return &RegisterHandler{register: register}
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *RegisterHandler) Register(c *gin.Context) {
 	var req dto.ReqRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})
@@ -42,7 +42,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-func (h *AuthHandler) VerifyRegister(c *gin.Context) {
+func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 	var req dto.ReqVerifyRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ResMessage{Message: err.Error()})

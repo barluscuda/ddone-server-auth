@@ -5,7 +5,6 @@ import (
 	"ddone-server-auth/internal/domain/account"
 	"ddone-server-auth/internal/ports"
 	"errors"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -102,26 +101,14 @@ func (r *AccountRepository) Update(ctx context.Context, accountModel *account.Ac
 }
 
 func (r *AccountRepository) Delete(ctx context.Context, id string) error {
-	return r.baseQuery(ctx).Transaction(func(tx *gorm.DB) error {
-		var accountModel account.AccountModel
+	var accountModel account.AccountModel
 
-		err := tx.First(&accountModel, "id = ?", id).Error
-		if err != nil {
-			return translateAccountError(err)
-		}
+	err := r.baseQuery(ctx).First(&accountModel, "id = ?", id).Error
+	if err != nil {
+		return translateAccountError(err)
+	}
 
-		deletedAccount := account.DeletedAccountModel{
-			AccountID:   accountModel.ID,
-			Username:    accountModel.Username,
-			PhoneNumber: accountModel.PhoneNumber,
-			DeletedAt:   time.Now().UTC(),
-		}
-		if err := tx.Create(&deletedAccount).Error; err != nil {
-			return err
-		}
-
-		return tx.Delete(&accountModel).Error
-	})
+	return r.baseQuery(ctx).Delete(&accountModel).Error
 }
 
 func (r *AccountRepository) baseQuery(ctx context.Context) *gorm.DB {

@@ -78,7 +78,7 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
-	handler := NewAuthHandler(service)
+	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
 		"phone_number": "        ",
@@ -106,7 +106,7 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
-	handler := NewAuthHandler(service)
+	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
 		"phone_number": "+85620ABC5678",
@@ -134,7 +134,7 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
-	handler := NewAuthHandler(service)
+	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
 		"phone_number": "+8562012345678",
@@ -171,7 +171,7 @@ func TestRegisterRejectsWhitespacePassword(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
-	handler := NewAuthHandler(service)
+	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
 		"phone_number": "+8562012345678",
@@ -199,7 +199,7 @@ func TestVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := services.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
-	handler := NewAuthHandler(service)
+	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
 		"ticket_id": "        ",

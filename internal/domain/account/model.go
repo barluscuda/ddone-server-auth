@@ -23,14 +23,6 @@ type RegisterModel struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-type DeletedAccountModel struct {
-	ID          string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	AccountID   string    `gorm:"type:uuid;not null;uniqueIndex"`
-	Username    *string   `gorm:"size:50;index"`
-	PhoneNumber string    `gorm:"size:20;not null;index"`
-	DeletedAt   time.Time `gorm:"not null;index"`
-}
-
 type AccountProviderModel struct {
 	ID             string       `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	AccountID      string       `gorm:"type:uuid;not null;index;uniqueIndex:idx_account_provider"`
@@ -52,8 +44,4 @@ func (AccountModel) TableName() string {
 
 func (AccountProviderModel) TableName() string {
 	return "account_providers"
-}
-
-func (DeletedAccountModel) TableName() string {
-	return "deleted_accounts"
 }
