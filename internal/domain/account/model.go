@@ -14,6 +14,7 @@ type AccountModel struct {
 }
 
 type RegisterModel struct {
+	TicketID     string    `json:"ticket_id"`
 	Username     *string   `json:"username"`
 	PasswordHash string    `json:"password_hash"`
 	PhoneNumber  string    `json:"phone_number"`

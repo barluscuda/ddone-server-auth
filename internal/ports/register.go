@@ -9,8 +9,8 @@ import (
 
 type RegistrationStore interface {
 	Save(ctx context.Context, registration *account.RegisterModel, ttl time.Duration) error
-	Get(ctx context.Context, phoneNumber string) (*account.RegisterModel, error)
-	Delete(ctx context.Context, phoneNumber string) error
+	Get(ctx context.Context, ticketID string) (*account.RegisterModel, error)
+	Delete(ctx context.Context, ticketID string) error
 }
 
 type OTPSender interface {

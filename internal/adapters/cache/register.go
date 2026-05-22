@@ -25,11 +25,11 @@ func (s *RegisterStore) Save(ctx context.Context, registration *account.Register
 		return err
 	}
 
-	return s.client.Set(ctx, registerKey(registration.PhoneNumber), payload, ttl).Err()
+	return s.client.Set(ctx, registerKey(registration.TicketID), payload, ttl).Err()
 }
 
-func (s *RegisterStore) Get(ctx context.Context, phoneNumber string) (*account.RegisterModel, error) {
-	payload, err := s.client.Get(ctx, registerKey(phoneNumber)).Result()
+func (s *RegisterStore) Get(ctx context.Context, ticketID string) (*account.RegisterModel, error) {
+	payload, err := s.client.Get(ctx, registerKey(ticketID)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, account.ErrPendingRegistrationNotFound
@@ -46,10 +46,10 @@ func (s *RegisterStore) Get(ctx context.Context, phoneNumber string) (*account.R
 	return &registration, nil
 }
 
-func (s *RegisterStore) Delete(ctx context.Context, phoneNumber string) error {
-	return s.client.Del(ctx, registerKey(phoneNumber)).Err()
+func (s *RegisterStore) Delete(ctx context.Context, ticketID string) error {
+	return s.client.Del(ctx, registerKey(ticketID)).Err()
 }
 
-func registerKey(phoneNumber string) string {
-	return fmt.Sprintf("register:otp:%s", phoneNumber)
+func registerKey(ticketID string) string {
+	return fmt.Sprintf("register:ticket:%s", ticketID)
 }

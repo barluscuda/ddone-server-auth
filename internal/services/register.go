@@ -15,14 +15,17 @@ import (
 )
 
 const (
-	registerOTPLength = 6
-	registerOTPTTL    = 5 * time.Minute
-	usernamePrefix    = "user_"
-	usernameBytes     = 6
-	usernameAttempts  = 5
+	registerOTPLength    = 6
+	registerOTPTTL       = 5 * time.Minute
+	registerTicketPrefix = "reg_"
+	registerTicketBytes  = 12
+	usernamePrefix       = "user_"
+	usernameBytes        = 6
+	usernameAttempts     = 5
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
+var ErrRegisterTicketRequired = errors.New("ticket id is required")
 var ErrOTPCodeRequired = errors.New("otp code is required")
 var ErrPasswordRequired = errors.New("password is required")
 var ErrPendingRegistrationInvalid = errors.New("pending registration is invalid, request otp again")
@@ -32,6 +35,7 @@ type RegisterService struct {
 	store             ports.RegistrationStore
 	sender            ports.OTPSender
 	now               func() time.Time
+	ticketGenerator   func() (string, error)
 	usernameGenerator func() (string, error)
 	passwordHasher    func(string) (string, error)
 }
@@ -42,12 +46,13 @@ type RegisterInput struct {
 }
 
 type RegisterResult struct {
+	TicketID  string
 	ExpiresAt time.Time
 }
 
 type VerifyRegisterInput struct {
-	PhoneNumber string
-	OTPCode     string
+	TicketID string
+	OTPCode  string
 }
 
 func NewRegisterService(
@@ -60,6 +65,7 @@ func NewRegisterService(
 		store:             store,
 		sender:            sender,
 		now:               func() time.Time { return time.Now().UTC() },
+		ticketGenerator:   generateRegisterTicket,
 		usernameGenerator: generateUsername,
 		passwordHasher:    hashPassword,
 	}
@@ -97,9 +103,14 @@ func (s *RegisterService) Register(
 	if err != nil {
 		return nil, err
 	}
+	ticketID, err := s.ticketGenerator()
+	if err != nil {
+		return nil, err
+	}
 
 	now := s.now()
 	pendingRegistration := &account.RegisterModel{
+		TicketID:     ticketID,
 		Username:     username,
 		PasswordHash: passwordHash,
 		PhoneNumber:  phoneNumber,
@@ -113,11 +124,12 @@ func (s *RegisterService) Register(
 
 	message := sms.RegisterOTPMessage(otpCode, registerOTPTTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber, message); err != nil {
-		_ = s.store.Delete(ctx, phoneNumber)
+		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
 	}
 
 	return &RegisterResult{
+		TicketID:  ticketID,
 		ExpiresAt: pendingRegistration.OTPExpiresAt,
 	}, nil
 }
@@ -126,36 +138,37 @@ func (s *RegisterService) VerifyRegister(
 	ctx context.Context,
 	input VerifyRegisterInput,
 ) (*account.AccountModel, error) {
-	phoneNumber := strings.TrimSpace(input.PhoneNumber)
+	ticketID := strings.TrimSpace(input.TicketID)
 	otpCode := strings.TrimSpace(input.OTPCode)
-	if phoneNumber == "" {
-		return nil, ErrPhoneNumberRequired
+	if ticketID == "" {
+		return nil, ErrRegisterTicketRequired
 	}
 	if otpCode == "" {
 		return nil, ErrOTPCodeRequired
 	}
 
-	pendingRegistration, err := s.store.Get(ctx, phoneNumber)
+	pendingRegistration, err := s.store.Get(ctx, ticketID)
 	if err != nil {
 		return nil, err
 	}
+	phoneNumber := pendingRegistration.PhoneNumber
 
 	now := s.now()
 	if now.After(pendingRegistration.OTPExpiresAt) {
-		_ = s.store.Delete(ctx, phoneNumber)
+		_ = s.store.Delete(ctx, ticketID)
 		return nil, account.ErrOTPExpired
 	}
 
 	if pendingRegistration.OTPCode != otpCode {
 		return nil, account.ErrInvalidOTPCode
 	}
-	if pendingRegistration.PasswordHash == "" {
-		_ = s.store.Delete(ctx, phoneNumber)
+	if pendingRegistration.PasswordHash == "" || phoneNumber == "" {
+		_ = s.store.Delete(ctx, ticketID)
 		return nil, ErrPendingRegistrationInvalid
 	}
 
 	if _, err := s.accounts.GetByPhoneNumber(ctx, phoneNumber); err == nil {
-		_ = s.store.Delete(ctx, phoneNumber)
+		_ = s.store.Delete(ctx, ticketID)
 		return nil, account.ErrPhoneNumberAlreadyRegistered
 	} else if !errors.Is(err, account.ErrAccountNotFound) {
 		return nil, err
@@ -190,7 +203,7 @@ func (s *RegisterService) VerifyRegister(
 		return nil, err
 	}
 
-	if err := s.store.Delete(ctx, phoneNumber); err != nil {
+	if err := s.store.Delete(ctx, ticketID); err != nil {
 		return nil, err
 	}
 
@@ -212,6 +225,15 @@ func (s *RegisterService) generateUniqueUsername(ctx context.Context) (*string, 
 	}
 
 	return nil, account.ErrUsernameAlreadyRegistered
+}
+
+func generateRegisterTicket() (string, error) {
+	randomBytes := make([]byte, registerTicketBytes)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
+	}
+
+	return registerTicketPrefix + hex.EncodeToString(randomBytes), nil
 }
 
 func generateUsername() (string, error) {

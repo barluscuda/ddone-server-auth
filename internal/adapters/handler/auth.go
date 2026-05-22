@@ -36,6 +36,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	c.JSON(http.StatusAccepted, dto.ResRegister{
 		Message:   "otp sent successfully",
+		TicketID:  result.TicketID,
 		ExpiresAt: result.ExpiresAt,
 	})
 }
@@ -48,8 +49,8 @@ func (h *AuthHandler) VerifyRegister(c *gin.Context) {
 	}
 
 	accountModel, err := h.register.VerifyRegister(c.Request.Context(), services.VerifyRegisterInput{
-		PhoneNumber: req.PhoneNumber,
-		OTPCode:     req.OTPCode,
+		TicketID: req.TicketID,
+		OTPCode:  req.OTPCode,
 	})
 	if err != nil {
 		handleRegisterError(c, err)
@@ -68,6 +69,7 @@ func (h *AuthHandler) VerifyRegister(c *gin.Context) {
 func handleRegisterError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrPhoneNumberRequired),
+		errors.Is(err, services.ErrRegisterTicketRequired),
 		errors.Is(err, services.ErrOTPCodeRequired),
 		errors.Is(err, services.ErrPasswordRequired),
 		errors.Is(err, services.ErrPendingRegistrationInvalid):
