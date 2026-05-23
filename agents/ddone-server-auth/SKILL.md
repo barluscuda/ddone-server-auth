@@ -17,6 +17,7 @@ Use this skill for changes inside this repository.
 
 - Phone-based registration with OTP
 - Phone-number login with access and refresh tokens
+- Cookie-based login and refresh flows for browser clients
 - OTP resend and verification flows
 - Health check endpoint
 - JWKS publication for ES256 access tokens
@@ -49,6 +50,7 @@ Use this skill for changes inside this repository.
 - HTTP server: `cmd/app/server.go`
 - Startup wiring: `cmd/app/main.go`
 - Config loading: `config/config.go`
+- Runtime config now includes auth cookie settings and CORS settings
 - Registration use case: `internal/application/register`
 - Login use case: `internal/application/login`
 - JWKS use case: `internal/application/jwks`
@@ -56,7 +58,28 @@ Use this skill for changes inside this repository.
 - Redis store: `internal/adapters/cache`
 - SMS adapter: `internal/adapters/sms`
 - ES256 token adapter: `internal/adapters/token`
+- HTTP middleware includes recovery, request logging, and CORS
 - Postman assets: `postman/` with usage notes in `docs/postman.md`
+
+## Current HTTP Surface
+
+- `GET /healthz`
+- `POST /register`
+- `POST /register/resend`
+- `POST /register/verify`
+- `POST /login`
+- `POST /login/cookie`
+- `POST /login/refresh`
+- `POST /login/refresh/cookie`
+- `GET /.well-known/jwks.json`
+
+## Cookie And CORS Notes
+
+- `POST /login` returns access and refresh tokens in JSON and also sets the refresh cookie.
+- `POST /login/cookie` sets the refresh cookie and returns only the access token in JSON.
+- `POST /login/refresh/cookie` rotates the refresh token from the `HttpOnly` cookie and returns only the access token in JSON.
+- Browser clients using cookie auth need CORS configured with `allow_credentials=true` and explicit origins instead of `*`.
+- Keep cookie behavior in handlers and startup wiring; do not push HTTP cookie concerns into application or domain packages.
 
 ## Commands
 
@@ -74,7 +97,7 @@ After edits:
 
 1. Run `gofmt -w` on touched Go files.
 2. Run `go test ./...`.
-3. If config, architecture, startup behavior, routes, or request/response bodies changed, keep `README.md` and `AGENTS.md` in sync.
+3. If config, architecture, startup behavior, routes, request/response bodies, cookie behavior, or CORS behavior changed, keep `README.md`, `AGENTS.md`, and this skill in sync.
 4. If API routes or request payloads changed, update the checked-in Postman collection and environment templates under `postman/` and the guide in `docs/postman.md`.
 
 ## Do Not Do
