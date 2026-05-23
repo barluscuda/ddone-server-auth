@@ -17,6 +17,7 @@ type Config struct {
 	}
 	Database  DatabaseConfig
 	Redis     RedisConfig
+	Cache     CacheConfig
 	CORS      CORSConfig
 	Auth      AuthConfig
 	WenovaAPI WenovaAPIConfig
@@ -51,6 +52,12 @@ type RedisConfig struct {
 	WriteTimeout time.Duration
 	PoolSize     int
 	MinIdleConns int
+}
+
+type CacheConfig struct {
+	AccountTTL            time.Duration `mapstructure:"account_ttl"`
+	AccountSessionListTTL time.Duration `mapstructure:"account_session_list_ttl"`
+	SigningKeysTTL        time.Duration `mapstructure:"signing_keys_ttl"`
 }
 
 type WenovaAPIConfig struct {
@@ -106,6 +113,9 @@ func Load() (*Config, error) {
 	viper.SetDefault("redis.write_timeout", "3s")
 	viper.SetDefault("redis.pool_size", 10)
 	viper.SetDefault("redis.min_idle_conns", 2)
+	viper.SetDefault("cache.account_ttl", "5m")
+	viper.SetDefault("cache.account_session_list_ttl", "1m")
+	viper.SetDefault("cache.signing_keys_ttl", "1m")
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
 	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
@@ -156,6 +166,9 @@ func Load() (*Config, error) {
 	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
 	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
 	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
+	viper.BindEnv("cache.account_ttl", "DDONE_CACHE_ACCOUNT_TTL")
+	viper.BindEnv("cache.account_session_list_ttl", "DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL")
+	viper.BindEnv("cache.signing_keys_ttl", "DDONE_CACHE_SIGNING_KEYS_TTL")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
 	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
@@ -232,6 +245,16 @@ func (c *Config) validate() error {
 		if c.Redis.DB < 0 {
 			return fmt.Errorf("redis.db must be greater than or equal to 0")
 		}
+	}
+
+	if c.Cache.AccountTTL < 0 {
+		return fmt.Errorf("cache.account_ttl must be greater than or equal to 0")
+	}
+	if c.Cache.AccountSessionListTTL < 0 {
+		return fmt.Errorf("cache.account_session_list_ttl must be greater than or equal to 0")
+	}
+	if c.Cache.SigningKeysTTL < 0 {
+		return fmt.Errorf("cache.signing_keys_ttl must be greater than or equal to 0")
 	}
 
 	c.CORS.AllowedOrigins = cleanStringSlice(c.CORS.AllowedOrigins)

@@ -34,6 +34,16 @@ func TestValidateRejectsSessionCookieSameSiteNoneWithoutSecure(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNegativeCacheTTL(t *testing.T) {
+	cfg := validConfig()
+	cfg.Cache.AccountTTL = -1
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject negative cache ttl")
+	}
+}
+
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000

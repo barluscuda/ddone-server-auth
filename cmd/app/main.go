@@ -60,12 +60,27 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
 	smsClient := sms.NewSMS(&wnvClient)
-	accountRepository := repository.NewAccountRepository(db)
+	accountRepository := cache.NewCachedAccountStore(
+		redisClient,
+		repository.NewAccountRepository(db),
+		cfg.Cache.AccountTTL,
+	)
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewService(accountRepository, registerStore, smsClient)
-	signingKeyRepository := repository.NewSigningKeyRepository(db)
-	refreshSessionRepository := repository.NewRefreshSessionRepository(db)
-	loginSessionRepository := repository.NewLoginSessionRepository(db)
+	signingKeyRepository := cache.NewCachedSigningKeyStore(
+		redisClient,
+		repository.NewSigningKeyRepository(db),
+		cfg.Cache.SigningKeysTTL,
+	)
+	refreshSessionRepository := cache.NewCachedRefreshSessionStore(
+		redisClient,
+		repository.NewRefreshSessionRepository(db),
+	)
+	loginSessionRepository := cache.NewCachedLoginSessionStore(
+		redisClient,
+		repository.NewLoginSessionRepository(db),
+		cfg.Cache.AccountSessionListTTL,
+	)
 	tokenCodec := token.NewES256Codec()
 	jwksService := appjwks.NewService(signingKeyRepository, tokenCodec, appjwks.Settings{
 		Issuer:              cfg.Auth.Issuer,

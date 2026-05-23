@@ -18,7 +18,7 @@ The service uses:
 
 - `gin` for HTTP delivery
 - `gorm` + PostgreSQL for persistent account storage
-- `redis` for pending registration state and OTP counters
+- `redis` for pending registration state, OTP counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
 
@@ -125,6 +125,10 @@ DDONE_DATABASE_LOG_SQL=true
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
 
+DDONE_CACHE_ACCOUNT_TTL=5m
+DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL=1m
+DDONE_CACHE_SIGNING_KEYS_TTL=1m
+
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
 DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
@@ -155,6 +159,7 @@ Safe defaults:
 
 - `database.log_sql` defaults to `false`
 - `auth.session_cookie_secure` defaults to `true`
+- cache TTLs default to short read-through values for account, session-list, and signing-key lookups
 
 For local HTTP development, set `DDONE_AUTH_SESSION_COOKIE_SECURE=false` and `DDONE_DATABASE_LOG_SQL=true` if useful. For list-based CORS environment variables, use comma-separated values. Browser clients using the session-login flow need `DDONE_CORS_ALLOW_CREDENTIALS=true` and explicit origins instead of `*`.
 
