@@ -2,10 +2,10 @@ package cache
 
 import (
 	"context"
-	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	applogin "ddone-server-auth/internal/application/login"
 	apppassword "ddone-server-auth/internal/application/password"
 	appregister "ddone-server-auth/internal/application/register"
+	appsettings "ddone-server-auth/internal/application/settings"
 	"ddone-server-auth/internal/domain/account"
 	"time"
 
@@ -15,7 +15,7 @@ import (
 type accountStoreBackend interface {
 	appregister.AccountStore
 	applogin.AccountLookup
-	appaccountmanager.AccountReader
+	appsettings.AccountReader
 	Update(ctx context.Context, accountModel *account.AccountModel) error
 	Delete(ctx context.Context, id string) error
 }
@@ -28,7 +28,7 @@ type CachedAccountStore struct {
 
 var _ appregister.AccountStore = (*CachedAccountStore)(nil)
 var _ applogin.AccountLookup = (*CachedAccountStore)(nil)
-var _ appaccountmanager.AccountReader = (*CachedAccountStore)(nil)
+var _ appsettings.AccountReader = (*CachedAccountStore)(nil)
 var _ apppassword.AccountStore = (*CachedAccountStore)(nil)
 
 func NewCachedAccountStore(

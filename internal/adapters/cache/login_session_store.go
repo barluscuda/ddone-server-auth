@@ -2,9 +2,9 @@ package cache
 
 import (
 	"context"
-	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	applogin "ddone-server-auth/internal/application/login"
 	apppassword "ddone-server-auth/internal/application/password"
+	appsettings "ddone-server-auth/internal/application/settings"
 	"ddone-server-auth/internal/domain/auth"
 	"time"
 
@@ -13,7 +13,7 @@ import (
 
 type loginSessionStoreBackend interface {
 	applogin.LoginSessionStore
-	appaccountmanager.SessionReader
+	appsettings.SessionReader
 	apppassword.LoginSessionRevoker
 }
 
@@ -25,7 +25,7 @@ type CachedLoginSessionStore struct {
 }
 
 var _ applogin.LoginSessionStore = (*CachedLoginSessionStore)(nil)
-var _ appaccountmanager.SessionReader = (*CachedLoginSessionStore)(nil)
+var _ appsettings.SessionReader = (*CachedLoginSessionStore)(nil)
 var _ apppassword.LoginSessionRevoker = (*CachedLoginSessionStore)(nil)
 
 func NewCachedLoginSessionStore(

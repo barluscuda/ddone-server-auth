@@ -2,14 +2,14 @@ package dto
 
 import "time"
 
-type ResAccountMe struct {
-	Success bool             `json:"success"`
-	Code    string           `json:"code"`
-	Message string           `json:"message"`
-	Data    ResAccountMeData `json:"data"`
+type ResSettingsMe struct {
+	Success bool              `json:"success"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Data    ResSettingsMeData `json:"data"`
 }
 
-type ResAccountMeData struct {
+type ResSettingsMeData struct {
 	ID              string    `json:"id"`
 	Username        *string   `json:"username,omitempty"`
 	PhoneNumber     string    `json:"phoneNumber"`
@@ -17,14 +17,14 @@ type ResAccountMeData struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
-type ResAccountSessions struct {
-	Success bool                    `json:"success"`
-	Code    string                  `json:"code"`
-	Message string                  `json:"message"`
-	Data    []ResAccountSessionData `json:"data"`
+type ResSettingsSessions struct {
+	Success bool                     `json:"success"`
+	Code    string                   `json:"code"`
+	Message string                   `json:"message"`
+	Data    []ResSettingsSessionData `json:"data"`
 }
 
-type ResAccountSessionData struct {
+type ResSettingsSessionData struct {
 	ID                   string     `json:"id"`
 	ClientIP             string     `json:"clientIp,omitempty"`
 	UserAgent            string     `json:"userAgent,omitempty"`

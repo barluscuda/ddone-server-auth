@@ -22,7 +22,7 @@ func newHTTPServer(
 	logger *zap.Logger,
 	registerService appregister.UseCase,
 	loginHandler *handler.LoginHandler,
-	accountManagerHandler *handler.AccountManagerHandler,
+	settingsHandler *handler.SettingsHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -54,7 +54,7 @@ func newHTTPServer(
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler, loginHandler, accountManagerHandler, passwordHandler, requireAccessToken, jwksHandler)
+	registerRoutes(app, registerHandler, loginHandler, settingsHandler, passwordHandler, requireAccessToken, jwksHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -96,7 +96,7 @@ func registerRoutes(
 	router *gin.Engine,
 	registerHandler *handler.RegisterHandler,
 	loginHandler *handler.LoginHandler,
-	accountManagerHandler *handler.AccountManagerHandler,
+	settingsHandler *handler.SettingsHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -117,8 +117,8 @@ func registerRoutes(
 
 	settingsRoutes := router.Group("/settings")
 	settingsRoutes.Use(requireAccessToken)
-	settingsRoutes.GET("", accountManagerHandler.GetMe)
-	settingsRoutes.GET("/me", accountManagerHandler.GetMe)
-	settingsRoutes.GET("/sessions", accountManagerHandler.ListSessions)
+	settingsRoutes.GET("", settingsHandler.GetMe)
+	settingsRoutes.GET("/me", settingsHandler.GetMe)
+	settingsRoutes.GET("/sessions", settingsHandler.ListSessions)
 	settingsRoutes.POST("/password", passwordHandler.ChangePassword)
 }

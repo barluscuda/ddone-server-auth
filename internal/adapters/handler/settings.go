@@ -6,47 +6,47 @@ import (
 
 	"ddone-server-auth/internal/adapters/dto"
 	"ddone-server-auth/internal/adapters/middleware"
-	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
+	appsettings "ddone-server-auth/internal/application/settings"
 	"ddone-server-auth/internal/domain/account"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	codeAccountFetched     = "account_fetched"
-	codeSessionsFetched    = "account_sessions_fetched"
-	messageAccountFetched  = "account fetched successfully"
-	messageSessionsFetched = "account sessions fetched successfully"
+	codeSettingsFetched         = "settings_fetched"
+	codeSettingsSessionsFetched = "settings_sessions_fetched"
+	messageSettingsFetched      = "settings fetched successfully"
+	messageSettingsSessions     = "settings sessions fetched successfully"
 )
 
-type AccountManagerHandler struct {
-	accountManager appaccountmanager.UseCase
+type SettingsHandler struct {
+	settings appsettings.UseCase
 }
 
-func NewAccountManagerHandler(accountManager appaccountmanager.UseCase) *AccountManagerHandler {
-	return &AccountManagerHandler{accountManager: accountManager}
+func NewSettingsHandler(settings appsettings.UseCase) *SettingsHandler {
+	return &SettingsHandler{settings: settings}
 }
 
-func (h *AccountManagerHandler) GetMe(c *gin.Context) {
+func (h *SettingsHandler) GetMe(c *gin.Context) {
 	authContext, ok := middleware.CurrentAuth(c)
 	if !ok {
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 		return
 	}
 
-	result, err := h.accountManager.GetMe(c.Request.Context(), appaccountmanager.GetMeInput{
+	result, err := h.settings.Get(c.Request.Context(), appsettings.GetInput{
 		AccountID: authContext.AccountID,
 	})
 	if err != nil {
-		handleAccountManagerError(c, err)
+		handleSettingsError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.ResAccountMe{
+	c.JSON(http.StatusOK, dto.ResSettingsMe{
 		Success: true,
-		Code:    codeAccountFetched,
-		Message: messageAccountFetched,
-		Data: dto.ResAccountMeData{
+		Code:    codeSettingsFetched,
+		Message: messageSettingsFetched,
+		Data: dto.ResSettingsMeData{
 			ID:              result.ID,
 			Username:        result.Username,
 			PhoneNumber:     result.PhoneNumber,
@@ -56,24 +56,24 @@ func (h *AccountManagerHandler) GetMe(c *gin.Context) {
 	})
 }
 
-func (h *AccountManagerHandler) ListSessions(c *gin.Context) {
+func (h *SettingsHandler) ListSessions(c *gin.Context) {
 	authContext, ok := middleware.CurrentAuth(c)
 	if !ok {
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 		return
 	}
 
-	result, err := h.accountManager.ListMySessions(c.Request.Context(), appaccountmanager.ListMySessionsInput{
+	result, err := h.settings.ListSessions(c.Request.Context(), appsettings.ListSessionsInput{
 		AccountID: authContext.AccountID,
 	})
 	if err != nil {
-		handleAccountManagerError(c, err)
+		handleSettingsError(c, err)
 		return
 	}
 
-	data := make([]dto.ResAccountSessionData, 0, len(result))
+	data := make([]dto.ResSettingsSessionData, 0, len(result))
 	for _, session := range result {
-		data = append(data, dto.ResAccountSessionData{
+		data = append(data, dto.ResSettingsSessionData{
 			ID:                   session.ID,
 			ClientIP:             session.ClientIP,
 			UserAgent:            session.UserAgent,
@@ -83,17 +83,17 @@ func (h *AccountManagerHandler) ListSessions(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, dto.ResAccountSessions{
+	c.JSON(http.StatusOK, dto.ResSettingsSessions{
 		Success: true,
-		Code:    codeSessionsFetched,
-		Message: messageSessionsFetched,
+		Code:    codeSettingsSessionsFetched,
+		Message: messageSettingsSessions,
 		Data:    data,
 	})
 }
 
-func handleAccountManagerError(c *gin.Context, err error) {
+func handleSettingsError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, appaccountmanager.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, appsettings.ErrAuthenticatedAccountRequired):
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 	case errors.Is(err, account.ErrAccountNotFound):
 		respondError(c, http.StatusNotFound, "account_not_found", "account not found")

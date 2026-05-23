@@ -1,4 +1,4 @@
-package accountmanager
+package settings
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 var ErrAuthenticatedAccountRequired = errors.New("authenticated account is required")
 
 type UseCase interface {
-	GetMe(ctx context.Context, input GetMeInput) (*AccountView, error)
-	ListMySessions(ctx context.Context, input ListMySessionsInput) ([]SessionView, error)
+	Get(ctx context.Context, input GetInput) (*View, error)
+	ListSessions(ctx context.Context, input ListSessionsInput) ([]SessionView, error)
 }
 
 type Service struct {
@@ -25,7 +25,7 @@ func NewService(accounts AccountReader, sessions SessionReader) *Service {
 	}
 }
 
-func (s *Service) GetMe(ctx context.Context, input GetMeInput) (*AccountView, error) {
+func (s *Service) Get(ctx context.Context, input GetInput) (*View, error) {
 	accountID := strings.TrimSpace(input.AccountID)
 	if accountID == "" {
 		return nil, ErrAuthenticatedAccountRequired
@@ -36,7 +36,7 @@ func (s *Service) GetMe(ctx context.Context, input GetMeInput) (*AccountView, er
 		return nil, err
 	}
 
-	return &AccountView{
+	return &View{
 		ID:              accountModel.ID,
 		Username:        accountModel.Username,
 		PhoneNumber:     accountModel.PhoneNumber,
@@ -45,7 +45,7 @@ func (s *Service) GetMe(ctx context.Context, input GetMeInput) (*AccountView, er
 	}, nil
 }
 
-func (s *Service) ListMySessions(ctx context.Context, input ListMySessionsInput) ([]SessionView, error) {
+func (s *Service) ListSessions(ctx context.Context, input ListSessionsInput) ([]SessionView, error) {
 	accountID := strings.TrimSpace(input.AccountID)
 	if accountID == "" {
 		return nil, ErrAuthenticatedAccountRequired

@@ -1,4 +1,4 @@
-package accountmanager
+package settings
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func (r *fakeSessionReader) ListByAccountID(_ context.Context, accountID string)
 	return append([]auth.LoginSession(nil), r.sessionsByAccount[accountID]...), nil
 }
 
-func TestGetMeReturnsCurrentAccount(t *testing.T) {
+func TestGetReturnsCurrentAccount(t *testing.T) {
 	service := NewService(&fakeAccountReader{
 		accountByID: map[string]*account.AccountModel{
 			"account-1": {
@@ -42,25 +42,25 @@ func TestGetMeReturnsCurrentAccount(t *testing.T) {
 		},
 	}, &fakeSessionReader{})
 
-	result, err := service.GetMe(context.Background(), GetMeInput{AccountID: "account-1"})
+	result, err := service.Get(context.Background(), GetInput{AccountID: "account-1"})
 	if err != nil {
-		t.Fatalf("GetMe returned error: %v", err)
+		t.Fatalf("Get returned error: %v", err)
 	}
 	if result.ID != "account-1" {
 		t.Fatalf("expected account id %q, got %q", "account-1", result.ID)
 	}
 }
 
-func TestGetMeRequiresAuthenticatedAccount(t *testing.T) {
+func TestGetRequiresAuthenticatedAccount(t *testing.T) {
 	service := NewService(&fakeAccountReader{}, &fakeSessionReader{})
 
-	_, err := service.GetMe(context.Background(), GetMeInput{})
+	_, err := service.Get(context.Background(), GetInput{})
 	if !errors.Is(err, ErrAuthenticatedAccountRequired) {
 		t.Fatalf("expected ErrAuthenticatedAccountRequired, got %v", err)
 	}
 }
 
-func TestListMySessionsReturnsOwnedSessions(t *testing.T) {
+func TestListSessionsReturnsOwnedSessions(t *testing.T) {
 	service := NewService(&fakeAccountReader{}, &fakeSessionReader{
 		sessionsByAccount: map[string][]auth.LoginSession{
 			"account-1": {
@@ -76,9 +76,9 @@ func TestListMySessionsReturnsOwnedSessions(t *testing.T) {
 		},
 	})
 
-	result, err := service.ListMySessions(context.Background(), ListMySessionsInput{AccountID: "account-1"})
+	result, err := service.ListSessions(context.Background(), ListSessionsInput{AccountID: "account-1"})
 	if err != nil {
-		t.Fatalf("ListMySessions returned error: %v", err)
+		t.Fatalf("ListSessions returned error: %v", err)
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(result))

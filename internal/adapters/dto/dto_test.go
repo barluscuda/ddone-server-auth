@@ -68,12 +68,12 @@ func TestResRegisterMarshalsCamelCaseFields(t *testing.T) {
 	}
 }
 
-func TestResAccountMeMarshalsCamelCaseFields(t *testing.T) {
-	payload, err := json.Marshal(ResAccountMe{
+func TestResSettingsMeMarshalsCamelCaseFields(t *testing.T) {
+	payload, err := json.Marshal(ResSettingsMe{
 		Success: true,
-		Code:    "account_fetched",
-		Message: "account fetched successfully",
-		Data: ResAccountMeData{
+		Code:    "settings_fetched",
+		Message: "settings fetched successfully",
+		Data: ResSettingsMeData{
 			ID:              "account-1",
 			PhoneNumber:     "2012345678",
 			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
@@ -81,7 +81,7 @@ func TestResAccountMeMarshalsCamelCaseFields(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("marshal account me dto: %v", err)
+		t.Fatalf("marshal settings me dto: %v", err)
 	}
 
 	body := string(payload)

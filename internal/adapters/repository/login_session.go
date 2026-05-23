@@ -2,9 +2,9 @@ package repository
 
 import (
 	"context"
-	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	"ddone-server-auth/internal/application/login"
 	apppassword "ddone-server-auth/internal/application/password"
+	appsettings "ddone-server-auth/internal/application/settings"
 	"ddone-server-auth/internal/domain/auth"
 	"errors"
 	"time"
@@ -35,7 +35,7 @@ func (loginSessionRecord) TableName() string {
 }
 
 var _ login.LoginSessionStore = (*LoginSessionRepository)(nil)
-var _ appaccountmanager.SessionReader = (*LoginSessionRepository)(nil)
+var _ appsettings.SessionReader = (*LoginSessionRepository)(nil)
 var _ apppassword.LoginSessionRevoker = (*LoginSessionRepository)(nil)
 
 func NewLoginSessionRepository(db *gorm.DB) *LoginSessionRepository {

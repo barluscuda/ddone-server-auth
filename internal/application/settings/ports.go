@@ -1,4 +1,4 @@
-package accountmanager
+package settings
 
 import (
 	"context"

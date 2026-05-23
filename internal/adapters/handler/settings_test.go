@@ -8,32 +8,32 @@ import (
 	"time"
 
 	"ddone-server-auth/internal/adapters/middleware"
-	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
+	appsettings "ddone-server-auth/internal/application/settings"
 
 	"github.com/gin-gonic/gin"
 )
 
-type fakeAccountManagerUseCase struct {
-	me       *appaccountmanager.AccountView
+type fakeSettingsUseCase struct {
+	me       *appsettings.View
 	meErr    error
-	sessions []appaccountmanager.SessionView
+	sessions []appsettings.SessionView
 	sessErr  error
 }
 
-func (f *fakeAccountManagerUseCase) GetMe(_ context.Context, _ appaccountmanager.GetMeInput) (*appaccountmanager.AccountView, error) {
+func (f *fakeSettingsUseCase) Get(_ context.Context, _ appsettings.GetInput) (*appsettings.View, error) {
 	return f.me, f.meErr
 }
 
-func (f *fakeAccountManagerUseCase) ListMySessions(_ context.Context, _ appaccountmanager.ListMySessionsInput) ([]appaccountmanager.SessionView, error) {
+func (f *fakeSettingsUseCase) ListSessions(_ context.Context, _ appsettings.ListSessionsInput) ([]appsettings.SessionView, error) {
 	return f.sessions, f.sessErr
 }
 
-func TestAccountManagerHandlerReturnsMe(t *testing.T) {
+func TestSettingsHandlerReturnsMe(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	handler := NewAccountManagerHandler(&fakeAccountManagerUseCase{
-		me: &appaccountmanager.AccountView{
+	handler := NewSettingsHandler(&fakeSettingsUseCase{
+		me: &appsettings.View{
 			ID:              "account-1",
 			PhoneNumber:     "2012345678",
 			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
@@ -56,12 +56,12 @@ func TestAccountManagerHandlerReturnsMe(t *testing.T) {
 	}
 }
 
-func TestAccountManagerHandlerReturnsSessions(t *testing.T) {
+func TestSettingsHandlerReturnsSessions(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	handler := NewAccountManagerHandler(&fakeAccountManagerUseCase{
-		sessions: []appaccountmanager.SessionView{
+	handler := NewSettingsHandler(&fakeSettingsUseCase{
+		sessions: []appsettings.SessionView{
 			{
 				ID:                   "session-1",
 				ClientIP:             "127.0.0.1",

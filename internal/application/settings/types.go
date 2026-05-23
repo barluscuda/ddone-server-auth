@@ -1,16 +1,16 @@
-package accountmanager
+package settings
 
 import "time"
 
-type GetMeInput struct {
+type GetInput struct {
 	AccountID string
 }
 
-type ListMySessionsInput struct {
+type ListSessionsInput struct {
 	AccountID string
 }
 
-type AccountView struct {
+type View struct {
 	ID              string
 	Username        *string
 	PhoneNumber     string

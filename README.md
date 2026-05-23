@@ -46,6 +46,7 @@ config/                        Config loading and default values
 internal/application/register/ Registration use case
 internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
+internal/application/settings/ Settings and current-session listing use case
 internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/account/       Account and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
