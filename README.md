@@ -10,6 +10,8 @@
 - `POST /login/refresh`
 - `POST /login/session`
 - `POST /login/session/token`
+- `GET /account/me`
+- `GET /account/sessions`
 - `GET /.well-known/jwks.json`
 
 The service uses:
@@ -241,6 +243,26 @@ Example body:
 ### `POST /login/session/token`
 
 Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while keeping the login session itself active indefinitely.
+
+### `GET /account/me`
+
+Returns the account identity for the current authenticated user.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `GET /account/sessions`
+
+Returns the current account's known login sessions.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
 
 ### `GET /.well-known/jwks.json`
 

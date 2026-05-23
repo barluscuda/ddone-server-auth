@@ -54,6 +54,28 @@ func (r *LoginSessionRepository) GetByTokenHash(
 	return toLoginSession(record), nil
 }
 
+func (r *LoginSessionRepository) ListByAccountID(
+	ctx context.Context,
+	accountID string,
+) ([]auth.LoginSession, error) {
+	var records []loginSessionRecord
+
+	if err := r.baseQuery(ctx).
+		Where("account_id = ?", accountID).
+		Order("created_at DESC").
+		Find(&records).
+		Error; err != nil {
+		return nil, err
+	}
+
+	sessions := make([]auth.LoginSession, 0, len(records))
+	for _, record := range records {
+		sessions = append(sessions, *toLoginSession(record))
+	}
+
+	return sessions, nil
+}
+
 func (r *LoginSessionRepository) UpdateAccessToken(
 	ctx context.Context,
 	sessionID string,

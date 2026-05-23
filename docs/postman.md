@@ -30,7 +30,9 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 6. `Refresh Token`
 7. `Create Login Session`
 8. `Session Access Token`
-9. `JWKS`
+9. `Account Me`
+10. `Account Sessions`
+11. `JWKS`
 
 ## Notes
 
@@ -38,4 +40,5 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - The `Login` and `Refresh Token` requests are body-token flows and store both `accessToken` and `refreshToken`.
 - The `Create Login Session` request relies on Postman's cookie jar receiving the `ddone_session` cookie; the JWT stays in server-side session state.
 - The `Session Access Token` request depends on that cookie jar entry and returns the currently active access token for the session, or a fresh one if the stored token has already expired.
+- The `Account Me` and `Account Sessions` requests require `accessToken` and send it in the `Authorization` header.
 - `JWKS` is public and does not require authentication.

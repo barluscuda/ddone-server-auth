@@ -6,9 +6,11 @@ import (
 	"ddone-server-auth/internal/adapters/cache"
 	"ddone-server-auth/internal/adapters/database"
 	"ddone-server-auth/internal/adapters/handler"
+	"ddone-server-auth/internal/adapters/middleware"
 	"ddone-server-auth/internal/adapters/repository"
 	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/adapters/token"
+	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	appjwks "ddone-server-auth/internal/application/jwks"
 	applogin "ddone-server-auth/internal/application/login"
 	appregister "ddone-server-auth/internal/application/register"
@@ -83,15 +85,17 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	loginService := applogin.NewService(accountRepository, refreshSessionRepository, loginSessionRepository, jwksService, applogin.Settings{
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 	})
+	accountManagerService := appaccountmanager.NewService(accountRepository, loginSessionRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
 		Name:     cfg.Auth.SessionCookieName,
 		MaxAge:   cfg.Auth.SessionCookieMaxAge,
 		Secure:   cfg.Auth.SessionCookieSecure,
 		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
 	})
+	accountManagerHandler := handler.NewAccountManagerHandler(accountManagerService)
 	jwksHandler := handler.NewJWKSHandler(jwksService)
 
-	return newHTTPServer(cfg, logger, registerService, loginHandler, jwksHandler), func() {
+	return newHTTPServer(cfg, logger, registerService, loginHandler, accountManagerHandler, middleware.RequireAccessToken(jwksService), jwksHandler), func() {
 		if err := redisClient.Close(); err != nil {
 			logger.Warn("failed to close redis client", zap.Error(err))
 		}

@@ -23,5 +23,12 @@ type TokenCodec interface {
 		retentionWindow time.Duration,
 	) (*auth.SigningKey, error)
 	IssueAccessToken(key *auth.SigningKey, claims auth.AccessTokenClaims) (*auth.AccessToken, error)
+	VerifyAccessToken(
+		tokenValue string,
+		keys []auth.SigningKey,
+		expectedIssuer string,
+		expectedAudience string,
+		now time.Time,
+	) (*auth.AccessTokenClaims, error)
 	PublicJWK(key auth.SigningKey) auth.JWK
 }

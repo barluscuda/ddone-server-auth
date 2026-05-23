@@ -94,6 +94,41 @@ func TestIssueAccessTokenSerializesExpectedHeaderAndClaims(t *testing.T) {
 	}
 }
 
+func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
+	codec := NewES256Codec()
+	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
+
+	key, err := codec.GenerateSigningKey("kid-1", now, now, 90*24*time.Hour, 180*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSigningKey returned error: %v", err)
+	}
+
+	issued, err := codec.IssueAccessToken(key, auth.AccessTokenClaims{
+		Issuer:      "issuer",
+		Subject:     "account-1",
+		Audience:    "audience",
+		JWTID:       "token-1",
+		PhoneNumber: "2012345678",
+		IssuedAt:    now,
+		NotBefore:   now,
+		ExpiresAt:   now.Add(15 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("IssueAccessToken returned error: %v", err)
+	}
+
+	claims, err := codec.VerifyAccessToken(issued.Token, []auth.SigningKey{*key}, "issuer", "audience", now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("VerifyAccessToken returned error: %v", err)
+	}
+	if claims.Subject != "account-1" {
+		t.Fatalf("expected subject %q, got %q", "account-1", claims.Subject)
+	}
+	if claims.PhoneNumber != "2012345678" {
+		t.Fatalf("expected phone number %q, got %q", "2012345678", claims.PhoneNumber)
+	}
+}
+
 func splitJWT(t *testing.T, tokenValue string) (string, string, string) {
 	t.Helper()
 

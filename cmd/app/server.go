@@ -22,6 +22,8 @@ func newHTTPServer(
 	logger *zap.Logger,
 	registerService appregister.UseCase,
 	loginHandler *handler.LoginHandler,
+	accountManagerHandler *handler.AccountManagerHandler,
+	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) *http.Server {
 	if cfg.App.Debug {
@@ -51,7 +53,7 @@ func newHTTPServer(
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler, loginHandler, jwksHandler)
+	registerRoutes(app, registerHandler, loginHandler, accountManagerHandler, requireAccessToken, jwksHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -93,6 +95,8 @@ func registerRoutes(
 	router gin.IRoutes,
 	registerHandler *handler.RegisterHandler,
 	loginHandler *handler.LoginHandler,
+	accountManagerHandler *handler.AccountManagerHandler,
+	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
@@ -104,4 +108,9 @@ func registerRoutes(
 	router.POST("/login/session", loginHandler.LoginSession)
 	router.POST("/login/session/token", loginHandler.SessionToken)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
+
+	accountRoutes := router.(*gin.Engine).Group("/account")
+	accountRoutes.Use(requireAccessToken)
+	accountRoutes.GET("/me", accountManagerHandler.GetMe)
+	accountRoutes.GET("/sessions", accountManagerHandler.ListSessions)
 }

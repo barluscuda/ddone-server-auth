@@ -67,3 +67,32 @@ func TestResRegisterMarshalsCamelCaseFields(t *testing.T) {
 		}
 	}
 }
+
+func TestResAccountMeMarshalsCamelCaseFields(t *testing.T) {
+	payload, err := json.Marshal(ResAccountMe{
+		Success: true,
+		Code:    "account_fetched",
+		Message: "account fetched successfully",
+		Data: ResAccountMeData{
+			ID:              "account-1",
+			PhoneNumber:     "2012345678",
+			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+			CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal account me dto: %v", err)
+	}
+
+	body := string(payload)
+	for _, expected := range []string{"phoneNumber", "phoneVerifiedAt", "createdAt"} {
+		if !strings.Contains(body, `"`+expected+`"`) {
+			t.Fatalf("expected response body to contain %q, got %s", expected, body)
+		}
+	}
+	for _, rejected := range []string{"phone_number", "phone_verified_at", "created_at"} {
+		if strings.Contains(body, `"`+rejected+`"`) {
+			t.Fatalf("expected response body to avoid %q, got %s", rejected, body)
+		}
+	}
+}

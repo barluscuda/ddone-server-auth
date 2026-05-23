@@ -56,6 +56,8 @@ cmd/app/                  Process entrypoint
 - `POST /login/refresh`
 - `POST /login/session`
 - `POST /login/session/token`
+- `GET /account/me`
+- `GET /account/sessions`
 - `GET /.well-known/jwks.json`
 
 Registration currently depends on:

@@ -40,8 +40,9 @@ func (s *fakeSigningKeyStore) WithRotationLock(ctx context.Context, fn func(cont
 }
 
 type fakeTokenCodec struct {
-	generatedKeys []*auth.SigningKey
-	issuedClaims  auth.AccessTokenClaims
+	generatedKeys  []*auth.SigningKey
+	issuedClaims   auth.AccessTokenClaims
+	verifiedClaims *auth.AccessTokenClaims
 }
 
 func (c *fakeTokenCodec) GenerateSigningKey(
@@ -101,6 +102,20 @@ func (c *fakeTokenCodec) PublicJWK(key auth.SigningKey) auth.JWK {
 		X:         key.PublicX,
 		Y:         key.PublicY,
 	}
+}
+
+func (c *fakeTokenCodec) VerifyAccessToken(
+	_ string,
+	_ []auth.SigningKey,
+	_ string,
+	_ string,
+	_ time.Time,
+) (*auth.AccessTokenClaims, error) {
+	if c.verifiedClaims == nil {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	return c.verifiedClaims, nil
 }
 
 func TestEnsureActiveSigningKeyCreatesFirstKey(t *testing.T) {
@@ -234,6 +249,35 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 	publicKey := publicKeyFromJWK(t, publicJWK)
 	if !ecdsa.Verify(publicKey, sum[:], decodeSignaturePart(signature[:32]), decodeSignaturePart(signature[32:])) {
 		t.Fatal("expected issued token to verify against published jwk")
+	}
+}
+
+func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
+	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
+	store := &fakeSigningKeyStore{}
+	codec := &fakeTokenCodec{
+		verifiedClaims: &auth.AccessTokenClaims{
+			Subject:   "account-1",
+			Audience:  "audience",
+			Issuer:    "issuer",
+			ExpiresAt: now.Add(time.Minute),
+		},
+	}
+	service := NewService(store, codec, Settings{
+		Issuer:              "issuer",
+		Audience:            "audience",
+		AccessTokenTTL:      15 * time.Minute,
+		SigningKeyRotation:  90 * 24 * time.Hour,
+		SigningKeyRetention: 180 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return now }
+
+	claims, err := service.VerifyAccessToken(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("VerifyAccessToken returned error: %v", err)
+	}
+	if claims.Subject != "account-1" {
+		t.Fatalf("expected subject %q, got %q", "account-1", claims.Subject)
 	}
 }
 

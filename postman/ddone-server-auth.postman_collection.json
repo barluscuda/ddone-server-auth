@@ -291,6 +291,52 @@
       }
     },
     {
+      "name": "Account Me",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/account/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "account",
+            "me"
+          ]
+        },
+        "description": "Returns the current authenticated account from the Bearer access token."
+      }
+    },
+    {
+      "name": "Account Sessions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/account/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "account",
+            "sessions"
+          ]
+        },
+        "description": "Returns the login sessions for the current authenticated account."
+      }
+    },
+    {
       "name": "JWKS",
       "request": {
         "method": "GET",

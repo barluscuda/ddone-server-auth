@@ -71,6 +71,8 @@ Use this skill for changes inside this repository.
 - `POST /login/refresh`
 - `POST /login/session`
 - `POST /login/session/token`
+- `GET /account/me`
+- `GET /account/sessions`
 - `GET /.well-known/jwks.json`
 
 ## Login And CORS Notes
@@ -79,6 +81,7 @@ Use this skill for changes inside this repository.
 - `POST /login/refresh` rotates the refresh token from the request body and returns a new access token plus refresh token in JSON.
 - `POST /login/session` stores a persistent server-side session in PostgreSQL and sets the session identifier in an `HttpOnly` cookie.
 - `POST /login/session/token` reads that session cookie and returns the current access token for the session, automatically issuing a new one only after the stored token has expired.
+- `GET /account/me` and `GET /account/sessions` are self-service routes protected by a Bearer access token in the `Authorization` header.
 - If clients send credentials across origins for other reasons, CORS still requires `allow_credentials=true` and explicit origins instead of `*`.
 
 ## Commands

@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 )
 
@@ -127,6 +128,85 @@ func (c *ES256Codec) PublicJWK(key auth.SigningKey) auth.JWK {
 	}
 }
 
+func (c *ES256Codec) VerifyAccessToken(
+	tokenValue string,
+	keys []auth.SigningKey,
+	expectedIssuer string,
+	expectedAudience string,
+	now time.Time,
+) (*auth.AccessTokenClaims, error) {
+	headerSegment, payloadSegment, signatureSegment, err := splitCompactJWT(tokenValue)
+	if err != nil {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	var header struct {
+		Algorithm string `json:"alg"`
+		KeyID     string `json:"kid"`
+		Type      string `json:"typ"`
+	}
+	if err := decodeJWTSegment(headerSegment, &header); err != nil {
+		return nil, auth.ErrInvalidAccessToken
+	}
+	if header.Algorithm != "ES256" || strings.TrimSpace(header.KeyID) == "" {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	signingKey, ok := findSigningKey(keys, header.KeyID)
+	if !ok {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	signature, err := base64.RawURLEncoding.DecodeString(signatureSegment)
+	if err != nil || len(signature) != 64 {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	sum := sha256.Sum256([]byte(headerSegment + "." + payloadSegment))
+	publicKey, err := publicKeyFromSigningKey(signingKey)
+	if err != nil {
+		return nil, auth.ErrInvalidAccessToken
+	}
+	if !ecdsa.Verify(publicKey, sum[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	var payload struct {
+		Issuer      string `json:"iss"`
+		Subject     string `json:"sub"`
+		Audience    string `json:"aud"`
+		JWTID       string `json:"jti"`
+		IssuedAt    int64  `json:"iat"`
+		NotBefore   int64  `json:"nbf"`
+		ExpiresAt   int64  `json:"exp"`
+		PhoneNumber string `json:"phone_number"`
+	}
+	if err := decodeJWTSegment(payloadSegment, &payload); err != nil {
+		return nil, auth.ErrInvalidAccessToken
+	}
+	if payload.Issuer != expectedIssuer || payload.Audience != expectedAudience {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	issuedAt := time.Unix(payload.IssuedAt, 0).UTC()
+	notBefore := time.Unix(payload.NotBefore, 0).UTC()
+	expiresAt := time.Unix(payload.ExpiresAt, 0).UTC()
+	if now.Before(notBefore) || !now.Before(expiresAt) {
+		return nil, auth.ErrInvalidAccessToken
+	}
+
+	return &auth.AccessTokenClaims{
+		Issuer:      payload.Issuer,
+		Subject:     payload.Subject,
+		Audience:    payload.Audience,
+		JWTID:       payload.JWTID,
+		PhoneNumber: payload.PhoneNumber,
+		IssuedAt:    issuedAt,
+		NotBefore:   notBefore,
+		ExpiresAt:   expiresAt,
+	}, nil
+}
+
 func parsePrivateKeyPEM(raw string) (*ecdsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(raw))
 	if block == nil {
@@ -173,4 +253,54 @@ func signingKeyStatus(createdAt time.Time, activatesAt time.Time) string {
 	}
 
 	return auth.SigningKeyStatusActive
+}
+
+func splitCompactJWT(tokenValue string) (string, string, string, error) {
+	parts := strings.Split(strings.TrimSpace(tokenValue), ".")
+	if len(parts) != 3 {
+		return "", "", "", fmt.Errorf("invalid jwt segments")
+	}
+
+	return parts[0], parts[1], parts[2], nil
+}
+
+func decodeJWTSegment(segment string, target any) error {
+	decoded, err := base64.RawURLEncoding.DecodeString(segment)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(decoded, target)
+}
+
+func findSigningKey(keys []auth.SigningKey, keyID string) (auth.SigningKey, bool) {
+	for _, key := range keys {
+		if key.KeyID == keyID {
+			return key, true
+		}
+	}
+
+	return auth.SigningKey{}, false
+}
+
+func publicKeyFromSigningKey(key auth.SigningKey) (*ecdsa.PublicKey, error) {
+	xValue, err := base64.RawURLEncoding.DecodeString(key.PublicX)
+	if err != nil {
+		return nil, err
+	}
+	yValue, err := base64.RawURLEncoding.DecodeString(key.PublicY)
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     new(big.Int).SetBytes(xValue),
+		Y:     new(big.Int).SetBytes(yValue),
+	}
+	if !publicKey.Curve.IsOnCurve(publicKey.X, publicKey.Y) {
+		return nil, fmt.Errorf("public key is not on curve")
+	}
+
+	return publicKey, nil
 }
