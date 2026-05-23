@@ -27,5 +27,5 @@ type LoginSessionStore interface {
 }
 
 type AccessTokenIssuer interface {
-	IssueAccessToken(ctx context.Context, subject string, phoneNumber string) (*auth.AccessToken, error)
+	IssueAccessToken(ctx context.Context, accountID string, phoneNumber string) (*auth.AccessToken, error)
 }

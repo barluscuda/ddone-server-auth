@@ -13,15 +13,15 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - `baseUrl`: default `http://localhost:3000`
 - `phoneNumber`: phone number used for registration and login
 - `password`: password used for registration and login
-- `otpCode`: OTP value for `/register/verify`
-- `ticketId`: saved automatically after `/register`
-- `resetOtpCode`: OTP value for `/password/forgot/verify`
-- `resetTicketId`: saved automatically after `/password/forgot`
-- `refreshToken`: saved automatically after `/login` and `/login/refresh`
-- `accessToken`: saved automatically after `/login`, `/login/refresh`, and `/login/session/token`
-- `accountId`: saved automatically after `/register/verify`
-- `username`: saved automatically after `/register/verify`
-- `currentPassword`: current password used for `/account/password`
+- `otpCode`: OTP value for `/registrations/verify`
+- `ticketId`: saved automatically after `/registrations`
+- `resetOtpCode`: OTP value for `/password-resets/verify`
+- `resetTicketId`: saved automatically after `/password-resets`
+- `refreshToken`: saved automatically after `/tokens` and `/tokens/refresh`
+- `accessToken`: saved automatically after `/tokens`, `/tokens/refresh`, and `/sessions/token`
+- `accountId`: saved automatically after `/registrations/verify`
+- `username`: saved automatically after `/registrations/verify`
+- `currentPassword`: current password used for `/settings/password`
 - `newPassword`: replacement password used for password reset and change-password flows
 
 ## Recommended Flow
@@ -39,8 +39,8 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 11. `Verify Forgot Password`
 12. `Login`
 13. `Change Password`
-14. `Account Me`
-15. `Account Sessions`
+14. `Settings`
+15. `Settings Sessions`
 16. `JWKS`
 
 ## Notes
@@ -51,5 +51,6 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - The `Verify Forgot Password` and `Change Password` requests update the `password` environment variable to match `newPassword` after a successful change.
 - The `Create Login Session` request relies on Postman's cookie jar receiving the `ddone_session` cookie; the JWT stays in server-side session state.
 - The `Session Access Token` request depends on that cookie jar entry and returns the currently active access token for the session, or a fresh one if the stored token has already expired.
-- The `Account Me`, `Account Sessions`, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
+- The `Settings`, `Settings Sessions`, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
+- The `Settings` request uses `GET /settings/me`; `GET /settings` is also available.
 - `JWKS` is public and does not require authentication.

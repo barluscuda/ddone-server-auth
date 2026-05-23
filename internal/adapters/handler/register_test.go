@@ -95,12 +95,12 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register", handler.Register)
+	router.POST("/registrations", handler.Register)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -131,12 +131,12 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register", handler.Register)
+	router.POST("/registrations", handler.Register)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -151,12 +151,12 @@ func TestRegisterRejectsInvalidRequestBodyWithSafeMessage(t *testing.T) {
 	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader([]byte(`{`)))
+	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader([]byte(`{`)))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register", handler.Register)
+	router.POST("/registrations", handler.Register)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -190,12 +190,12 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register", handler.Register)
+	router.POST("/registrations", handler.Register)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusAccepted {
@@ -236,12 +236,12 @@ func TestRegisterRejectsWhitespacePassword(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register", handler.Register)
+	router.POST("/registrations", handler.Register)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -264,12 +264,12 @@ func TestVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register/verify", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations/verify", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register/verify", handler.VerifyRegister)
+	router.POST("/registrations/verify", handler.VerifyRegister)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -305,12 +305,12 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register/resend", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register/resend", handler.ResendOTP)
+	router.POST("/registrations/resend", handler.ResendOTP)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusAccepted {
@@ -364,12 +364,12 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/register/resend", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/registrations/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/register/resend", handler.ResendOTP)
+	router.POST("/registrations/resend", handler.ResendOTP)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusTooManyRequests {

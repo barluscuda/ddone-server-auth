@@ -27,11 +27,11 @@ func TestRequireAccessTokenRejectsMissingHeader(t *testing.T) {
 
 	router := gin.New()
 	router.Use(RequireAccessToken(&fakeAccessTokenVerifier{}))
-	router.GET("/account/me", func(c *gin.Context) {
+	router.GET("/settings/me", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/me", nil)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -54,7 +54,7 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 			ExpiresAt:   time.Now().UTC().Add(time.Minute),
 		},
 	}))
-	router.GET("/account/me", func(c *gin.Context) {
+	router.GET("/settings/me", func(c *gin.Context) {
 		authContext, ok := CurrentAuth(c)
 		if !ok {
 			t.Fatal("expected auth context")
@@ -65,7 +65,7 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/me", nil)
 	req.Header.Set("Authorization", "Bearer access-token")
 	recorder := httptest.NewRecorder()
 

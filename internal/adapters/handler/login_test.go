@@ -83,12 +83,12 @@ func TestLoginHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/tokens", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/login", handler.Login)
+	router.POST("/tokens", handler.Login)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
@@ -126,12 +126,12 @@ func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login/refresh", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/tokens/refresh", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/login/refresh", handler.Refresh)
+	router.POST("/tokens/refresh", handler.Refresh)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
@@ -169,12 +169,12 @@ func TestLoginSessionHandlerSetsSessionCookie(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login/session", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/login/session", handler.LoginSession)
+	router.POST("/sessions", handler.LoginSession)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
@@ -208,12 +208,12 @@ func TestSessionTokenHandlerReturnsAccessTokenFromSessionCookie(t *testing.T) {
 		},
 	}, testSessionCookieConfig())
 
-	req := httptest.NewRequest(http.MethodPost, "/login/session/token", nil)
+	req := httptest.NewRequest(http.MethodPost, "/sessions/token", nil)
 	req.AddCookie(&http.Cookie{Name: "ddone_session", Value: "session-token"})
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/login/session/token", handler.SessionToken)
+	router.POST("/sessions/token", handler.SessionToken)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {

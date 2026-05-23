@@ -57,12 +57,12 @@ func TestPasswordHandlerForgotPasswordReturnsAccepted(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/password/forgot", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/password-resets", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/password/forgot", handler.ForgotPassword)
+	router.POST("/password-resets", handler.ForgotPassword)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusAccepted {
@@ -84,12 +84,12 @@ func TestPasswordHandlerChangePasswordRequiresAuthContext(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/account/password", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/settings/password", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/account/password", handler.ChangePassword)
+	router.POST("/settings/password", handler.ChangePassword)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusUnauthorized {
@@ -111,12 +111,12 @@ func TestPasswordHandlerChangePasswordReturnsSuccess(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/account/password", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/settings/password", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/account/password", func(c *gin.Context) {
+	router.POST("/settings/password", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.ChangePassword(c)
 	})

@@ -93,7 +93,7 @@ func run(server *http.Server, logger *zap.Logger) {
 }
 
 func registerRoutes(
-	router gin.IRoutes,
+	router *gin.Engine,
 	registerHandler *handler.RegisterHandler,
 	loginHandler *handler.LoginHandler,
 	accountManagerHandler *handler.AccountManagerHandler,
@@ -102,21 +102,23 @@ func registerRoutes(
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
-	router.POST("/register", registerHandler.Register)
-	router.POST("/register/resend", registerHandler.ResendOTP)
-	router.POST("/register/verify", registerHandler.VerifyRegister)
-	router.POST("/login", loginHandler.Login)
-	router.POST("/login/refresh", loginHandler.Refresh)
-	router.POST("/login/session", loginHandler.LoginSession)
-	router.POST("/login/session/token", loginHandler.SessionToken)
-	router.POST("/password/forgot", passwordHandler.ForgotPassword)
-	router.POST("/password/forgot/resend", passwordHandler.ResendForgotPassword)
-	router.POST("/password/forgot/verify", passwordHandler.VerifyForgotPassword)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 
-	accountRoutes := router.(*gin.Engine).Group("/account")
-	accountRoutes.Use(requireAccessToken)
-	accountRoutes.GET("/me", accountManagerHandler.GetMe)
-	accountRoutes.GET("/sessions", accountManagerHandler.ListSessions)
-	accountRoutes.POST("/password", passwordHandler.ChangePassword)
+	router.POST("/registrations", registerHandler.Register)
+	router.POST("/registrations/resend", registerHandler.ResendOTP)
+	router.POST("/registrations/verify", registerHandler.VerifyRegister)
+	router.POST("/tokens", loginHandler.Login)
+	router.POST("/tokens/refresh", loginHandler.Refresh)
+	router.POST("/sessions", loginHandler.LoginSession)
+	router.POST("/sessions/token", loginHandler.SessionToken)
+	router.POST("/password-resets", passwordHandler.ForgotPassword)
+	router.POST("/password-resets/resend", passwordHandler.ResendForgotPassword)
+	router.POST("/password-resets/verify", passwordHandler.VerifyForgotPassword)
+
+	settingsRoutes := router.Group("/settings")
+	settingsRoutes.Use(requireAccessToken)
+	settingsRoutes.GET("", accountManagerHandler.GetMe)
+	settingsRoutes.GET("/me", accountManagerHandler.GetMe)
+	settingsRoutes.GET("/sessions", accountManagerHandler.ListSessions)
+	settingsRoutes.POST("/password", passwordHandler.ChangePassword)
 }

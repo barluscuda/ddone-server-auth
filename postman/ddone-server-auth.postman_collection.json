@@ -52,12 +52,12 @@
           "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/register",
+          "raw": "{{baseUrl}}/registrations",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "register"
+            "registrations"
           ]
         },
         "description": "Starts registration and stores ticketId from the response."
@@ -78,12 +78,12 @@
           "raw": "{\n  \"ticketId\": \"{{ticketId}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/register/resend",
+          "raw": "{{baseUrl}}/registrations/resend",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "register",
+            "registrations",
             "resend"
           ]
         },
@@ -120,12 +120,12 @@
           "raw": "{\n  \"ticketId\": \"{{ticketId}}\",\n  \"otpCode\": \"{{otpCode}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/register/verify",
+          "raw": "{{baseUrl}}/registrations/verify",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "register",
+            "registrations",
             "verify"
           ]
         },
@@ -162,12 +162,12 @@
           "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/login",
+          "raw": "{{baseUrl}}/tokens",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "login"
+            "tokens"
           ]
         },
         "description": "Authenticates and stores accessToken plus refreshToken."
@@ -203,12 +203,12 @@
           "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/login/refresh",
+          "raw": "{{baseUrl}}/tokens/refresh",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "login",
+            "tokens",
             "refresh"
           ]
         },
@@ -245,13 +245,12 @@
           "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/login/session",
+          "raw": "{{baseUrl}}/sessions",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "login",
-            "session"
+            "sessions"
           ]
         },
         "description": "Authenticates and stores a persistent session identifier in Postman's cookie jar while keeping the JWT in server-side session state."
@@ -277,13 +276,12 @@
         "method": "POST",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/login/session/token",
+          "raw": "{{baseUrl}}/sessions/token",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "login",
-            "session",
+            "sessions",
             "token"
           ]
         },
@@ -319,13 +317,12 @@
           "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/password/forgot",
+          "raw": "{{baseUrl}}/password-resets",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "password",
-            "forgot"
+            "password-resets"
           ]
         },
         "description": "Starts password reset and stores resetTicketId from the response."
@@ -346,13 +343,12 @@
           "raw": "{\n  \"ticketId\": \"{{resetTicketId}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/password/forgot/resend",
+          "raw": "{{baseUrl}}/password-resets/resend",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "password",
-            "forgot",
+            "password-resets",
             "resend"
           ]
         },
@@ -388,13 +384,12 @@
           "raw": "{\n  \"ticketId\": \"{{resetTicketId}}\",\n  \"otpCode\": \"{{resetOtpCode}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/password/forgot/verify",
+          "raw": "{{baseUrl}}/password-resets/verify",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "password",
-            "forgot",
+            "password-resets",
             "verify"
           ]
         },
@@ -402,7 +397,7 @@
       }
     },
     {
-      "name": "Account Me",
+      "name": "Settings",
       "request": {
         "method": "GET",
         "header": [
@@ -412,12 +407,12 @@
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/account/me",
+          "raw": "{{baseUrl}}/settings/me",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "account",
+            "settings",
             "me"
           ]
         },
@@ -425,7 +420,7 @@
       }
     },
     {
-      "name": "Account Sessions",
+      "name": "Settings Sessions",
       "request": {
         "method": "GET",
         "header": [
@@ -435,12 +430,12 @@
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/account/sessions",
+          "raw": "{{baseUrl}}/settings/sessions",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "account",
+            "settings",
             "sessions"
           ]
         },
@@ -480,12 +475,12 @@
           "raw": "{\n  \"currentPassword\": \"{{currentPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/account/password",
+          "raw": "{{baseUrl}}/settings/password",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "account",
+            "settings",
             "password"
           ]
         },

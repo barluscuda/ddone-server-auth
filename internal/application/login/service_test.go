@@ -110,13 +110,13 @@ func (s *fakeLoginSessionStore) UpdateAccessToken(
 
 type fakeAccessTokenIssuer struct{}
 
-func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, subject string, phoneNumber string) (*auth.AccessToken, error) {
+func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, accountID string, phoneNumber string) (*auth.AccessToken, error) {
 	return &auth.AccessToken{
 		Token:     "access-token",
 		TokenType: "Bearer",
 		ExpiresAt: time.Now().UTC().Add(15 * time.Minute),
 		ExpiresIn: 900,
-		KeyID:     subject + ":" + phoneNumber,
+		KeyID:     accountID + ":" + phoneNumber,
 	}, nil
 }
 

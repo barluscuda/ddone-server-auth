@@ -41,11 +41,11 @@ func TestAccountManagerHandlerReturnsMe(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/me", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.GET("/account/me", func(c *gin.Context) {
+	router.GET("/settings/me", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.GetMe(c)
 	})
@@ -72,11 +72,11 @@ func TestAccountManagerHandlerReturnsSessions(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/account/sessions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/sessions", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.GET("/account/sessions", func(c *gin.Context) {
+	router.GET("/settings/sessions", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.ListSessions(c)
 	})

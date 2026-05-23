@@ -33,7 +33,8 @@ const (
 	messageTokenRefreshed    = "token refreshed successfully"
 )
 
-const sessionCookiePath = "/login/session"
+// Keep the cookie available to both canonical and legacy session endpoints.
+const sessionCookiePath = "/"
 
 type SessionCookieConfig struct {
 	Name     string

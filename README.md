@@ -3,19 +3,20 @@
 `ddone-server-auth` is a Go auth service for DDONE. It currently provides:
 
 - `GET /healthz`
-- `POST /register`
-- `POST /register/resend`
-- `POST /register/verify`
-- `POST /login`
-- `POST /login/refresh`
-- `POST /login/session`
-- `POST /login/session/token`
-- `POST /password/forgot`
-- `POST /password/forgot/resend`
-- `POST /password/forgot/verify`
-- `GET /account/me`
-- `GET /account/sessions`
-- `POST /account/password`
+- `POST /registrations`
+- `POST /registrations/resend`
+- `POST /registrations/verify`
+- `POST /tokens`
+- `POST /tokens/refresh`
+- `POST /sessions`
+- `POST /sessions/token`
+- `POST /password-resets`
+- `POST /password-resets/resend`
+- `POST /password-resets/verify`
+- `GET /settings`
+- `GET /settings/me`
+- `GET /settings/sessions`
+- `POST /settings/password`
 - `GET /.well-known/jwks.json`
 
 The service uses:
@@ -178,7 +179,7 @@ For local HTTP development, set `DDONE_AUTH_SESSION_COOKIE_SECURE=false` and `DD
 
 Returns service health.
 
-### `POST /register`
+### `POST /registrations`
 
 Starts phone registration and sends an OTP.
 
@@ -191,7 +192,7 @@ Example body:
 }
 ```
 
-### `POST /register/resend`
+### `POST /registrations/resend`
 
 Resends the OTP for an existing registration ticket.
 
@@ -203,7 +204,7 @@ Example body:
 }
 ```
 
-### `POST /register/verify`
+### `POST /registrations/verify`
 
 Verifies the OTP and creates the account.
 
@@ -216,7 +217,7 @@ Example body:
 }
 ```
 
-### `POST /login`
+### `POST /tokens`
 
 Authenticates a verified phone-number account and returns an ES256 access token plus a refresh token in the response body.
 
@@ -229,7 +230,7 @@ Example body:
 }
 ```
 
-### `POST /login/refresh`
+### `POST /tokens/refresh`
 
 Rotates the refresh token from the request body and returns a new access token plus a new refresh token in the response body.
 
@@ -241,7 +242,7 @@ Example body:
 }
 ```
 
-### `POST /login/session`
+### `POST /sessions`
 
 Authenticates a verified phone-number account, creates a database-backed login session with a configured expiry, stores the JWT in server-side session state, and sets an `HttpOnly` session cookie. This route does not return access or session tokens in the response body.
 
@@ -254,11 +255,11 @@ Example body:
 }
 ```
 
-### `POST /login/session/token`
+### `POST /sessions/token`
 
 Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while the login session itself is still within its configured TTL.
 
-### `POST /password/forgot`
+### `POST /password-resets`
 
 Starts a phone-based password reset flow and sends an OTP.
 
@@ -270,7 +271,7 @@ Example body:
 }
 ```
 
-### `POST /password/forgot/resend`
+### `POST /password-resets/resend`
 
 Resends the password-reset OTP for an existing reset ticket.
 
@@ -282,7 +283,7 @@ Example body:
 }
 ```
 
-### `POST /password/forgot/verify`
+### `POST /password-resets/verify`
 
 Verifies the password-reset OTP, updates the account password, and revokes existing login and refresh sessions.
 
@@ -296,7 +297,7 @@ Example body:
 }
 ```
 
-### `GET /account/me`
+### `GET /settings`
 
 Returns the account identity for the current authenticated user.
 
@@ -306,7 +307,17 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `GET /account/sessions`
+### `GET /settings/me`
+
+Returns the account identity for the current authenticated user.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `GET /settings/sessions`
 
 Returns the current account's known login sessions.
 
@@ -316,7 +327,7 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `POST /account/password`
+### `POST /settings/password`
 
 Changes the password for the current authenticated account after verifying the current password. A successful change revokes existing login and refresh sessions.
 
