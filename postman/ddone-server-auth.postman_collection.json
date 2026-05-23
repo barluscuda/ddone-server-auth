@@ -174,47 +174,6 @@
       }
     },
     {
-      "name": "Login With Cookie",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "if (pm.response.code === 200) {",
-              "  const body = pm.response.json();",
-              "  pm.environment.set('accessToken', body.data.accessToken);",
-              "}"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
-        },
-        "url": {
-          "raw": "{{baseUrl}}/login/cookie",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "login",
-            "cookie"
-          ]
-        },
-        "description": "Authenticates and stores the refresh token only in Postman's cookie jar."
-      }
-    },
-    {
       "name": "Refresh Token",
       "event": [
         {
@@ -257,7 +216,49 @@
       }
     },
     {
-      "name": "Refresh Token From Cookie",
+      "name": "Create Login Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  pm.test('session cookie stored in cookie jar', function () {",
+              "    pm.expect(pm.response.headers.has('Set-Cookie')).to.eql(true);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/login/session",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "login",
+            "session"
+          ]
+        },
+        "description": "Authenticates and stores a persistent session identifier in Postman's cookie jar while keeping the JWT in server-side session state."
+      }
+    },
+    {
+      "name": "Session Access Token",
       "event": [
         {
           "listen": "test",
@@ -276,17 +277,17 @@
         "method": "POST",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/login/refresh/cookie",
+          "raw": "{{baseUrl}}/login/session/token",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "login",
-            "refresh",
-            "cookie"
+            "session",
+            "token"
           ]
         },
-        "description": "Requires the Postman cookie jar to already have the refresh cookie from Login or Refresh Token."
+        "description": "Uses the session cookie from Postman's cookie jar and returns the stored access token for the session or a fresh one if the previous token has expired."
       }
     },
     {

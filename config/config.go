@@ -73,9 +73,10 @@ type AuthConfig struct {
 	RefreshTokenTTL       time.Duration `mapstructure:"refresh_token_ttl"`
 	SigningKeyRotation    time.Duration `mapstructure:"signing_key_rotation"`
 	SigningKeyRetention   time.Duration `mapstructure:"signing_key_retention"`
-	RefreshCookieName     string        `mapstructure:"refresh_cookie_name"`
-	RefreshCookieSecure   bool          `mapstructure:"refresh_cookie_secure"`
-	RefreshCookieSameSite string        `mapstructure:"refresh_cookie_same_site"`
+	SessionCookieName     string        `mapstructure:"session_cookie_name"`
+	SessionCookieSecure   bool          `mapstructure:"session_cookie_secure"`
+	SessionCookieSameSite string        `mapstructure:"session_cookie_same_site"`
+	SessionCookieMaxAge   time.Duration `mapstructure:"session_cookie_max_age"`
 }
 
 func Load() (*Config, error) {
@@ -117,9 +118,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("auth.refresh_token_ttl", "720h")
 	viper.SetDefault("auth.signing_key_rotation", "2160h")
 	viper.SetDefault("auth.signing_key_retention", "4320h")
-	viper.SetDefault("auth.refresh_cookie_name", "ddone_refresh_token")
-	viper.SetDefault("auth.refresh_cookie_secure", true)
-	viper.SetDefault("auth.refresh_cookie_same_site", "lax")
+	viper.SetDefault("auth.session_cookie_name", "ddone_session")
+	viper.SetDefault("auth.session_cookie_secure", true)
+	viper.SetDefault("auth.session_cookie_same_site", "lax")
+	viper.SetDefault("auth.session_cookie_max_age", "876000h")
 
 	viper.SetEnvPrefix("DDONE")
 	viper.SetEnvKeyReplacer(
@@ -166,9 +168,10 @@ func Load() (*Config, error) {
 	viper.BindEnv("auth.refresh_token_ttl", "DDONE_AUTH_REFRESH_TOKEN_TTL")
 	viper.BindEnv("auth.signing_key_rotation", "DDONE_AUTH_SIGNING_KEY_ROTATION")
 	viper.BindEnv("auth.signing_key_retention", "DDONE_AUTH_SIGNING_KEY_RETENTION")
-	viper.BindEnv("auth.refresh_cookie_name", "DDONE_AUTH_REFRESH_COOKIE_NAME")
-	viper.BindEnv("auth.refresh_cookie_secure", "DDONE_AUTH_REFRESH_COOKIE_SECURE")
-	viper.BindEnv("auth.refresh_cookie_same_site", "DDONE_AUTH_REFRESH_COOKIE_SAME_SITE")
+	viper.BindEnv("auth.session_cookie_name", "DDONE_AUTH_SESSION_COOKIE_NAME")
+	viper.BindEnv("auth.session_cookie_secure", "DDONE_AUTH_SESSION_COOKIE_SECURE")
+	viper.BindEnv("auth.session_cookie_same_site", "DDONE_AUTH_SESSION_COOKIE_SAME_SITE")
+	viper.BindEnv("auth.session_cookie_max_age", "DDONE_AUTH_SESSION_COOKIE_MAX_AGE")
 	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN", "DDONE_WENOVA_TOKEN")
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -277,16 +280,19 @@ func (c *Config) validate() error {
 	if c.Auth.SigningKeyRetention < c.Auth.SigningKeyRotation {
 		return fmt.Errorf("auth.signing_key_retention must be greater than or equal to auth.signing_key_rotation")
 	}
-	if c.Auth.RefreshCookieName == "" {
-		return fmt.Errorf("auth.refresh_cookie_name is required")
+	if c.Auth.SessionCookieName == "" {
+		return fmt.Errorf("auth.session_cookie_name is required")
 	}
-	switch strings.ToLower(c.Auth.RefreshCookieSameSite) {
+	if c.Auth.SessionCookieMaxAge <= 0 {
+		return fmt.Errorf("auth.session_cookie_max_age must be greater than 0")
+	}
+	switch strings.ToLower(c.Auth.SessionCookieSameSite) {
 	case "lax", "strict", "none":
 	default:
-		return fmt.Errorf("auth.refresh_cookie_same_site must be one of lax, strict, none")
+		return fmt.Errorf("auth.session_cookie_same_site must be one of lax, strict, none")
 	}
-	if strings.EqualFold(c.Auth.RefreshCookieSameSite, "none") && !c.Auth.RefreshCookieSecure {
-		return fmt.Errorf("auth.refresh_cookie_secure must be true when auth.refresh_cookie_same_site is none")
+	if strings.EqualFold(c.Auth.SessionCookieSameSite, "none") && !c.Auth.SessionCookieSecure {
+		return fmt.Errorf("auth.session_cookie_secure must be true when auth.session_cookie_same_site is none")
 	}
 
 	return nil

@@ -20,6 +20,12 @@ type RefreshSessionStore interface {
 	RevokeLineage(ctx context.Context, rootSessionID string, reason string, revokedAt time.Time) error
 }
 
+type LoginSessionStore interface {
+	Create(ctx context.Context, session *auth.LoginSession) error
+	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error)
+	UpdateAccessToken(ctx context.Context, sessionID string, accessToken *auth.AccessToken) error
+}
+
 type AccessTokenIssuer interface {
 	IssueAccessToken(ctx context.Context, subject string, phoneNumber string) (*auth.AccessToken, error)
 }

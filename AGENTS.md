@@ -54,7 +54,8 @@ cmd/app/                  Process entrypoint
 - `POST /register/verify`
 - `POST /login`
 - `POST /login/refresh`
-- `POST /login/refresh/cookie`
+- `POST /login/session`
+- `POST /login/session/token`
 - `GET /.well-known/jwks.json`
 
 Registration currently depends on:
@@ -65,8 +66,12 @@ Registration currently depends on:
 
 Login currently depends on:
 
-- PostgreSQL for account lookup, refresh sessions, and signing keys
+- PostgreSQL for account lookup, refresh sessions, login sessions, and signing keys
 - ES256 access-token signing with JWKS publication
+
+Session-login currently also depends on:
+
+- `HttpOnly` cookie transport for the server-side session identifier
 
 ## Preferred Change Style
 

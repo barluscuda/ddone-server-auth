@@ -68,6 +68,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	registerService := appregister.NewRegisterService(accountRepository, registerStore, smsClient)
 	signingKeyRepository := repository.NewSigningKeyRepository(db)
 	refreshSessionRepository := repository.NewRefreshSessionRepository(db)
+	loginSessionRepository := repository.NewLoginSessionRepository(db)
 	tokenCodec := token.NewES256Codec()
 	jwksService := appjwks.NewService(signingKeyRepository, tokenCodec, appjwks.Settings{
 		Issuer:              cfg.Auth.Issuer,
@@ -79,14 +80,14 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	if _, err := jwksService.EnsureActiveSigningKey(context.Background()); err != nil {
 		logger.Fatal("failed to ensure active signing key", zap.Error(err))
 	}
-	loginService := applogin.NewService(accountRepository, refreshSessionRepository, jwksService, applogin.Settings{
+	loginService := applogin.NewService(accountRepository, refreshSessionRepository, loginSessionRepository, jwksService, applogin.Settings{
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 	})
-	loginHandler := handler.NewLoginHandler(loginService, handler.RefreshCookieConfig{
-		Name:     cfg.Auth.RefreshCookieName,
-		MaxAge:   cfg.Auth.RefreshTokenTTL,
-		Secure:   cfg.Auth.RefreshCookieSecure,
-		SameSite: sameSiteMode(cfg.Auth.RefreshCookieSameSite),
+	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
+		Name:     cfg.Auth.SessionCookieName,
+		MaxAge:   cfg.Auth.SessionCookieMaxAge,
+		Secure:   cfg.Auth.SessionCookieSecure,
+		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
 	})
 	jwksHandler := handler.NewJWKSHandler(jwksService)
 

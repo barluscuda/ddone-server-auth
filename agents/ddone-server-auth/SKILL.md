@@ -17,7 +17,7 @@ Use this skill for changes inside this repository.
 
 - Phone-based registration with OTP
 - Phone-number login with access and refresh tokens
-- Cookie-based login and refresh flows for browser clients
+- Database-backed unlimited login sessions with access-token reuse/refresh
 - OTP resend and verification flows
 - Health check endpoint
 - JWKS publication for ES256 access tokens
@@ -50,7 +50,7 @@ Use this skill for changes inside this repository.
 - HTTP server: `cmd/app/server.go`
 - Startup wiring: `cmd/app/main.go`
 - Config loading: `config/config.go`
-- Runtime config now includes auth cookie settings and CORS settings
+- Runtime config includes auth token settings and CORS settings
 - Registration use case: `internal/application/register`
 - Login use case: `internal/application/login`
 - JWKS use case: `internal/application/jwks`
@@ -68,18 +68,18 @@ Use this skill for changes inside this repository.
 - `POST /register/resend`
 - `POST /register/verify`
 - `POST /login`
-- `POST /login/cookie`
 - `POST /login/refresh`
-- `POST /login/refresh/cookie`
+- `POST /login/session`
+- `POST /login/session/token`
 - `GET /.well-known/jwks.json`
 
-## Cookie And CORS Notes
+## Login And CORS Notes
 
-- `POST /login` returns access and refresh tokens in JSON and also sets the refresh cookie.
-- `POST /login/cookie` sets the refresh cookie and returns only the access token in JSON.
-- `POST /login/refresh/cookie` rotates the refresh token from the `HttpOnly` cookie and returns only the access token in JSON.
-- Browser clients using cookie auth need CORS configured with `allow_credentials=true` and explicit origins instead of `*`.
-- Keep cookie behavior in handlers and startup wiring; do not push HTTP cookie concerns into application or domain packages.
+- `POST /login` returns access and refresh tokens in JSON.
+- `POST /login/refresh` rotates the refresh token from the request body and returns a new access token plus refresh token in JSON.
+- `POST /login/session` stores a persistent server-side session in PostgreSQL and sets the session identifier in an `HttpOnly` cookie.
+- `POST /login/session/token` reads that session cookie and returns the current access token for the session, automatically issuing a new one only after the stored token has expired.
+- If clients send credentials across origins for other reasons, CORS still requires `allow_credentials=true` and explicit origins instead of `*`.
 
 ## Commands
 
@@ -97,7 +97,7 @@ After edits:
 
 1. Run `gofmt -w` on touched Go files.
 2. Run `go test ./...`.
-3. If config, architecture, startup behavior, routes, request/response bodies, cookie behavior, or CORS behavior changed, keep `README.md`, `AGENTS.md`, and this skill in sync.
+3. If config, architecture, startup behavior, routes, request/response bodies, or CORS behavior changed, keep `README.md`, `AGENTS.md`, and this skill in sync.
 4. If API routes or request payloads changed, update the checked-in Postman collection and environment templates under `postman/` and the guide in `docs/postman.md`.
 
 ## Do Not Do

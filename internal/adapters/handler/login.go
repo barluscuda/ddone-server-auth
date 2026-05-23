@@ -17,18 +17,25 @@ import (
 
 const (
 	codeLoginSucceeded       = "login_succeeded"
+	codeLoginSessionCreated  = "login_session_created"
+	codeSessionTokenIssued   = "login_session_token_issued"
 	codeTokenRefreshed       = "token_refreshed"
 	codeInvalidCredentials   = "invalid_credentials"
 	codeRefreshTokenRequired = "refresh_token_required"
+	codeSessionTokenRequired = "session_token_required"
 	codeRefreshTokenExpired  = "refresh_token_expired"
 	codeRefreshTokenRevoked  = "refresh_token_revoked"
 	codeRefreshTokenReplay   = "refresh_token_replay_detected"
+	codeLoginSessionRevoked  = "login_session_revoked"
 	messageLoginSucceeded    = "login completed successfully"
+	messageLoginSessionMade  = "login session created successfully"
+	messageSessionTokenMade  = "login session token issued successfully"
 	messageTokenRefreshed    = "token refreshed successfully"
-	loginCookiePath          = "/login/refresh/cookie"
 )
 
-type RefreshCookieConfig struct {
+const sessionCookiePath = "/login/session"
+
+type SessionCookieConfig struct {
 	Name     string
 	MaxAge   time.Duration
 	Secure   bool
@@ -37,25 +44,17 @@ type RefreshCookieConfig struct {
 
 type LoginHandler struct {
 	login         applogin.UseCase
-	refreshCookie RefreshCookieConfig
+	sessionCookie SessionCookieConfig
 }
 
-func NewLoginHandler(login applogin.UseCase, refreshCookie RefreshCookieConfig) *LoginHandler {
+func NewLoginHandler(login applogin.UseCase, sessionCookie SessionCookieConfig) *LoginHandler {
 	return &LoginHandler{
 		login:         login,
-		refreshCookie: refreshCookie,
+		sessionCookie: sessionCookie,
 	}
 }
 
 func (h *LoginHandler) Login(c *gin.Context) {
-	h.loginWithRefreshResponse(c, true, false)
-}
-
-func (h *LoginHandler) LoginCookie(c *gin.Context) {
-	h.loginWithRefreshResponse(c, false, true)
-}
-
-func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshToken bool, setCookie bool) {
 	var req dto.ReqLogin
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
@@ -73,26 +72,19 @@ func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshTo
 		return
 	}
 
-	if setCookie {
-		h.setRefreshCookie(c, result.RefreshToken)
-	}
-	response := dto.ResLogin{
+	c.JSON(http.StatusOK, dto.ResLogin{
 		Success: true,
 		Code:    codeLoginSucceeded,
 		Message: messageLoginSucceeded,
 		Data: dto.ResLoginData{
-			AccessToken: result.AccessToken.Token,
-			TokenType:   result.AccessToken.TokenType,
-			ExpiresAt:   result.AccessToken.ExpiresAt,
-			ExpiresIn:   result.AccessToken.ExpiresIn,
+			AccessToken:      result.AccessToken.Token,
+			TokenType:        result.AccessToken.TokenType,
+			ExpiresAt:        result.AccessToken.ExpiresAt,
+			ExpiresIn:        result.AccessToken.ExpiresIn,
+			RefreshToken:     result.RefreshToken,
+			RefreshExpiresAt: result.RefreshExpiresAt,
 		},
-	}
-	if includeRefreshToken {
-		response.Data.RefreshToken = result.RefreshToken
-		response.Data.RefreshExpiresAt = result.RefreshExpiresAt
-	}
-
-	c.JSON(http.StatusOK, response)
+	})
 }
 
 func (h *LoginHandler) Refresh(c *gin.Context) {
@@ -127,28 +119,52 @@ func (h *LoginHandler) Refresh(c *gin.Context) {
 	})
 }
 
-func (h *LoginHandler) RefreshCookie(c *gin.Context) {
-	tokenValue, err := c.Cookie(h.refreshCookie.Name)
-	if err != nil || strings.TrimSpace(tokenValue) == "" {
-		handleLoginError(c, auth.ErrRefreshTokenRequired)
+func (h *LoginHandler) LoginSession(c *gin.Context) {
+	var req dto.ReqLogin
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
 		return
 	}
 
-	result, refreshErr := h.login.RefreshFromCookieToken(c.Request.Context(), applogin.RefreshInput{
-		RefreshToken: tokenValue,
-		ClientIP:     c.ClientIP(),
-		UserAgent:    c.Request.UserAgent(),
+	result, err := h.login.LoginSession(c.Request.Context(), applogin.LoginInput{
+		PhoneNumber: req.PhoneNumber,
+		Password:    req.Password,
+		ClientIP:    c.ClientIP(),
+		UserAgent:   c.Request.UserAgent(),
 	})
-	if refreshErr != nil {
-		handleLoginError(c, refreshErr)
+	if err != nil {
+		handleLoginError(c, err)
 		return
 	}
 
-	h.setRefreshCookie(c, result.RefreshToken)
+	h.setSessionCookie(c, result.SessionToken)
 	c.JSON(http.StatusOK, dto.ResLogin{
 		Success: true,
-		Code:    codeTokenRefreshed,
-		Message: messageTokenRefreshed,
+		Code:    codeLoginSessionCreated,
+		Message: messageLoginSessionMade,
+		Data:    dto.ResLoginData{},
+	})
+}
+
+func (h *LoginHandler) SessionToken(c *gin.Context) {
+	tokenValue, err := c.Cookie(h.sessionCookie.Name)
+	if err != nil || strings.TrimSpace(tokenValue) == "" {
+		handleLoginError(c, auth.ErrSessionTokenRequired)
+		return
+	}
+
+	result, err := h.login.SessionToken(c.Request.Context(), applogin.SessionTokenInput{
+		SessionToken: tokenValue,
+	})
+	if err != nil {
+		handleLoginError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ResLogin{
+		Success: true,
+		Code:    codeSessionTokenIssued,
+		Message: messageSessionTokenMade,
 		Data: dto.ResLoginData{
 			AccessToken: result.AccessToken.Token,
 			TokenType:   result.AccessToken.TokenType,
@@ -158,15 +174,15 @@ func (h *LoginHandler) RefreshCookie(c *gin.Context) {
 	})
 }
 
-func (h *LoginHandler) setRefreshCookie(c *gin.Context, tokenValue string) {
-	c.SetSameSite(h.refreshCookie.SameSite)
+func (h *LoginHandler) setSessionCookie(c *gin.Context, tokenValue string) {
+	c.SetSameSite(h.sessionCookie.SameSite)
 	c.SetCookie(
-		h.refreshCookie.Name,
+		h.sessionCookie.Name,
 		tokenValue,
-		int(h.refreshCookie.MaxAge.Seconds()),
-		loginCookiePath,
+		int(h.sessionCookie.MaxAge.Seconds()),
+		sessionCookiePath,
 		"",
-		h.refreshCookie.Secure,
+		h.sessionCookie.Secure,
 		true,
 	)
 }
@@ -176,9 +192,12 @@ func handleLoginError(c *gin.Context, err error) {
 	case errors.Is(err, applogin.ErrPhoneNumberRequired),
 		errors.Is(err, applogin.ErrInvalidPhoneNumber),
 		errors.Is(err, applogin.ErrPasswordRequired),
-		errors.Is(err, auth.ErrRefreshTokenRequired):
+		errors.Is(err, auth.ErrRefreshTokenRequired),
+		errors.Is(err, auth.ErrSessionTokenRequired):
 		respondError(c, http.StatusBadRequest, loginErrorCode(err), loginErrorMessage(err))
 	case errors.Is(err, auth.ErrInvalidCredentials),
+		errors.Is(err, auth.ErrLoginSessionNotFound),
+		errors.Is(err, auth.ErrLoginSessionRevoked),
 		errors.Is(err, auth.ErrRefreshSessionNotFound),
 		errors.Is(err, auth.ErrRefreshSessionExpired),
 		errors.Is(err, auth.ErrRefreshSessionRevoked),
@@ -199,6 +218,10 @@ func loginErrorCode(err error) string {
 		return codePasswordRequired
 	case errors.Is(err, auth.ErrRefreshTokenRequired):
 		return codeRefreshTokenRequired
+	case errors.Is(err, auth.ErrSessionTokenRequired):
+		return codeSessionTokenRequired
+	case errors.Is(err, auth.ErrLoginSessionRevoked):
+		return codeLoginSessionRevoked
 	case errors.Is(err, auth.ErrRefreshSessionExpired):
 		return codeRefreshTokenExpired
 	case errors.Is(err, auth.ErrRefreshSessionRevoked):
@@ -206,6 +229,7 @@ func loginErrorCode(err error) string {
 	case errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		return codeRefreshTokenReplay
 	case errors.Is(err, auth.ErrInvalidCredentials),
+		errors.Is(err, auth.ErrLoginSessionNotFound),
 		errors.Is(err, auth.ErrRefreshSessionNotFound):
 		return codeInvalidCredentials
 	default:
@@ -223,6 +247,10 @@ func loginErrorMessage(err error) string {
 		return "password is required"
 	case errors.Is(err, auth.ErrRefreshTokenRequired):
 		return "refresh token is required"
+	case errors.Is(err, auth.ErrSessionTokenRequired):
+		return "session token is required"
+	case errors.Is(err, auth.ErrLoginSessionRevoked):
+		return "login session is no longer valid"
 	case errors.Is(err, auth.ErrRefreshSessionExpired):
 		return "refresh token has expired"
 	case errors.Is(err, auth.ErrRefreshSessionRevoked):
@@ -230,6 +258,7 @@ func loginErrorMessage(err error) string {
 	case errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		return "refresh token replay detected, please log in again"
 	case errors.Is(err, auth.ErrInvalidCredentials),
+		errors.Is(err, auth.ErrLoginSessionNotFound),
 		errors.Is(err, auth.ErrRefreshSessionNotFound):
 		return "invalid credentials"
 	default:

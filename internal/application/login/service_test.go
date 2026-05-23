@@ -75,6 +75,39 @@ func (s *fakeRefreshSessionStore) RevokeLineage(
 	return nil
 }
 
+type fakeLoginSessionStore struct {
+	created              *auth.LoginSession
+	sessionsByHash       map[string]*auth.LoginSession
+	updatedSessionID     string
+	updatedAccessToken   *auth.AccessToken
+	updateAccessTokenErr error
+}
+
+func (s *fakeLoginSessionStore) Create(_ context.Context, session *auth.LoginSession) error {
+	s.created = session
+	return nil
+}
+
+func (s *fakeLoginSessionStore) GetByTokenHash(_ context.Context, tokenHash string) (*auth.LoginSession, error) {
+	if session, ok := s.sessionsByHash[tokenHash]; ok {
+		return session, nil
+	}
+	return nil, auth.ErrLoginSessionNotFound
+}
+
+func (s *fakeLoginSessionStore) UpdateAccessToken(
+	_ context.Context,
+	sessionID string,
+	accessToken *auth.AccessToken,
+) error {
+	if s.updateAccessTokenErr != nil {
+		return s.updateAccessTokenErr
+	}
+	s.updatedSessionID = sessionID
+	s.updatedAccessToken = accessToken
+	return nil
+}
+
 type fakeAccessTokenIssuer struct{}
 
 func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, subject string, phoneNumber string) (*auth.AccessToken, error) {
@@ -103,7 +136,8 @@ func TestLoginCreatesRefreshSession(t *testing.T) {
 		byID:    map[string]*account.AccountModel{"account-1": accountModel},
 	}
 	sessions := &fakeRefreshSessionStore{}
-	service := NewService(accounts, sessions, &fakeAccessTokenIssuer{}, Settings{
+	loginSessions := &fakeLoginSessionStore{}
+	service := NewService(accounts, sessions, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	})
 	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
@@ -154,7 +188,7 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 				ExpiresAt:     time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 			},
 		},
-	}, &fakeAccessTokenIssuer{}, Settings{
+	}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	})
 	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
@@ -162,6 +196,125 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 	_, err = service.Refresh(context.Background(), RefreshInput{RefreshToken: "refresh-token"})
 	if !errors.Is(err, auth.ErrRefreshTokenReplayDetected) {
 		t.Fatalf("expected replay error, got %v", err)
+	}
+}
+
+func TestLoginSessionCreatesPersistentSession(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	accountModel := &account.AccountModel{
+		ID:           "account-1",
+		PhoneNumber:  "2012345678",
+		PasswordHash: string(passwordHash),
+	}
+	accounts := &fakeAccountLookup{
+		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+		byID:    map[string]*account.AccountModel{"account-1": accountModel},
+	}
+	loginSessions := &fakeLoginSessionStore{}
+	service := NewService(accounts, &fakeRefreshSessionStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	})
+	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+
+	result, err := service.LoginSession(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+		ClientIP:    "127.0.0.1",
+		UserAgent:   "test-agent",
+	})
+	if err != nil {
+		t.Fatalf("LoginSession returned error: %v", err)
+	}
+
+	if result.SessionToken == "" {
+		t.Fatal("expected session token")
+	}
+	if loginSessions.created == nil {
+		t.Fatal("expected login session to be created")
+	}
+	if loginSessions.created.CurrentAccessToken == "" {
+		t.Fatal("expected current access token to be stored")
+	}
+}
+
+func TestSessionTokenReturnsStoredAccessTokenWhenStillValid(t *testing.T) {
+	loginSessions := &fakeLoginSessionStore{
+		sessionsByHash: map[string]*auth.LoginSession{
+			hashSessionToken("session-token"): {
+				ID:                   "session-1",
+				AccountID:            "account-1",
+				TokenHash:            hashSessionToken("session-token"),
+				CurrentAccessToken:   "stored-access-token",
+				CurrentAccessExpires: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
+			},
+		},
+	}
+	service := NewService(&fakeAccountLookup{}, &fakeRefreshSessionStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
+
+	result, err := service.SessionToken(context.Background(), SessionTokenInput{SessionToken: "session-token"})
+	if err != nil {
+		t.Fatalf("SessionToken returned error: %v", err)
+	}
+
+	if result.AccessToken.Token != "stored-access-token" {
+		t.Fatalf("expected stored access token, got %q", result.AccessToken.Token)
+	}
+	if loginSessions.updatedSessionID != "" {
+		t.Fatal("expected stored token to be returned without update")
+	}
+}
+
+func TestSessionTokenRefreshesExpiredAccessToken(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	accountModel := &account.AccountModel{
+		ID:           "account-1",
+		PhoneNumber:  "2012345678",
+		PasswordHash: string(passwordHash),
+	}
+	accounts := &fakeAccountLookup{
+		byID: map[string]*account.AccountModel{"account-1": accountModel},
+	}
+	loginSessions := &fakeLoginSessionStore{
+		sessionsByHash: map[string]*auth.LoginSession{
+			hashSessionToken("session-token"): {
+				ID:                   "session-1",
+				AccountID:            "account-1",
+				TokenHash:            hashSessionToken("session-token"),
+				CurrentAccessToken:   "expired-access-token",
+				CurrentAccessExpires: time.Date(2026, 5, 23, 9, 59, 0, 0, time.UTC),
+			},
+		},
+	}
+	service := NewService(accounts, &fakeRefreshSessionStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
+
+	result, err := service.SessionToken(context.Background(), SessionTokenInput{SessionToken: "session-token"})
+	if err != nil {
+		t.Fatalf("SessionToken returned error: %v", err)
+	}
+
+	if result.AccessToken.Token != "access-token" {
+		t.Fatalf("expected fresh access token, got %q", result.AccessToken.Token)
+	}
+	if loginSessions.updatedSessionID != "session-1" {
+		t.Fatalf("expected updated session id %q, got %q", "session-1", loginSessions.updatedSessionID)
+	}
+	if loginSessions.updatedAccessToken == nil {
+		t.Fatal("expected updated access token to be stored")
 	}
 }
 

@@ -23,8 +23,17 @@ type RefreshInput struct {
 	UserAgent    string
 }
 
+type SessionTokenInput struct {
+	SessionToken string
+}
+
 type Result struct {
 	AccessToken      *auth.AccessToken
 	RefreshToken     string
 	RefreshExpiresAt time.Time
+}
+
+type SessionResult struct {
+	SessionToken string
+	AccessToken  *auth.AccessToken
 }

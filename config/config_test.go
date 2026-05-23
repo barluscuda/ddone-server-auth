@@ -2,24 +2,35 @@ package config
 
 import "testing"
 
-func TestValidateRejectsSameSiteNoneWithoutSecure(t *testing.T) {
+func TestValidateRejectsCredentialsWithWildcardOrigin(t *testing.T) {
 	cfg := validConfig()
-	cfg.Auth.RefreshCookieSameSite = "none"
-	cfg.Auth.RefreshCookieSecure = false
+	cfg.CORS.AllowedOrigins = []string{"*"}
+	cfg.CORS.AllowCredentials = true
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject wildcard origin when credentials are allowed")
+	}
+}
+
+func TestValidateAllowsCredentialsWithExplicitOrigin(t *testing.T) {
+	cfg := validConfig()
+	cfg.CORS.AllowedOrigins = []string{"http://localhost:5173"}
+	cfg.CORS.AllowCredentials = true
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("expected validate to allow explicit origin with credentials, got %v", err)
+	}
+}
+
+func TestValidateRejectsSessionCookieSameSiteNoneWithoutSecure(t *testing.T) {
+	cfg := validConfig()
+	cfg.Auth.SessionCookieSameSite = "none"
+	cfg.Auth.SessionCookieSecure = false
 
 	err := cfg.validate()
 	if err == nil {
 		t.Fatal("expected validate to reject SameSite=None without Secure")
-	}
-}
-
-func TestValidateAllowsSameSiteNoneWithSecure(t *testing.T) {
-	cfg := validConfig()
-	cfg.Auth.RefreshCookieSameSite = "none"
-	cfg.Auth.RefreshCookieSecure = true
-
-	if err := cfg.validate(); err != nil {
-		t.Fatalf("expected validate to allow SameSite=None with Secure, got %v", err)
 	}
 }
 
@@ -37,8 +48,9 @@ func validConfig() Config {
 	cfg.Auth.RefreshTokenTTL = 1
 	cfg.Auth.SigningKeyRotation = 1
 	cfg.Auth.SigningKeyRetention = 1
-	cfg.Auth.RefreshCookieName = "ddone_refresh_token"
-	cfg.Auth.RefreshCookieSecure = true
-	cfg.Auth.RefreshCookieSameSite = "lax"
+	cfg.Auth.SessionCookieName = "ddone_session"
+	cfg.Auth.SessionCookieSecure = true
+	cfg.Auth.SessionCookieSameSite = "lax"
+	cfg.Auth.SessionCookieMaxAge = 1
 	return cfg
 }

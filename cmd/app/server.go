@@ -100,8 +100,8 @@ func registerRoutes(
 	router.POST("/register/resend", registerHandler.ResendOTP)
 	router.POST("/register/verify", registerHandler.VerifyRegister)
 	router.POST("/login", loginHandler.Login)
-	router.POST("/login/cookie", loginHandler.LoginCookie)
 	router.POST("/login/refresh", loginHandler.Refresh)
-	router.POST("/login/refresh/cookie", loginHandler.RefreshCookie)
+	router.POST("/login/session", loginHandler.LoginSession)
+	router.POST("/login/session/token", loginHandler.SessionToken)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 }

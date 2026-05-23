@@ -15,11 +15,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func testSessionCookieConfig() SessionCookieConfig {
+	return SessionCookieConfig{
+		Name:     "ddone_session",
+		MaxAge:   100 * 365 * 24 * time.Hour,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
 type fakeLoginUseCase struct {
 	loginResult   *applogin.Result
 	loginErr      error
 	refreshResult *applogin.Result
 	refreshErr    error
+	sessionResult *applogin.SessionResult
+	sessionErr    error
 }
 
 func (f *fakeLoginUseCase) Login(_ context.Context, _ applogin.LoginInput) (*applogin.Result, error) {
@@ -30,8 +41,12 @@ func (f *fakeLoginUseCase) Refresh(_ context.Context, _ applogin.RefreshInput) (
 	return f.refreshResult, f.refreshErr
 }
 
-func (f *fakeLoginUseCase) RefreshFromCookieToken(_ context.Context, _ applogin.RefreshInput) (*applogin.Result, error) {
-	return f.refreshResult, f.refreshErr
+func (f *fakeLoginUseCase) LoginSession(_ context.Context, _ applogin.LoginInput) (*applogin.SessionResult, error) {
+	return f.sessionResult, f.sessionErr
+}
+
+func (f *fakeLoginUseCase) SessionToken(_ context.Context, _ applogin.SessionTokenInput) (*applogin.SessionResult, error) {
+	return f.sessionResult, f.sessionErr
 }
 
 type fakeJWKSUseCase struct {
@@ -58,12 +73,7 @@ func TestLoginHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 			RefreshToken:     "refresh-token",
 			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
 		},
-	}, RefreshCookieConfig{
-		Name:     "ddone_refresh_token",
-		MaxAge:   30 * 24 * time.Hour,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
+	}, testSessionCookieConfig())
 
 	body, err := json.Marshal(map[string]string{
 		"phoneNumber": "+8562012345678",
@@ -92,55 +102,6 @@ func TestLoginHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	}
 }
 
-func TestLoginCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
-	t.Setenv("GIN_MODE", gin.TestMode)
-	gin.SetMode(gin.TestMode)
-
-	handler := NewLoginHandler(&fakeLoginUseCase{
-		loginResult: &applogin.Result{
-			AccessToken: &auth.AccessToken{
-				Token:     "access-token",
-				TokenType: "Bearer",
-				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
-				ExpiresIn: 900,
-			},
-			RefreshToken:     "refresh-token",
-			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
-		},
-	}, RefreshCookieConfig{
-		Name:     "ddone_refresh_token",
-		MaxAge:   30 * 24 * time.Hour,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	body, err := json.Marshal(map[string]string{
-		"phoneNumber": "+8562012345678",
-		"password":    "secretpass",
-	})
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/login/cookie", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-
-	router := gin.New()
-	router.POST("/login/cookie", handler.LoginCookie)
-	router.ServeHTTP(recorder, req)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
-	}
-	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
-		t.Fatal("expected refresh cookie to be set")
-	}
-	if strings.Contains(recorder.Body.String(), "refresh-token") {
-		t.Fatal("expected refresh token to be omitted from response body")
-	}
-}
-
 func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
@@ -156,12 +117,7 @@ func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 			RefreshToken:     "rotated-refresh-token",
 			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
 		},
-	}, RefreshCookieConfig{
-		Name:     "ddone_refresh_token",
-		MaxAge:   30 * 24 * time.Hour,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
+	}, testSessionCookieConfig())
 
 	body, err := json.Marshal(map[string]string{
 		"refreshToken": "refresh-token",
@@ -189,44 +145,83 @@ func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	}
 }
 
-func TestRefreshCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
+func TestLoginSessionHandlerSetsSessionCookie(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
 	handler := NewLoginHandler(&fakeLoginUseCase{
-		refreshResult: &applogin.Result{
+		sessionResult: &applogin.SessionResult{
+			SessionToken: "session-token",
 			AccessToken: &auth.AccessToken{
 				Token:     "access-token",
 				TokenType: "Bearer",
 				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
 				ExpiresIn: 900,
 			},
-			RefreshToken:     "rotated-refresh-token",
-			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
 		},
-	}, RefreshCookieConfig{
-		Name:     "ddone_refresh_token",
-		MaxAge:   30 * 24 * time.Hour,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
+	}, testSessionCookieConfig())
 
-	req := httptest.NewRequest(http.MethodPost, "/login/refresh/cookie", nil)
-	req.AddCookie(&http.Cookie{Name: "ddone_refresh_token", Value: "refresh-token"})
+	body, err := json.Marshal(map[string]string{
+		"phoneNumber": "+8562012345678",
+		"password":    "secretpass",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login/session", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/login/refresh/cookie", handler.RefreshCookie)
+	router.POST("/login/session", handler.LoginSession)
 	router.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
 	}
 	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
-		t.Fatal("expected refresh cookie to be rotated")
+		t.Fatal("expected session cookie to be set")
 	}
-	if strings.Contains(recorder.Body.String(), "rotated-refresh-token") {
-		t.Fatal("expected refresh token to be omitted from cookie refresh response body")
+	if strings.Contains(recorder.Body.String(), "access-token") {
+		t.Fatal("expected access token to be omitted from session login response body")
+	}
+	if strings.Contains(recorder.Body.String(), "session-token") {
+		t.Fatal("expected session token to be omitted from session login response body")
+	}
+}
+
+func TestSessionTokenHandlerReturnsAccessTokenFromSessionCookie(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewLoginHandler(&fakeLoginUseCase{
+		sessionResult: &applogin.SessionResult{
+			AccessToken: &auth.AccessToken{
+				Token:     "access-token",
+				TokenType: "Bearer",
+				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
+				ExpiresIn: 900,
+			},
+		},
+	}, testSessionCookieConfig())
+
+	req := httptest.NewRequest(http.MethodPost, "/login/session/token", nil)
+	req.AddCookie(&http.Cookie{Name: "ddone_session", Value: "session-token"})
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/login/session/token", handler.SessionToken)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "access-token") {
+		t.Fatal("expected access token in response body")
+	}
+	if strings.Contains(recorder.Body.String(), "session-token") {
+		t.Fatal("expected session token to be omitted from token response body")
 	}
 }
 

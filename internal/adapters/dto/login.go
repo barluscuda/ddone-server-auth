@@ -12,10 +12,10 @@ type ReqRefreshLogin struct {
 }
 
 type ResLoginData struct {
-	AccessToken      string    `json:"accessToken"`
-	TokenType        string    `json:"tokenType"`
-	ExpiresAt        time.Time `json:"expiresAt"`
-	ExpiresIn        int64     `json:"expiresIn"`
+	AccessToken      string    `json:"accessToken,omitempty"`
+	TokenType        string    `json:"tokenType,omitempty"`
+	ExpiresAt        time.Time `json:"expiresAt,omitempty"`
+	ExpiresIn        int64     `json:"expiresIn,omitempty"`
 	RefreshToken     string    `json:"refreshToken,omitempty"`
 	RefreshExpiresAt time.Time `json:"refreshExpiresAt,omitempty"`
 }

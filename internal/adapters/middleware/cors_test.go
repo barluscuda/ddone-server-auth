@@ -26,7 +26,7 @@ func TestCORSPreflightReturnsConfiguredHeaders(t *testing.T) {
 		c.Status(http.StatusNoContent)
 	})
 
-	req := httptest.NewRequest(http.MethodOptions, "/login/cookie", nil)
+	req := httptest.NewRequest(http.MethodOptions, "/login/refresh", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
@@ -65,7 +65,7 @@ func TestCORSBlocksDisallowedPreflightOrigin(t *testing.T) {
 		c.Status(http.StatusNoContent)
 	})
 
-	req := httptest.NewRequest(http.MethodOptions, "/login/cookie", nil)
+	req := httptest.NewRequest(http.MethodOptions, "/login/refresh", nil)
 	req.Header.Set("Origin", "http://evil.test")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	recorder := httptest.NewRecorder()
