@@ -48,6 +48,14 @@ func NewLoginHandler(login applogin.UseCase, refreshCookie RefreshCookieConfig) 
 }
 
 func (h *LoginHandler) Login(c *gin.Context) {
+	h.loginWithRefreshResponse(c, true)
+}
+
+func (h *LoginHandler) LoginCookie(c *gin.Context) {
+	h.loginWithRefreshResponse(c, false)
+}
+
+func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshToken bool) {
 	var req dto.ReqLogin
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
@@ -66,19 +74,23 @@ func (h *LoginHandler) Login(c *gin.Context) {
 	}
 
 	h.setRefreshCookie(c, result.RefreshToken)
-	c.JSON(http.StatusOK, dto.ResLogin{
+	response := dto.ResLogin{
 		Success: true,
 		Code:    codeLoginSucceeded,
 		Message: messageLoginSucceeded,
 		Data: dto.ResLoginData{
-			AccessToken:      result.AccessToken.Token,
-			TokenType:        result.AccessToken.TokenType,
-			ExpiresAt:        result.AccessToken.ExpiresAt,
-			ExpiresIn:        result.AccessToken.ExpiresIn,
-			RefreshToken:     result.RefreshToken,
-			RefreshExpiresAt: result.RefreshExpiresAt,
+			AccessToken: result.AccessToken.Token,
+			TokenType:   result.AccessToken.TokenType,
+			ExpiresAt:   result.AccessToken.ExpiresAt,
+			ExpiresIn:   result.AccessToken.ExpiresIn,
 		},
-	})
+	}
+	if includeRefreshToken {
+		response.Data.RefreshToken = result.RefreshToken
+		response.Data.RefreshExpiresAt = result.RefreshExpiresAt
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *LoginHandler) Refresh(c *gin.Context) {

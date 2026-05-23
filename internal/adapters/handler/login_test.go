@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,55 @@ func TestLoginHandlerSetsRefreshCookie(t *testing.T) {
 	}
 	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
 		t.Fatal("expected refresh cookie to be set")
+	}
+}
+
+func TestLoginCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewLoginHandler(&fakeLoginUseCase{
+		loginResult: &applogin.Result{
+			AccessToken: &auth.AccessToken{
+				Token:     "access-token",
+				TokenType: "Bearer",
+				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
+				ExpiresIn: 900,
+			},
+			RefreshToken:     "refresh-token",
+			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
+		},
+	}, RefreshCookieConfig{
+		Name:     "ddone_refresh_token",
+		MaxAge:   30 * 24 * time.Hour,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	body, err := json.Marshal(map[string]string{
+		"phone_number": "+8562012345678",
+		"password":     "secretpass",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login/cookie", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/login/cookie", handler.LoginCookie)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
+		t.Fatal("expected refresh cookie to be set")
+	}
+	if strings.Contains(recorder.Body.String(), "refresh-token") {
+		t.Fatal("expected refresh token to be omitted from response body")
 	}
 }
 

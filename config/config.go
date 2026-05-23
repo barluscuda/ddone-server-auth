@@ -17,6 +17,7 @@ type Config struct {
 	}
 	Database  DatabaseConfig
 	Redis     RedisConfig
+	CORS      CORSConfig
 	Auth      AuthConfig
 	WenovaAPI WenovaAPIConfig
 }
@@ -53,6 +54,15 @@ type RedisConfig struct {
 
 type WenovaAPIConfig struct {
 	Token string
+}
+
+type CORSConfig struct {
+	AllowedOrigins   []string      `mapstructure:"allowed_origins"`
+	AllowedMethods   []string      `mapstructure:"allowed_methods"`
+	AllowedHeaders   []string      `mapstructure:"allowed_headers"`
+	ExposedHeaders   []string      `mapstructure:"exposed_headers"`
+	AllowCredentials bool          `mapstructure:"allow_credentials"`
+	MaxAge           time.Duration `mapstructure:"max_age"`
 }
 
 type AuthConfig struct {
@@ -93,6 +103,12 @@ func Load() (*Config, error) {
 	viper.SetDefault("redis.write_timeout", "3s")
 	viper.SetDefault("redis.pool_size", 10)
 	viper.SetDefault("redis.min_idle_conns", 2)
+	viper.SetDefault("cors.allowed_origins", []string{"*"})
+	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
+	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
+	viper.SetDefault("cors.exposed_headers", []string{})
+	viper.SetDefault("cors.allow_credentials", false)
+	viper.SetDefault("cors.max_age", "12h")
 	viper.SetDefault("auth.issuer", "ddone-server-auth")
 	viper.SetDefault("auth.audience", "ddone-clients")
 	viper.SetDefault("auth.access_token_ttl", "15m")
@@ -135,6 +151,12 @@ func Load() (*Config, error) {
 	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
 	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
 	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
+	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
+	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
+	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
+	viper.BindEnv("cors.exposed_headers", "DDONE_CORS_EXPOSED_HEADERS")
+	viper.BindEnv("cors.allow_credentials", "DDONE_CORS_ALLOW_CREDENTIALS")
+	viper.BindEnv("cors.max_age", "DDONE_CORS_MAX_AGE")
 	viper.BindEnv("auth.issuer", "DDONE_AUTH_ISSUER")
 	viper.BindEnv("auth.audience", "DDONE_AUTH_AUDIENCE")
 	viper.BindEnv("auth.access_token_ttl", "DDONE_AUTH_ACCESS_TOKEN_TTL")
@@ -157,6 +179,13 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	cfg.CORS.AllowedOrigins = viper.GetStringSlice("cors.allowed_origins")
+	cfg.CORS.AllowedMethods = viper.GetStringSlice("cors.allowed_methods")
+	cfg.CORS.AllowedHeaders = viper.GetStringSlice("cors.allowed_headers")
+	cfg.CORS.ExposedHeaders = viper.GetStringSlice("cors.exposed_headers")
+	cfg.CORS.AllowCredentials = viper.GetBool("cors.allow_credentials")
+	cfg.CORS.MaxAge = viper.GetDuration("cors.max_age")
+
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -164,7 +193,7 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-func (c Config) validate() error {
+func (c *Config) validate() error {
 	if c.App.Port <= 0 {
 		return fmt.Errorf("app.port must be greater than 0")
 	}
@@ -196,6 +225,31 @@ func (c Config) validate() error {
 		}
 		if c.Redis.DB < 0 {
 			return fmt.Errorf("redis.db must be greater than or equal to 0")
+		}
+	}
+
+	c.CORS.AllowedOrigins = cleanStringSlice(c.CORS.AllowedOrigins)
+	c.CORS.AllowedMethods = cleanStringSlice(c.CORS.AllowedMethods)
+	c.CORS.AllowedHeaders = cleanStringSlice(c.CORS.AllowedHeaders)
+	c.CORS.ExposedHeaders = cleanStringSlice(c.CORS.ExposedHeaders)
+
+	if len(c.CORS.AllowedOrigins) == 0 {
+		return fmt.Errorf("cors.allowed_origins must contain at least one origin")
+	}
+	if len(c.CORS.AllowedMethods) == 0 {
+		return fmt.Errorf("cors.allowed_methods must contain at least one method")
+	}
+	if len(c.CORS.AllowedHeaders) == 0 {
+		return fmt.Errorf("cors.allowed_headers must contain at least one header")
+	}
+	if c.CORS.MaxAge < 0 {
+		return fmt.Errorf("cors.max_age must be greater than or equal to 0")
+	}
+	if c.CORS.AllowCredentials {
+		for _, origin := range c.CORS.AllowedOrigins {
+			if origin == "*" {
+				return fmt.Errorf("cors.allowed_origins cannot contain * when cors.allow_credentials is true")
+			}
 		}
 	}
 
@@ -256,6 +310,19 @@ func (c DatabaseConfig) DSN() string {
 
 func (c Config) RedisAddr() string {
 	return c.Redis.Addr()
+}
+
+func cleanStringSlice(values []string) []string {
+	cleaned := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		cleaned = append(cleaned, trimmed)
+	}
+
+	return cleaned
 }
 
 func (c RedisConfig) Addr() string {

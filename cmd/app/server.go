@@ -33,11 +33,22 @@ func newHTTPServer(
 	app := gin.New()
 	app.HandleMethodNotAllowed = true
 	app.Use(
+		middleware.CORS(middleware.CORSConfig{
+			AllowedOrigins:   cfg.CORS.AllowedOrigins,
+			AllowedMethods:   cfg.CORS.AllowedMethods,
+			AllowedHeaders:   cfg.CORS.AllowedHeaders,
+			ExposedHeaders:   cfg.CORS.ExposedHeaders,
+			AllowCredentials: cfg.CORS.AllowCredentials,
+			MaxAge:           cfg.CORS.MaxAge,
+		}),
 		middleware.Recovery(logger),
 		middleware.RequestLogger(logger),
 	)
 	app.NoRoute(middleware.NoRoute())
 	app.NoMethod(middleware.NoMethod())
+	app.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
 	registerRoutes(app, registerHandler, loginHandler, jwksHandler)
@@ -89,6 +100,7 @@ func registerRoutes(
 	router.POST("/register/resend", registerHandler.ResendOTP)
 	router.POST("/register/verify", registerHandler.VerifyRegister)
 	router.POST("/login", loginHandler.Login)
+	router.POST("/login/cookie", loginHandler.LoginCookie)
 	router.POST("/login/refresh", loginHandler.Refresh)
 	router.POST("/login/refresh/cookie", loginHandler.RefreshCookie)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)

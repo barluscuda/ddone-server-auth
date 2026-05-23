@@ -50,9 +50,13 @@ Use this skill for changes inside this repository.
 - Startup wiring: `cmd/app/main.go`
 - Config loading: `config/config.go`
 - Registration use case: `internal/application/register`
+- Login use case: `internal/application/login`
+- JWKS use case: `internal/application/jwks`
 - Postgres repository: `internal/adapters/repository`
 - Redis store: `internal/adapters/cache`
 - SMS adapter: `internal/adapters/sms`
+- ES256 token adapter: `internal/adapters/token`
+- Postman assets: `postman/` with usage notes in `docs/postman.md`
 
 ## Commands
 
@@ -70,7 +74,8 @@ After edits:
 
 1. Run `gofmt -w` on touched Go files.
 2. Run `go test ./...`.
-3. If config, architecture, or startup behavior changed, keep `README.md` and `AGENTS.md` in sync.
+3. If config, architecture, startup behavior, routes, or request/response bodies changed, keep `README.md` and `AGENTS.md` in sync.
+4. If API routes or request payloads changed, update the checked-in Postman collection and environment templates under `postman/` and the guide in `docs/postman.md`.
 
 ## Do Not Do
 

@@ -28,6 +28,22 @@ redis:
   pool_size: 10
   min_idle_conns: 2
 
+cors:
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - GET
+    - POST
+    - OPTIONS
+  allowed_headers:
+    - Origin
+    - Content-Type
+    - Accept
+    - Authorization
+  exposed_headers: []
+  allow_credentials: false
+  max_age: 12h
+
 auth:
   issuer: ddone-server-auth
   audience: ddone-clients

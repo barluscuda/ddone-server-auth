@@ -7,6 +7,7 @@
 - `POST /register/resend`
 - `POST /register/verify`
 - `POST /login`
+- `POST /login/cookie`
 - `POST /login/refresh`
 - `POST /login/refresh/cookie`
 - `GET /.well-known/jwks.json`
@@ -121,6 +122,13 @@ DDONE_DATABASE_SSLMODE=disable
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
 
+DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
+DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
+DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
+DDONE_CORS_EXPOSED_HEADERS=
+DDONE_CORS_ALLOW_CREDENTIALS=true
+DDONE_CORS_MAX_AGE=12h
+
 DDONE_AUTH_ISSUER=ddone-server-auth
 DDONE_AUTH_AUDIENCE=ddone-clients
 DDONE_AUTH_ACCESS_TOKEN_TTL=15m
@@ -138,6 +146,8 @@ You can also supply:
 
 - `DDONE_DATABASE_URL`
 - `DDONE_REDIS_URL`
+
+For list-based CORS environment variables, use comma-separated values. If you want browser clients to send the refresh cookie to `/login/cookie` or `/login/refresh/cookie`, set `DDONE_CORS_ALLOW_CREDENTIALS=true` and use explicit origins instead of `*`.
 
 ## API
 
@@ -185,7 +195,20 @@ Example body:
 
 ### `POST /login`
 
-Authenticates a verified phone-number account and returns an ES256 access token plus a refresh token.
+Authenticates a verified phone-number account, returns an ES256 access token plus a refresh token, and also stores the refresh token in the configured `HttpOnly` cookie.
+
+Example body:
+
+```json
+{
+  "phone_number": "+8562012345678",
+  "password": "secretpass"
+}
+```
+
+### `POST /login/cookie`
+
+Authenticates a verified phone-number account, stores the refresh token in the configured `HttpOnly` cookie, and returns only the access token in the response body.
 
 Example body:
 
@@ -198,7 +221,7 @@ Example body:
 
 ### `POST /login/refresh`
 
-Rotates the refresh token from the request body and returns a new access token plus a new refresh token.
+Rotates the refresh token from the request body, returns a new access token plus a new refresh token, and refreshes the configured `HttpOnly` cookie.
 
 Example body:
 
@@ -210,7 +233,7 @@ Example body:
 
 ### `POST /login/refresh/cookie`
 
-Rotates the refresh token from the `HttpOnly` refresh cookie and returns a new access token.
+Rotates the refresh token from the `HttpOnly` refresh cookie, keeps the rotated refresh token in that cookie, and returns a new access token.
 
 ### `GET /.well-known/jwks.json`
 

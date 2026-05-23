@@ -16,7 +16,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - `otpCode`: OTP value for `/register/verify`
 - `ticketId`: saved automatically after `/register`
 - `refreshToken`: saved automatically after `/login` and `/login/refresh`
-- `accessToken`: saved automatically after `/login`, `/login/refresh`, and `/login/refresh/cookie`
+- `accessToken`: saved automatically after `/login`, `/login/cookie`, `/login/refresh`, and `/login/refresh/cookie`
 - `accountId`: saved automatically after `/register/verify`
 - `username`: saved automatically after `/register/verify`
 
@@ -27,13 +27,15 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 3. Fill in `otpCode` after receiving the OTP
 4. `Verify Register`
 5. `Login`
-6. `Refresh Token`
-7. `Refresh Token From Cookie`
-8. `JWKS`
+6. `Login With Cookie`
+7. `Refresh Token`
+8. `Refresh Token From Cookie`
+9. `JWKS`
 
 ## Notes
 
 - The `Register` request stores `ticketId` into the active Postman environment.
 - The `Login` and `Refresh Token` requests store both `accessToken` and `refreshToken`.
+- The `Login With Cookie` request stores only `accessToken` in the environment and relies on Postman's cookie jar for the refresh token.
 - The `Refresh Token From Cookie` request depends on Postman's cookie jar receiving the `ddone_refresh_token` cookie from a previous login or refresh response.
 - `JWKS` is public and does not require authentication.
