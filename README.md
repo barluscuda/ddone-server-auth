@@ -91,6 +91,12 @@ Stop infrastructure:
 make infra-down
 ```
 
+Postman assets:
+
+- Collection: [postman/ddone-server-auth.postman_collection.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.postman_collection.json)
+- Environment template: [postman/ddone-server-auth.local.postman_environment.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.local.postman_environment.json)
+- Usage guide: [docs/postman.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/postman.md)
+
 ## Configuration
 
 Configuration is loaded from:

@@ -1,0 +1,276 @@
+{
+  "info": {
+    "_postman_id": "3ba679ca-daf5-4ae7-a16f-13a6bc02eb04",
+    "name": "ddone-server-auth",
+    "description": "Postman collection for the DDONE auth service registration, login, refresh, and JWKS flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Healthz",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/healthz",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "healthz"
+          ]
+        },
+        "description": "Checks service liveness."
+      }
+    },
+    {
+      "name": "Register",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('ticketId', body.data.ticket_id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "register"
+          ]
+        },
+        "description": "Starts registration and stores ticketId from the response."
+      }
+    },
+    {
+      "name": "Resend Register OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticket_id\": \"{{ticketId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/resend",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "register",
+            "resend"
+          ]
+        },
+        "description": "Resends the OTP for the saved ticketId."
+      }
+    },
+    {
+      "name": "Verify Register",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('accountId', body.data.id);",
+              "  pm.environment.set('username', body.data.username || '');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticket_id\": \"{{ticketId}}\",\n  \"otp_code\": \"{{otpCode}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/register/verify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "register",
+            "verify"
+          ]
+        },
+        "description": "Completes registration after you fill in otpCode."
+      }
+    },
+    {
+      "name": "Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('accessToken', body.data.access_token);",
+              "  pm.environment.set('refreshToken', body.data.refresh_token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone_number\": \"{{phoneNumber}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "login"
+          ]
+        },
+        "description": "Authenticates and stores accessToken plus refreshToken."
+      }
+    },
+    {
+      "name": "Refresh Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('accessToken', body.data.access_token);",
+              "  pm.environment.set('refreshToken', body.data.refresh_token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/login/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "login",
+            "refresh"
+          ]
+        },
+        "description": "Uses the saved refreshToken and rotates it."
+      }
+    },
+    {
+      "name": "Refresh Token From Cookie",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('accessToken', body.data.access_token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/login/refresh/cookie",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "login",
+            "refresh",
+            "cookie"
+          ]
+        },
+        "description": "Requires the Postman cookie jar to already have the refresh cookie from Login or Refresh Token."
+      }
+    },
+    {
+      "name": "JWKS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/.well-known/jwks.json",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ".well-known",
+            "jwks.json"
+          ]
+        },
+        "description": "Returns the public signing keys used for ES256 access-token verification."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    }
+  ]
+}
