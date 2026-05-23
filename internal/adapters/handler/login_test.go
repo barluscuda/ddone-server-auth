@@ -66,8 +66,8 @@ func TestLoginHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	})
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "+8562012345678",
-		"password":     "secretpass",
+		"phoneNumber": "+8562012345678",
+		"password":    "secretpass",
 	})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
@@ -115,8 +115,8 @@ func TestLoginCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
 	})
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "+8562012345678",
-		"password":     "secretpass",
+		"phoneNumber": "+8562012345678",
+		"password":    "secretpass",
 	})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
@@ -164,7 +164,7 @@ func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	})
 
 	body, err := json.Marshal(map[string]string{
-		"refresh_token": "refresh-token",
+		"refreshToken": "refresh-token",
 	})
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)

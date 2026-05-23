@@ -92,8 +92,8 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "        ",
-		"password":     "secretpass",
+		"phoneNumber": "        ",
+		"password":    "secretpass",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -128,8 +128,8 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "+85620ABC5678",
-		"password":     "secretpass",
+		"phoneNumber": "+85620ABC5678",
+		"password":    "secretpass",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -187,8 +187,8 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "+8562012345678",
-		"password":     "secretpass",
+		"phoneNumber": "+8562012345678",
+		"password":    "secretpass",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -233,8 +233,8 @@ func TestRegisterRejectsWhitespacePassword(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"phone_number": "+8562012345678",
-		"password":     "        ",
+		"phoneNumber": "+8562012345678",
+		"password":    "        ",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -261,8 +261,8 @@ func TestVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"ticket_id": "        ",
-		"otp_code":  "123456",
+		"ticketId": "        ",
+		"otpCode":  "123456",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -303,7 +303,7 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"ticket_id": "reg_fixed123",
+		"ticketId": "reg_fixed123",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
@@ -362,7 +362,7 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
-		"ticket_id": "reg_fixed123",
+		"ticketId": "reg_fixed123",
 	})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)

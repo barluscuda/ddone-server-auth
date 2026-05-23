@@ -170,7 +170,7 @@ Example body:
 
 ```json
 {
-  "phone_number": "+8562012345678",
+  "phoneNumber": "+8562012345678",
   "password": "secretpass"
 }
 ```
@@ -183,7 +183,7 @@ Example body:
 
 ```json
 {
-  "ticket_id": "reg_abc123"
+  "ticketId": "reg_abc123"
 }
 ```
 
@@ -195,8 +195,8 @@ Example body:
 
 ```json
 {
-  "ticket_id": "reg_abc123",
-  "otp_code": "123456"
+  "ticketId": "reg_abc123",
+  "otpCode": "123456"
 }
 ```
 
@@ -208,7 +208,7 @@ Example body:
 
 ```json
 {
-  "phone_number": "+8562012345678",
+  "phoneNumber": "+8562012345678",
   "password": "secretpass"
 }
 ```
@@ -221,7 +221,7 @@ Example body:
 
 ```json
 {
-  "phone_number": "+8562012345678",
+  "phoneNumber": "+8562012345678",
   "password": "secretpass"
 }
 ```
@@ -234,7 +234,7 @@ Example body:
 
 ```json
 {
-  "refresh_token": "opaque-refresh-token"
+  "refreshToken": "opaque-refresh-token"
 }
 ```
 

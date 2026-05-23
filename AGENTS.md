@@ -26,6 +26,7 @@ cmd/app/                  Process entrypoint
 
 - New business logic should go into `internal/application/<usecase>`.
 - New handlers should depend on application interfaces, not concrete repositories.
+- HTTP JSON request and response field names should use camelCase in DTOs and public examples.
 - Do not introduce new adapter imports into application or domain code.
 - Do not put migrations, GORM tags, Redis logic, or HTTP types into new domain packages.
 - `internal/domain/account` still contains legacy GORM tags and migration helpers. If touching that area, move it toward pure domain models instead of extending the leakage.
