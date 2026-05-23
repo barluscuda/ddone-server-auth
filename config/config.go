@@ -36,6 +36,7 @@ type DatabaseConfig struct {
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
+	LogSQL          bool `mapstructure:"log_sql"`
 }
 
 type RedisConfig struct {
@@ -96,6 +97,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("database.max_idle_conns", 5)
 	viper.SetDefault("database.conn_max_lifetime", "30m")
 	viper.SetDefault("database.conn_max_idle_time", "15m")
+	viper.SetDefault("database.log_sql", false)
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("redis.dial_timeout", "5s")
@@ -116,7 +118,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("auth.signing_key_rotation", "2160h")
 	viper.SetDefault("auth.signing_key_retention", "4320h")
 	viper.SetDefault("auth.refresh_cookie_name", "ddone_refresh_token")
-	viper.SetDefault("auth.refresh_cookie_secure", false)
+	viper.SetDefault("auth.refresh_cookie_secure", true)
 	viper.SetDefault("auth.refresh_cookie_same_site", "lax")
 
 	viper.SetEnvPrefix("DDONE")
@@ -140,6 +142,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("database.max_idle_conns", "DDONE_DATABASE_MAX_IDLE_CONNS")
 	viper.BindEnv("database.conn_max_lifetime", "DDONE_DATABASE_CONN_MAX_LIFETIME")
 	viper.BindEnv("database.conn_max_idle_time", "DDONE_DATABASE_CONN_MAX_IDLE_TIME")
+	viper.BindEnv("database.log_sql", "DDONE_DATABASE_LOG_SQL")
 	viper.BindEnv("redis.url", "DDONE_REDIS_URL")
 	viper.BindEnv("redis.host", "DDONE_REDIS_HOST")
 	viper.BindEnv("redis.port", "DDONE_REDIS_PORT")
@@ -281,6 +284,9 @@ func (c *Config) validate() error {
 	case "lax", "strict", "none":
 	default:
 		return fmt.Errorf("auth.refresh_cookie_same_site must be one of lax, strict, none")
+	}
+	if strings.EqualFold(c.Auth.RefreshCookieSameSite, "none") && !c.Auth.RefreshCookieSecure {
+		return fmt.Errorf("auth.refresh_cookie_secure must be true when auth.refresh_cookie_same_site is none")
 	}
 
 	return nil

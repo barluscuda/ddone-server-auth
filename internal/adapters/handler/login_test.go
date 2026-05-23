@@ -43,7 +43,7 @@ func (f *fakeJWKSUseCase) PublicJWKS(_ context.Context) (*auth.JWKSet, error) {
 	return f.set, f.err
 }
 
-func TestLoginHandlerSetsRefreshCookie(t *testing.T) {
+func TestLoginHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
@@ -84,8 +84,11 @@ func TestLoginHandlerSetsRefreshCookie(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
 	}
-	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
-		t.Fatal("expected refresh cookie to be set")
+	if cookie := recorder.Header().Get("Set-Cookie"); cookie != "" {
+		t.Fatalf("expected body login flow to avoid Set-Cookie, got %q", cookie)
+	}
+	if !strings.Contains(recorder.Body.String(), "refresh-token") {
+		t.Fatal("expected refresh token in response body")
 	}
 }
 
@@ -135,6 +138,95 @@ func TestLoginCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "refresh-token") {
 		t.Fatal("expected refresh token to be omitted from response body")
+	}
+}
+
+func TestRefreshHandlerReturnsRefreshTokenWithoutSettingCookie(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewLoginHandler(&fakeLoginUseCase{
+		refreshResult: &applogin.Result{
+			AccessToken: &auth.AccessToken{
+				Token:     "access-token",
+				TokenType: "Bearer",
+				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
+				ExpiresIn: 900,
+			},
+			RefreshToken:     "rotated-refresh-token",
+			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
+		},
+	}, RefreshCookieConfig{
+		Name:     "ddone_refresh_token",
+		MaxAge:   30 * 24 * time.Hour,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	body, err := json.Marshal(map[string]string{
+		"refresh_token": "refresh-token",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login/refresh", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/login/refresh", handler.Refresh)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if cookie := recorder.Header().Get("Set-Cookie"); cookie != "" {
+		t.Fatalf("expected body refresh flow to avoid Set-Cookie, got %q", cookie)
+	}
+	if !strings.Contains(recorder.Body.String(), "rotated-refresh-token") {
+		t.Fatal("expected rotated refresh token in response body")
+	}
+}
+
+func TestRefreshCookieHandlerOmitsRefreshTokenFromBody(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewLoginHandler(&fakeLoginUseCase{
+		refreshResult: &applogin.Result{
+			AccessToken: &auth.AccessToken{
+				Token:     "access-token",
+				TokenType: "Bearer",
+				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
+				ExpiresIn: 900,
+			},
+			RefreshToken:     "rotated-refresh-token",
+			RefreshExpiresAt: time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
+		},
+	}, RefreshCookieConfig{
+		Name:     "ddone_refresh_token",
+		MaxAge:   30 * 24 * time.Hour,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/login/refresh/cookie", nil)
+	req.AddCookie(&http.Cookie{Name: "ddone_refresh_token", Value: "refresh-token"})
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/login/refresh/cookie", handler.RefreshCookie)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
+		t.Fatal("expected refresh cookie to be rotated")
+	}
+	if strings.Contains(recorder.Body.String(), "rotated-refresh-token") {
+		t.Fatal("expected refresh token to be omitted from cookie refresh response body")
 	}
 }
 

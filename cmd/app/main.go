@@ -40,7 +40,7 @@ func main() {
 }
 
 func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server, func()) {
-	db, err := database.New(cfg.Database, cfg.App.Debug)
+	db, err := database.New(cfg.Database)
 	if err != nil {
 		logger.Fatal("failed to connect database", zap.Error(err))
 	}

@@ -8,9 +8,9 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func New(cfg config.DatabaseConfig, debug bool) (*gorm.DB, error) {
+func New(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	logLevel := logger.Silent
-	if debug {
+	if cfg.LogSQL {
 		logLevel = logger.Info
 	}
 

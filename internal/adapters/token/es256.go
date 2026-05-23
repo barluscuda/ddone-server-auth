@@ -98,10 +98,11 @@ func (c *ES256Codec) IssueAccessToken(
 	signingInput := headerSegment + "." + payloadSegment
 
 	sum := sha256.Sum256([]byte(signingInput))
-	signature, err := ecdsa.SignASN1(rand.Reader, privateKey, sum[:])
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, sum[:])
 	if err != nil {
 		return nil, err
 	}
+	signature := joseSignature(r, s)
 
 	tokenValue := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
 	return &auth.AccessToken{
@@ -145,12 +146,22 @@ func parsePrivateKeyPEM(raw string) (*ecdsa.PrivateKey, error) {
 }
 
 func encodeCoordinate(value *big.Int) string {
+	return base64.RawURLEncoding.EncodeToString(paddedBytes(value, 32))
+}
+
+func joseSignature(r *big.Int, s *big.Int) []byte {
+	signature := make([]byte, 64)
+	copy(signature[:32], paddedBytes(r, 32))
+	copy(signature[32:], paddedBytes(s, 32))
+	return signature
+}
+
+func paddedBytes(value *big.Int, width int) []byte {
 	bytes := value.Bytes()
-	if len(bytes) < 32 {
-		padded := make([]byte, 32)
-		copy(padded[32-len(bytes):], bytes)
+	if len(bytes) < width {
+		padded := make([]byte, width)
+		copy(padded[width-len(bytes):], bytes)
 		bytes = padded
 	}
-
-	return base64.RawURLEncoding.EncodeToString(bytes)
+	return bytes
 }

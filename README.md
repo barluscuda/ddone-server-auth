@@ -118,6 +118,7 @@ DDONE_DATABASE_NAME=ddone_auth
 DDONE_DATABASE_USERNAME=postgres
 DDONE_DATABASE_PASSWORD=postgres
 DDONE_DATABASE_SSLMODE=disable
+DDONE_DATABASE_LOG_SQL=true
 
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
@@ -147,7 +148,13 @@ You can also supply:
 - `DDONE_DATABASE_URL`
 - `DDONE_REDIS_URL`
 
-For list-based CORS environment variables, use comma-separated values. If you want browser clients to send the refresh cookie to `/login/cookie` or `/login/refresh/cookie`, set `DDONE_CORS_ALLOW_CREDENTIALS=true` and use explicit origins instead of `*`.
+Safe defaults:
+
+- `auth.refresh_cookie_secure` defaults to `true`
+- `database.log_sql` defaults to `false`
+- `auth.refresh_cookie_same_site=none` requires `auth.refresh_cookie_secure=true`
+
+For local HTTP development, explicitly set `DDONE_AUTH_REFRESH_COOKIE_SECURE=false` and, if useful, `DDONE_DATABASE_LOG_SQL=true`. For list-based CORS environment variables, use comma-separated values. If you want browser clients to send the refresh cookie to `/login/cookie` or `/login/refresh/cookie`, set `DDONE_CORS_ALLOW_CREDENTIALS=true` and use explicit origins instead of `*`.
 
 ## API
 
@@ -195,7 +202,7 @@ Example body:
 
 ### `POST /login`
 
-Authenticates a verified phone-number account, returns an ES256 access token plus a refresh token, and also stores the refresh token in the configured `HttpOnly` cookie.
+Authenticates a verified phone-number account and returns an ES256 access token plus a refresh token in the response body. This route does not set the refresh cookie.
 
 Example body:
 
@@ -221,7 +228,7 @@ Example body:
 
 ### `POST /login/refresh`
 
-Rotates the refresh token from the request body, returns a new access token plus a new refresh token, and refreshes the configured `HttpOnly` cookie.
+Rotates the refresh token from the request body and returns a new access token plus a new refresh token in the response body. This route does not set the refresh cookie.
 
 Example body:
 

@@ -48,14 +48,14 @@ func NewLoginHandler(login applogin.UseCase, refreshCookie RefreshCookieConfig) 
 }
 
 func (h *LoginHandler) Login(c *gin.Context) {
-	h.loginWithRefreshResponse(c, true)
+	h.loginWithRefreshResponse(c, true, false)
 }
 
 func (h *LoginHandler) LoginCookie(c *gin.Context) {
-	h.loginWithRefreshResponse(c, false)
+	h.loginWithRefreshResponse(c, false, true)
 }
 
-func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshToken bool) {
+func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshToken bool, setCookie bool) {
 	var req dto.ReqLogin
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, codeInvalidRequestBody, messageInvalidRequestBody)
@@ -73,7 +73,9 @@ func (h *LoginHandler) loginWithRefreshResponse(c *gin.Context, includeRefreshTo
 		return
 	}
 
-	h.setRefreshCookie(c, result.RefreshToken)
+	if setCookie {
+		h.setRefreshCookie(c, result.RefreshToken)
+	}
 	response := dto.ResLogin{
 		Success: true,
 		Code:    codeLoginSucceeded,
@@ -110,7 +112,6 @@ func (h *LoginHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	h.setRefreshCookie(c, result.RefreshToken)
 	c.JSON(http.StatusOK, dto.ResLogin{
 		Success: true,
 		Code:    codeTokenRefreshed,

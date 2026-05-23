@@ -35,7 +35,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 ## Notes
 
 - The `Register` request stores `ticketId` into the active Postman environment.
-- The `Login` and `Refresh Token` requests store both `accessToken` and `refreshToken`.
+- The `Login` and `Refresh Token` requests are body-token flows and store both `accessToken` and `refreshToken`.
 - The `Login With Cookie` request stores only `accessToken` in the environment and relies on Postman's cookie jar for the refresh token.
 - The `Refresh Token From Cookie` request depends on Postman's cookie jar receiving the `ddone_refresh_token` cookie from a previous login or refresh response.
 - `JWKS` is public and does not require authentication.

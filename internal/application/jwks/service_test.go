@@ -2,10 +2,17 @@ package jwks
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
+	"math/big"
+	"strings"
 	"testing"
 	"time"
 
+	"ddone-server-auth/internal/adapters/token"
 	"ddone-server-auth/internal/domain/auth"
 )
 
@@ -184,4 +191,82 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	if codec.issuedClaims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", codec.issuedClaims.PhoneNumber)
 	}
+}
+
+func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
+	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
+	store := &fakeSigningKeyStore{}
+	codec := token.NewES256Codec()
+	service := NewService(store, codec, Settings{
+		Issuer:              "issuer",
+		Audience:            "audience",
+		AccessTokenTTL:      15 * time.Minute,
+		SigningKeyRotation:  90 * 24 * time.Hour,
+		SigningKeyRetention: 180 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return now }
+
+	issued, err := service.IssueAccessToken(context.Background(), "account-1", "2012345678")
+	if err != nil {
+		t.Fatalf("IssueAccessToken returned error: %v", err)
+	}
+
+	jwks, err := service.PublicJWKS(context.Background())
+	if err != nil {
+		t.Fatalf("PublicJWKS returned error: %v", err)
+	}
+	if len(jwks.Keys) != 1 {
+		t.Fatalf("expected 1 jwk, got %d", len(jwks.Keys))
+	}
+
+	headerSegment, payloadSegment, signatureSegment := splitJWTForVerify(t, issued.Token)
+	signature := decodeJWTSegment(t, signatureSegment)
+	if len(signature) != 64 {
+		t.Fatalf("expected 64-byte JOSE signature, got %d bytes", len(signature))
+	}
+	if issued.KeyID != jwks.Keys[0].KeyID {
+		t.Fatalf("expected token kid %q to match jwks kid %q", issued.KeyID, jwks.Keys[0].KeyID)
+	}
+
+	sum := sha256.Sum256([]byte(headerSegment + "." + payloadSegment))
+	publicKey := publicKeyFromJWK(t, jwks.Keys[0])
+	if !ecdsa.Verify(publicKey, sum[:], decodeSignaturePart(signature[:32]), decodeSignaturePart(signature[32:])) {
+		t.Fatal("expected issued token to verify against published jwk")
+	}
+}
+
+func splitJWTForVerify(t *testing.T, tokenValue string) (string, string, string) {
+	t.Helper()
+
+	parts := strings.Split(tokenValue, ".")
+	if len(parts) != 3 {
+		t.Fatalf("expected compact JWT with 3 segments, got %d", len(parts))
+	}
+
+	return parts[0], parts[1], parts[2]
+}
+
+func decodeJWTSegment(t *testing.T, segment string) []byte {
+	t.Helper()
+
+	payload, err := base64.RawURLEncoding.DecodeString(segment)
+	if err != nil {
+		t.Fatalf("decode jwt segment: %v", err)
+	}
+
+	return payload
+}
+
+func publicKeyFromJWK(t *testing.T, key auth.JWK) *ecdsa.PublicKey {
+	t.Helper()
+
+	return &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     decodeSignaturePart(decodeJWTSegment(t, key.X)),
+		Y:     decodeSignaturePart(decodeJWTSegment(t, key.Y)),
+	}
+}
+
+func decodeSignaturePart(raw []byte) *big.Int {
+	return new(big.Int).SetBytes(raw)
 }
