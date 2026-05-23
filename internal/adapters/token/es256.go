@@ -82,6 +82,9 @@ func (c *ES256Codec) IssueAccessToken(
 		"nbf": claims.NotBefore.Unix(),
 		"exp": claims.ExpiresAt.Unix(),
 	}
+	if claims.AccountID != "" {
+		payload["accountId"] = claims.AccountID
+	}
 	if claims.PhoneNumber != "" {
 		payload["phone_number"] = claims.PhoneNumber
 	}
@@ -173,6 +176,7 @@ func (c *ES256Codec) VerifyAccessToken(
 
 	var payload struct {
 		Issuer      string `json:"iss"`
+		AccountID   string `json:"accountId"`
 		Subject     string `json:"sub"`
 		Audience    string `json:"aud"`
 		JWTID       string `json:"jti"`
@@ -194,9 +198,14 @@ func (c *ES256Codec) VerifyAccessToken(
 	if now.Before(notBefore) || !now.Before(expiresAt) {
 		return nil, auth.ErrInvalidAccessToken
 	}
+	accountID := payload.AccountID
+	if accountID == "" {
+		accountID = payload.Subject
+	}
 
 	return &auth.AccessTokenClaims{
 		Issuer:      payload.Issuer,
+		AccountID:   accountID,
 		Subject:     payload.Subject,
 		Audience:    payload.Audience,
 		JWTID:       payload.JWTID,

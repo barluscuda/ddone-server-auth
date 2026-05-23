@@ -24,6 +24,7 @@ func TestIssueAccessTokenUsesJOSESignatureFormat(t *testing.T) {
 
 	tokenValue, err := codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:      "issuer",
+		AccountID:   "account-1",
 		Subject:     "account-1",
 		Audience:    "audience",
 		JWTID:       "token-1",
@@ -61,6 +62,7 @@ func TestIssueAccessTokenSerializesExpectedHeaderAndClaims(t *testing.T) {
 
 	tokenValue, err := codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:    "issuer",
+		AccountID: "account-1",
 		Subject:   "account-1",
 		Audience:  "audience",
 		JWTID:     "token-1",
@@ -89,6 +91,9 @@ func TestIssueAccessTokenSerializesExpectedHeaderAndClaims(t *testing.T) {
 	if payload["iss"] != "issuer" || payload["sub"] != "account-1" || payload["aud"] != "audience" || payload["jti"] != "token-1" {
 		t.Fatalf("unexpected payload identifiers: %#v", payload)
 	}
+	if payload["accountId"] != "account-1" {
+		t.Fatalf("expected accountId claim %q, got %#v", "account-1", payload["accountId"])
+	}
 	if _, ok := payload["phone_number"]; ok {
 		t.Fatal("expected phone_number claim to be omitted when empty")
 	}
@@ -105,6 +110,7 @@ func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
 
 	issued, err := codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:      "issuer",
+		AccountID:   "account-1",
 		Subject:     "account-1",
 		Audience:    "audience",
 		JWTID:       "token-1",
@@ -123,6 +129,9 @@ func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
 	}
 	if claims.Subject != "account-1" {
 		t.Fatalf("expected subject %q, got %q", "account-1", claims.Subject)
+	}
+	if claims.AccountID != "account-1" {
+		t.Fatalf("expected account id %q, got %q", "account-1", claims.AccountID)
 	}
 	if claims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", claims.PhoneNumber)

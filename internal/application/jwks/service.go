@@ -145,6 +145,7 @@ func (s *Service) IssueAccessToken(
 
 	return s.codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:      s.settings.Issuer,
+		AccountID:   subject,
 		Subject:     subject,
 		Audience:    s.settings.Audience,
 		JWTID:       tokenID,

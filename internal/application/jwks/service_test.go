@@ -201,6 +201,9 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	if codec.issuedClaims.Subject != "account-1" {
 		t.Fatalf("expected subject %q, got %q", "account-1", codec.issuedClaims.Subject)
 	}
+	if codec.issuedClaims.AccountID != "account-1" {
+		t.Fatalf("expected account id %q, got %q", "account-1", codec.issuedClaims.AccountID)
+	}
 	if codec.issuedClaims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", codec.issuedClaims.PhoneNumber)
 	}
@@ -257,6 +260,7 @@ func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	store := &fakeSigningKeyStore{}
 	codec := &fakeTokenCodec{
 		verifiedClaims: &auth.AccessTokenClaims{
+			AccountID: "account-1",
 			Subject:   "account-1",
 			Audience:  "audience",
 			Issuer:    "issuer",
@@ -278,6 +282,9 @@ func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	}
 	if claims.Subject != "account-1" {
 		t.Fatalf("expected subject %q, got %q", "account-1", claims.Subject)
+	}
+	if claims.AccountID != "account-1" {
+		t.Fatalf("expected account id %q, got %q", "account-1", claims.AccountID)
 	}
 }
 

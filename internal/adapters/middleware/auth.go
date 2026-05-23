@@ -44,8 +44,13 @@ func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
 			return
 		}
 
+		accountID := claims.AccountID
+		if accountID == "" {
+			accountID = claims.Subject
+		}
+
 		c.Set(authContextKey, AuthContext{
-			AccountID:   claims.Subject,
+			AccountID:   accountID,
 			PhoneNumber: claims.PhoneNumber,
 			TokenID:     claims.JWTID,
 		})
