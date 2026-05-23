@@ -57,9 +57,10 @@ auth:
   audience: ddone-clients
   access_token_ttl: 15m
   refresh_token_ttl: 720h
+  login_session_ttl: 720h
   signing_key_rotation: 2160h
   signing_key_retention: 4320h
   session_cookie_name: ddone_session
   session_cookie_secure: false
   session_cookie_same_site: lax
-  session_cookie_max_age: 876000h
+  session_cookie_max_age: 720h

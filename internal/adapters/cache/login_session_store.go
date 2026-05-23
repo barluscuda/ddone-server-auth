@@ -150,7 +150,7 @@ func (s *CachedLoginSessionStore) cacheSession(ctx context.Context, session *aut
 		return
 	}
 
-	ttl := time.Until(session.CurrentAccessExpires)
+	ttl := time.Until(session.ExpiresAt)
 	if ttl <= 0 {
 		return
 	}

@@ -24,6 +24,7 @@ type loginSessionRecord struct {
 	ClientIP             string     `gorm:"size:64"`
 	CurrentAccessToken   string     `gorm:"type:text;not null"`
 	CurrentAccessExpires time.Time  `gorm:"not null;index"`
+	ExpiresAt            *time.Time `gorm:"index"`
 	RevokedAt            *time.Time `gorm:"index"`
 	RevokeReason         string     `gorm:"type:text"`
 	CreatedAt            time.Time  `gorm:"not null"`
@@ -116,6 +117,11 @@ func (r *LoginSessionRepository) baseQuery(ctx context.Context) *gorm.DB {
 }
 
 func toLoginSessionRecord(session *auth.LoginSession) *loginSessionRecord {
+	var expiresAt *time.Time
+	if !session.ExpiresAt.IsZero() {
+		expiresAt = &session.ExpiresAt
+	}
+
 	return &loginSessionRecord{
 		ID:                   session.ID,
 		AccountID:            session.AccountID,
@@ -124,6 +130,7 @@ func toLoginSessionRecord(session *auth.LoginSession) *loginSessionRecord {
 		ClientIP:             session.ClientIP,
 		CurrentAccessToken:   session.CurrentAccessToken,
 		CurrentAccessExpires: session.CurrentAccessExpires,
+		ExpiresAt:            expiresAt,
 		RevokedAt:            session.RevokedAt,
 		RevokeReason:         session.RevokeReason,
 		CreatedAt:            session.CreatedAt,
@@ -131,6 +138,11 @@ func toLoginSessionRecord(session *auth.LoginSession) *loginSessionRecord {
 }
 
 func toLoginSession(record loginSessionRecord) *auth.LoginSession {
+	var expiresAt time.Time
+	if record.ExpiresAt != nil {
+		expiresAt = *record.ExpiresAt
+	}
+
 	return &auth.LoginSession{
 		ID:                   record.ID,
 		AccountID:            record.AccountID,
@@ -139,6 +151,7 @@ func toLoginSession(record loginSessionRecord) *auth.LoginSession {
 		ClientIP:             record.ClientIP,
 		CurrentAccessToken:   record.CurrentAccessToken,
 		CurrentAccessExpires: record.CurrentAccessExpires,
+		ExpiresAt:            expiresAt,
 		RevokedAt:            record.RevokedAt,
 		RevokeReason:         record.RevokeReason,
 		CreatedAt:            record.CreatedAt,

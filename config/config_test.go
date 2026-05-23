@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidateRejectsCredentialsWithWildcardOrigin(t *testing.T) {
 	cfg := validConfig()
@@ -34,6 +37,37 @@ func TestValidateRejectsSessionCookieSameSiteNoneWithoutSecure(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNonPositiveLoginSessionTTL(t *testing.T) {
+	cfg := validConfig()
+	cfg.Auth.LoginSessionTTL = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive login session ttl")
+	}
+}
+
+func TestValidateRejectsSessionCookieMaxAgeLongerThanLoginSessionTTL(t *testing.T) {
+	cfg := validConfig()
+	cfg.Auth.LoginSessionTTL = time.Hour
+	cfg.Auth.SessionCookieMaxAge = 2 * time.Hour
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject session cookie max age longer than login session ttl")
+	}
+}
+
+func TestEffectiveSessionCookieMaxAgeDefaultsToLoginSessionTTL(t *testing.T) {
+	cfg := validConfig()
+	cfg.Auth.LoginSessionTTL = 24 * time.Hour
+	cfg.Auth.SessionCookieMaxAge = 0
+
+	if got, want := cfg.Auth.EffectiveSessionCookieMaxAge(), 24*time.Hour; got != want {
+		t.Fatalf("expected effective session cookie max age %v, got %v", want, got)
+	}
+}
+
 func TestValidateRejectsNegativeCacheTTL(t *testing.T) {
 	cfg := validConfig()
 	cfg.Cache.AccountTTL = -1
@@ -56,11 +90,12 @@ func validConfig() Config {
 	cfg.Auth.Audience = "audience"
 	cfg.Auth.AccessTokenTTL = 1
 	cfg.Auth.RefreshTokenTTL = 1
+	cfg.Auth.LoginSessionTTL = 1
 	cfg.Auth.SigningKeyRotation = 1
 	cfg.Auth.SigningKeyRetention = 1
 	cfg.Auth.SessionCookieName = "ddone_session"
 	cfg.Auth.SessionCookieSecure = true
 	cfg.Auth.SessionCookieSameSite = "lax"
-	cfg.Auth.SessionCookieMaxAge = 1
+	cfg.Auth.SessionCookieMaxAge = 0
 	return cfg
 }

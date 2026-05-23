@@ -19,7 +19,7 @@ Use this skill for changes inside this repository.
 - Phone-number login with access and refresh tokens
 - Phone-based forgot-password with OTP verification
 - Authenticated change-password
-- Database-backed unlimited login sessions with access-token reuse/refresh
+- Database-backed login sessions with access-token reuse/refresh
 - OTP resend and verification flows
 - Health check endpoint
 - JWKS publication for ES256 access tokens

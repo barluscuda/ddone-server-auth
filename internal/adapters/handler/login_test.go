@@ -18,7 +18,7 @@ import (
 func testSessionCookieConfig() SessionCookieConfig {
 	return SessionCookieConfig{
 		Name:     "ddone_session",
-		MaxAge:   100 * 365 * 24 * time.Hour,
+		MaxAge:   30 * 24 * time.Hour,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 	}
@@ -182,6 +182,8 @@ func TestLoginSessionHandlerSetsSessionCookie(t *testing.T) {
 	}
 	if cookie := recorder.Header().Get("Set-Cookie"); cookie == "" {
 		t.Fatal("expected session cookie to be set")
+	} else if !strings.Contains(cookie, "Max-Age=2592000") {
+		t.Fatalf("expected session cookie max-age to match configured ttl, got %q", cookie)
 	}
 	if strings.Contains(recorder.Body.String(), "access-token") {
 		t.Fatal("expected access token to be omitted from session login response body")

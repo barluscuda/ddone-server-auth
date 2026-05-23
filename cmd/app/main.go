@@ -96,6 +96,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	}
 	loginService := applogin.NewService(accountRepository, refreshSessionRepository, loginSessionRepository, jwksService, applogin.Settings{
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
+		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
 	})
 	passwordService := apppassword.NewService(
 		accountRepository,
@@ -107,7 +108,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	accountManagerService := appaccountmanager.NewService(accountRepository, loginSessionRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
 		Name:     cfg.Auth.SessionCookieName,
-		MaxAge:   cfg.Auth.SessionCookieMaxAge,
+		MaxAge:   cfg.Auth.EffectiveSessionCookieMaxAge(),
 		Secure:   cfg.Auth.SessionCookieSecure,
 		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
 	})

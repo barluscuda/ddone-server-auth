@@ -78,6 +78,7 @@ type AuthConfig struct {
 	Audience              string        `mapstructure:"audience"`
 	AccessTokenTTL        time.Duration `mapstructure:"access_token_ttl"`
 	RefreshTokenTTL       time.Duration `mapstructure:"refresh_token_ttl"`
+	LoginSessionTTL       time.Duration `mapstructure:"login_session_ttl"`
 	SigningKeyRotation    time.Duration `mapstructure:"signing_key_rotation"`
 	SigningKeyRetention   time.Duration `mapstructure:"signing_key_retention"`
 	SessionCookieName     string        `mapstructure:"session_cookie_name"`
@@ -126,12 +127,13 @@ func Load() (*Config, error) {
 	viper.SetDefault("auth.audience", "ddone-clients")
 	viper.SetDefault("auth.access_token_ttl", "15m")
 	viper.SetDefault("auth.refresh_token_ttl", "720h")
+	viper.SetDefault("auth.login_session_ttl", "720h")
 	viper.SetDefault("auth.signing_key_rotation", "2160h")
 	viper.SetDefault("auth.signing_key_retention", "4320h")
 	viper.SetDefault("auth.session_cookie_name", "ddone_session")
 	viper.SetDefault("auth.session_cookie_secure", true)
 	viper.SetDefault("auth.session_cookie_same_site", "lax")
-	viper.SetDefault("auth.session_cookie_max_age", "876000h")
+	viper.SetDefault("auth.session_cookie_max_age", "0s")
 
 	viper.SetEnvPrefix("DDONE")
 	viper.SetEnvKeyReplacer(
@@ -179,6 +181,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("auth.audience", "DDONE_AUTH_AUDIENCE")
 	viper.BindEnv("auth.access_token_ttl", "DDONE_AUTH_ACCESS_TOKEN_TTL")
 	viper.BindEnv("auth.refresh_token_ttl", "DDONE_AUTH_REFRESH_TOKEN_TTL")
+	viper.BindEnv("auth.login_session_ttl", "DDONE_AUTH_LOGIN_SESSION_TTL")
 	viper.BindEnv("auth.signing_key_rotation", "DDONE_AUTH_SIGNING_KEY_ROTATION")
 	viper.BindEnv("auth.signing_key_retention", "DDONE_AUTH_SIGNING_KEY_RETENTION")
 	viper.BindEnv("auth.session_cookie_name", "DDONE_AUTH_SESSION_COOKIE_NAME")
@@ -294,6 +297,9 @@ func (c *Config) validate() error {
 	if c.Auth.RefreshTokenTTL <= 0 {
 		return fmt.Errorf("auth.refresh_token_ttl must be greater than 0")
 	}
+	if c.Auth.LoginSessionTTL <= 0 {
+		return fmt.Errorf("auth.login_session_ttl must be greater than 0")
+	}
 	if c.Auth.SigningKeyRotation <= 0 {
 		return fmt.Errorf("auth.signing_key_rotation must be greater than 0")
 	}
@@ -306,8 +312,11 @@ func (c *Config) validate() error {
 	if c.Auth.SessionCookieName == "" {
 		return fmt.Errorf("auth.session_cookie_name is required")
 	}
-	if c.Auth.SessionCookieMaxAge <= 0 {
-		return fmt.Errorf("auth.session_cookie_max_age must be greater than 0")
+	if c.Auth.SessionCookieMaxAge < 0 {
+		return fmt.Errorf("auth.session_cookie_max_age must be greater than or equal to 0")
+	}
+	if c.Auth.SessionCookieMaxAge > 0 && c.Auth.SessionCookieMaxAge > c.Auth.LoginSessionTTL {
+		return fmt.Errorf("auth.session_cookie_max_age must be less than or equal to auth.login_session_ttl")
 	}
 	switch strings.ToLower(c.Auth.SessionCookieSameSite) {
 	case "lax", "strict", "none":
@@ -345,6 +354,14 @@ func (c DatabaseConfig) DSN() string {
 
 func (c Config) RedisAddr() string {
 	return c.Redis.Addr()
+}
+
+func (c AuthConfig) EffectiveSessionCookieMaxAge() time.Duration {
+	if c.SessionCookieMaxAge > 0 {
+		return c.SessionCookieMaxAge
+	}
+
+	return c.LoginSessionTTL
 }
 
 func cleanStringSlice(values []string) []string {

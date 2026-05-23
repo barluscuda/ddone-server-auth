@@ -197,6 +197,7 @@ func handleLoginError(c *gin.Context, err error) {
 		respondError(c, http.StatusBadRequest, loginErrorCode(err), loginErrorMessage(err))
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrLoginSessionNotFound),
+		errors.Is(err, auth.ErrLoginSessionExpired),
 		errors.Is(err, auth.ErrLoginSessionRevoked),
 		errors.Is(err, auth.ErrRefreshSessionNotFound),
 		errors.Is(err, auth.ErrRefreshSessionExpired),
@@ -221,6 +222,8 @@ func loginErrorCode(err error) string {
 	case errors.Is(err, auth.ErrSessionTokenRequired):
 		return codeSessionTokenRequired
 	case errors.Is(err, auth.ErrLoginSessionRevoked):
+		return codeLoginSessionRevoked
+	case errors.Is(err, auth.ErrLoginSessionExpired):
 		return codeLoginSessionRevoked
 	case errors.Is(err, auth.ErrRefreshSessionExpired):
 		return codeRefreshTokenExpired
@@ -250,6 +253,8 @@ func loginErrorMessage(err error) string {
 	case errors.Is(err, auth.ErrSessionTokenRequired):
 		return "session token is required"
 	case errors.Is(err, auth.ErrLoginSessionRevoked):
+		return "login session is no longer valid"
+	case errors.Is(err, auth.ErrLoginSessionExpired):
 		return "login session is no longer valid"
 	case errors.Is(err, auth.ErrRefreshSessionExpired):
 		return "refresh token has expired"

@@ -10,6 +10,7 @@ type LoginSession struct {
 	ClientIP             string
 	CurrentAccessToken   string
 	CurrentAccessExpires time.Time
+	ExpiresAt            time.Time
 	RevokedAt            *time.Time
 	RevokeReason         string
 	CreatedAt            time.Time
@@ -17,6 +18,10 @@ type LoginSession struct {
 
 func (s LoginSession) IsRevoked() bool {
 	return s.RevokedAt != nil
+}
+
+func (s LoginSession) IsExpired(now time.Time) bool {
+	return s.ExpiresAt.IsZero() || !now.Before(s.ExpiresAt)
 }
 
 func (s LoginSession) HasActiveAccessToken(now time.Time) bool {

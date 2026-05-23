@@ -145,12 +145,13 @@ DDONE_AUTH_ISSUER=ddone-server-auth
 DDONE_AUTH_AUDIENCE=ddone-clients
 DDONE_AUTH_ACCESS_TOKEN_TTL=15m
 DDONE_AUTH_REFRESH_TOKEN_TTL=720h
+DDONE_AUTH_LOGIN_SESSION_TTL=720h
 DDONE_AUTH_SIGNING_KEY_ROTATION=2160h
 DDONE_AUTH_SIGNING_KEY_RETENTION=4320h
 DDONE_AUTH_SESSION_COOKIE_NAME=ddone_session
 DDONE_AUTH_SESSION_COOKIE_SECURE=false
 DDONE_AUTH_SESSION_COOKIE_SAME_SITE=lax
-DDONE_AUTH_SESSION_COOKIE_MAX_AGE=876000h
+DDONE_AUTH_SESSION_COOKIE_MAX_AGE=720h
 
 DDONE_WENOVA_TOKEN=your-token
 ```
@@ -164,7 +165,10 @@ Safe defaults:
 
 - `database.log_sql` defaults to `false`
 - `auth.session_cookie_secure` defaults to `true`
+- `auth.login_session_ttl` defaults to `720h`
 - cache TTLs default to short read-through values for account, session-list, and signing-key lookups
+
+`DDONE_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.
 
 For local HTTP development, set `DDONE_AUTH_SESSION_COOKIE_SECURE=false` and `DDONE_DATABASE_LOG_SQL=true` if useful. For list-based CORS environment variables, use comma-separated values. Browser clients using the session-login flow need `DDONE_CORS_ALLOW_CREDENTIALS=true` and explicit origins instead of `*`.
 
@@ -239,7 +243,7 @@ Example body:
 
 ### `POST /login/session`
 
-Authenticates a verified phone-number account, creates a database-backed unlimited-lifetime login session, stores the JWT in server-side session state, and sets an `HttpOnly` session cookie. This route does not return access or session tokens in the response body.
+Authenticates a verified phone-number account, creates a database-backed login session with a configured expiry, stores the JWT in server-side session state, and sets an `HttpOnly` session cookie. This route does not return access or session tokens in the response body.
 
 Example body:
 
@@ -252,7 +256,7 @@ Example body:
 
 ### `POST /login/session/token`
 
-Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while keeping the login session itself active indefinitely.
+Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while the login session itself is still within its configured TTL.
 
 ### `POST /password/forgot`
 

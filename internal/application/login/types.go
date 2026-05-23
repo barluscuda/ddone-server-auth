@@ -8,6 +8,7 @@ import (
 
 type Settings struct {
 	RefreshTokenTTL time.Duration
+	LoginSessionTTL time.Duration
 }
 
 type LoginInput struct {

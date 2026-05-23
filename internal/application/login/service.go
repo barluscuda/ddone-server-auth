@@ -142,6 +142,9 @@ func (s *Service) SessionToken(ctx context.Context, input SessionTokenInput) (*S
 	}
 
 	now := s.now()
+	if session.IsExpired(now) {
+		return nil, auth.ErrLoginSessionExpired
+	}
 	if session.HasActiveAccessToken(now) {
 		return &SessionResult{
 			AccessToken: existingAccessToken(session, now),
@@ -295,6 +298,7 @@ func (s *Service) newLoginSession(
 		ClientIP:             strings.TrimSpace(clientIP),
 		CurrentAccessToken:   accessToken.Token,
 		CurrentAccessExpires: accessToken.ExpiresAt,
+		ExpiresAt:            now.Add(s.settings.LoginSessionTTL),
 		CreatedAt:            now,
 	}
 
