@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"time"
 
 	"ddone-server-auth/internal/domain/auth"
@@ -48,12 +47,13 @@ func (s *Service) EnsureActiveSigningKey(ctx context.Context) (*auth.SigningKey,
 		return nil, err
 	}
 
-	active, err := s.store.GetActive(ctx, now)
-	if err == nil && now.Before(active.RotatesAt) {
-		return active, nil
-	}
-	if err != nil && !errors.Is(err, auth.ErrSigningKeyNotFound) {
+	keys, err := s.store.ListPublicKeys(ctx, now)
+	if err != nil {
 		return nil, err
+	}
+	active := activeSigningKey(keys, now)
+	if active != nil && hasPreparedSuccessor(keys, *active) {
+		return active, nil
 	}
 
 	var ensured *auth.SigningKey
@@ -62,46 +62,83 @@ func (s *Service) EnsureActiveSigningKey(ctx context.Context) (*auth.SigningKey,
 			return err
 		}
 
-		lockedActive, activeErr := s.store.GetActive(lockCtx, now)
-		if activeErr == nil && now.Before(lockedActive.RotatesAt) {
-			ensured = lockedActive
-			return nil
-		}
-		if activeErr != nil && !errors.Is(activeErr, auth.ErrSigningKeyNotFound) {
-			return activeErr
+		lockedKeys, err := s.store.ListPublicKeys(lockCtx, now)
+		if err != nil {
+			return err
 		}
 
-		if activeErr == nil {
-			if err := s.store.Retire(lockCtx, lockedActive.KeyID); err != nil {
+		lockedActive := activeSigningKey(lockedKeys, now)
+		if lockedActive == nil {
+			lockedActive, err = s.generateSigningKey(now, now)
+			if err != nil {
+				return err
+			}
+			if err := s.store.Create(lockCtx, lockedActive); err != nil {
+				return err
+			}
+			lockedKeys = append(lockedKeys, *lockedActive)
+		}
+
+		if !hasPreparedSuccessor(lockedKeys, *lockedActive) {
+			nextKey, err := s.generateSigningKey(now, lockedActive.RotatesAt)
+			if err != nil {
+				return err
+			}
+			if err := s.store.Create(lockCtx, nextKey); err != nil {
 				return err
 			}
 		}
 
-		keyID, err := randomTokenID()
-		if err != nil {
-			return err
-		}
-
-		newKey, err := s.codec.GenerateSigningKey(
-			keyID,
-			now,
-			s.settings.SigningKeyRotation,
-			s.settings.SigningKeyRetention,
-		)
-		if err != nil {
-			return err
-		}
-		if err := s.store.Create(lockCtx, newKey); err != nil {
-			return err
-		}
-
-		ensured = newKey
+		ensured = lockedActive
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
 	return ensured, nil
+}
+
+func (s *Service) generateSigningKey(createdAt time.Time, activatesAt time.Time) (*auth.SigningKey, error) {
+	keyID, err := randomTokenID()
+	if err != nil {
+		return nil, err
+	}
+
+	return s.codec.GenerateSigningKey(
+		keyID,
+		createdAt,
+		activatesAt,
+		s.settings.SigningKeyRotation,
+		s.settings.SigningKeyRetention,
+	)
+}
+
+func activeSigningKey(keys []auth.SigningKey, now time.Time) *auth.SigningKey {
+	var current *auth.SigningKey
+	for i := range keys {
+		if !keys[i].IsActiveAt(now) {
+			continue
+		}
+		if current == nil || keys[i].ActivatesAt.After(current.ActivatesAt) {
+			key := keys[i]
+			current = &key
+		}
+	}
+
+	return current
+}
+
+func hasPreparedSuccessor(keys []auth.SigningKey, current auth.SigningKey) bool {
+	for _, key := range keys {
+		if key.KeyID == current.KeyID {
+			continue
+		}
+		if key.ActivatesAt.Equal(current.RotatesAt) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *Service) IssueAccessToken(
@@ -145,6 +182,9 @@ func (s *Service) PublicJWKS(ctx context.Context) (*auth.JWKSet, error) {
 
 	publicKeys := make([]auth.JWK, 0, len(keys))
 	for _, key := range keys {
+		if !key.IsPublishedAt(now) {
+			continue
+		}
 		publicKeys = append(publicKeys, s.codec.PublicJWK(key))
 	}
 

@@ -244,7 +244,7 @@ Rotates the refresh token from the `HttpOnly` refresh cookie, keeps the rotated 
 
 ### `GET /.well-known/jwks.json`
 
-Returns the current public JWK set for access-token verification.
+Returns the public JWK set for access-token verification. During normal rotation this can include the current signing key, the next pre-published key, and recently retired verification keys until their retention window ends.
 
 ## Development Direction
 

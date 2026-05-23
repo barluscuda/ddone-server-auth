@@ -17,7 +17,7 @@ func TestIssueAccessTokenUsesJOSESignatureFormat(t *testing.T) {
 	codec := NewES256Codec()
 	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
 
-	key, err := codec.GenerateSigningKey("kid-1", now, 90*24*time.Hour, 180*24*time.Hour)
+	key, err := codec.GenerateSigningKey("kid-1", now, now, 90*24*time.Hour, 180*24*time.Hour)
 	if err != nil {
 		t.Fatalf("GenerateSigningKey returned error: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestIssueAccessTokenSerializesExpectedHeaderAndClaims(t *testing.T) {
 	codec := NewES256Codec()
 	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
 
-	key, err := codec.GenerateSigningKey("kid-1", now, 90*24*time.Hour, 180*24*time.Hour)
+	key, err := codec.GenerateSigningKey("kid-1", now, now, 90*24*time.Hour, 180*24*time.Hour)
 	if err != nil {
 		t.Fatalf("GenerateSigningKey returned error: %v", err)
 	}

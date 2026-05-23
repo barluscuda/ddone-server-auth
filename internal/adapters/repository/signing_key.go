@@ -4,7 +4,6 @@ import (
 	"context"
 	"ddone-server-auth/internal/application/jwks"
 	"ddone-server-auth/internal/domain/auth"
-	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -40,32 +39,8 @@ func NewSigningKeyRepository(db *gorm.DB) *SigningKeyRepository {
 	return &SigningKeyRepository{db: db}
 }
 
-func (r *SigningKeyRepository) GetActive(
-	ctx context.Context,
-	now time.Time,
-) (*auth.SigningKey, error) {
-	var record signingKeyRecord
-	if err := r.baseQuery(ctx).
-		Where("status = ? AND activates_at <= ? AND retires_at > ?", auth.SigningKeyStatusActive, now, now).
-		Order("created_at DESC").
-		First(&record).
-		Error; err != nil {
-		return nil, translateSigningKeyError(err)
-	}
-
-	return toSigningKey(record), nil
-}
-
 func (r *SigningKeyRepository) Create(ctx context.Context, key *auth.SigningKey) error {
 	return r.baseQuery(ctx).Create(toSigningKeyRecord(key)).Error
-}
-
-func (r *SigningKeyRepository) Retire(ctx context.Context, keyID string) error {
-	return r.baseQuery(ctx).
-		Model(&signingKeyRecord{}).
-		Where("key_id = ?", keyID).
-		Update("status", auth.SigningKeyStatusRetired).
-		Error
 }
 
 func (r *SigningKeyRepository) ListPublicKeys(
@@ -74,8 +49,8 @@ func (r *SigningKeyRepository) ListPublicKeys(
 ) ([]auth.SigningKey, error) {
 	var records []signingKeyRecord
 	if err := r.baseQuery(ctx).
-		Where("activates_at <= ? AND retires_at > ?", now, now).
-		Order("created_at DESC").
+		Where("retires_at > ?", now).
+		Order("activates_at ASC").
 		Find(&records).
 		Error; err != nil {
 		return nil, err
@@ -149,12 +124,4 @@ func toSigningKey(record signingKeyRecord) *auth.SigningKey {
 		RotatesAt:     record.RotatesAt,
 		RetiresAt:     record.RetiresAt,
 	}
-}
-
-func translateSigningKeyError(err error) error {
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return auth.ErrSigningKeyNotFound
-	}
-
-	return err
 }

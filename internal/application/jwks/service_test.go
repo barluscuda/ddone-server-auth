@@ -17,37 +17,12 @@ import (
 )
 
 type fakeSigningKeyStore struct {
-	active       *auth.SigningKey
-	keys         []auth.SigningKey
-	deletedAt    []time.Time
-	retiredKeyID string
-}
-
-func (s *fakeSigningKeyStore) GetActive(_ context.Context, _ time.Time) (*auth.SigningKey, error) {
-	if s.active == nil {
-		return nil, auth.ErrSigningKeyNotFound
-	}
-
-	key := *s.active
-	return &key, nil
+	keys      []auth.SigningKey
+	deletedAt []time.Time
 }
 
 func (s *fakeSigningKeyStore) Create(_ context.Context, key *auth.SigningKey) error {
-	s.active = key
 	s.keys = append(s.keys, *key)
-	return nil
-}
-
-func (s *fakeSigningKeyStore) Retire(_ context.Context, keyID string) error {
-	s.retiredKeyID = keyID
-	if s.active != nil && s.active.KeyID == keyID {
-		s.active.Status = auth.SigningKeyStatusRetired
-	}
-	for i := range s.keys {
-		if s.keys[i].KeyID == keyID {
-			s.keys[i].Status = auth.SigningKeyStatusRetired
-		}
-	}
 	return nil
 }
 
@@ -65,30 +40,37 @@ func (s *fakeSigningKeyStore) WithRotationLock(ctx context.Context, fn func(cont
 }
 
 type fakeTokenCodec struct {
-	generatedKey *auth.SigningKey
-	issuedClaims auth.AccessTokenClaims
+	generatedKeys []*auth.SigningKey
+	issuedClaims  auth.AccessTokenClaims
 }
 
 func (c *fakeTokenCodec) GenerateSigningKey(
 	keyID string,
-	now time.Time,
+	createdAt time.Time,
+	activatesAt time.Time,
 	rotationInterval time.Duration,
 	retentionWindow time.Duration,
 ) (*auth.SigningKey, error) {
-	c.generatedKey = &auth.SigningKey{
+	status := auth.SigningKeyStatusActive
+	if activatesAt.After(createdAt) {
+		status = auth.SigningKeyStatusScheduled
+	}
+
+	key := &auth.SigningKey{
 		KeyID:         keyID,
 		Algorithm:     "ES256",
 		Curve:         "P-256",
 		PublicX:       "x",
 		PublicY:       "y",
 		PrivateKeyPEM: "pem",
-		Status:        auth.SigningKeyStatusActive,
-		CreatedAt:     now,
-		ActivatesAt:   now,
-		RotatesAt:     now.Add(rotationInterval),
-		RetiresAt:     now.Add(retentionWindow),
+		Status:        status,
+		CreatedAt:     createdAt,
+		ActivatesAt:   activatesAt,
+		RotatesAt:     activatesAt.Add(rotationInterval),
+		RetiresAt:     activatesAt.Add(retentionWindow),
 	}
-	return c.generatedKey, nil
+	c.generatedKeys = append(c.generatedKeys, key)
+	return key, nil
 }
 
 func (c *fakeTokenCodec) IssueAccessToken(
@@ -145,28 +127,41 @@ func TestEnsureActiveSigningKeyCreatesFirstKey(t *testing.T) {
 	if key.Status != auth.SigningKeyStatusActive {
 		t.Fatalf("expected active key, got %q", key.Status)
 	}
-	if codec.generatedKey == nil {
-		t.Fatal("expected codec to generate a key")
+	if len(codec.generatedKeys) != 2 {
+		t.Fatalf("expected 2 generated keys, got %d", len(codec.generatedKeys))
+	}
+	if len(store.keys) != 2 {
+		t.Fatalf("expected key ring with 2 keys, got %d", len(store.keys))
+	}
+	if store.keys[1].Status != auth.SigningKeyStatusScheduled {
+		t.Fatalf("expected successor key to be scheduled, got %q", store.keys[1].Status)
+	}
+	if !store.keys[1].ActivatesAt.Equal(store.keys[0].RotatesAt) {
+		t.Fatalf(
+			"expected successor to activate at %s, got %s",
+			store.keys[0].RotatesAt,
+			store.keys[1].ActivatesAt,
+		)
 	}
 }
 
 func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
 	store := &fakeSigningKeyStore{
-		active: &auth.SigningKey{
+		keys: []auth.SigningKey{{
 			KeyID:         "kid-1",
 			Algorithm:     "ES256",
 			Curve:         "P-256",
 			Status:        auth.SigningKeyStatusActive,
 			CreatedAt:     now.Add(-time.Hour),
+			ActivatesAt:   now.Add(-time.Hour),
 			RotatesAt:     now.Add(time.Hour),
 			RetiresAt:     now.Add(90 * 24 * time.Hour),
 			PublicX:       "x",
 			PublicY:       "y",
 			PrivateKeyPEM: "pem",
-		},
+		}},
 	}
-	store.keys = []auth.SigningKey{*store.active}
 	codec := &fakeTokenCodec{}
 	service := NewService(store, codec, Settings{
 		Issuer:              "issuer",
@@ -185,11 +180,17 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	if token.Token != "signed-token" {
 		t.Fatalf("expected signed token, got %q", token.Token)
 	}
+	if token.KeyID != "kid-1" {
+		t.Fatalf("expected access token to use existing key %q, got %q", "kid-1", token.KeyID)
+	}
 	if codec.issuedClaims.Subject != "account-1" {
 		t.Fatalf("expected subject %q, got %q", "account-1", codec.issuedClaims.Subject)
 	}
 	if codec.issuedClaims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", codec.issuedClaims.PhoneNumber)
+	}
+	if len(store.keys) != 2 {
+		t.Fatalf("expected successor key to be created, got %d keys", len(store.keys))
 	}
 }
 
@@ -215,8 +216,8 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublicJWKS returned error: %v", err)
 	}
-	if len(jwks.Keys) != 1 {
-		t.Fatalf("expected 1 jwk, got %d", len(jwks.Keys))
+	if len(jwks.Keys) != 2 {
+		t.Fatalf("expected 2 jwks entries, got %d", len(jwks.Keys))
 	}
 
 	headerSegment, payloadSegment, signatureSegment := splitJWTForVerify(t, issued.Token)
@@ -224,15 +225,26 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 	if len(signature) != 64 {
 		t.Fatalf("expected 64-byte JOSE signature, got %d bytes", len(signature))
 	}
-	if issued.KeyID != jwks.Keys[0].KeyID {
-		t.Fatalf("expected token kid %q to match jwks kid %q", issued.KeyID, jwks.Keys[0].KeyID)
+	publicJWK, ok := findJWK(jwks.Keys, issued.KeyID)
+	if !ok {
+		t.Fatalf("expected issued kid %q to be present in jwks", issued.KeyID)
 	}
 
 	sum := sha256.Sum256([]byte(headerSegment + "." + payloadSegment))
-	publicKey := publicKeyFromJWK(t, jwks.Keys[0])
+	publicKey := publicKeyFromJWK(t, publicJWK)
 	if !ecdsa.Verify(publicKey, sum[:], decodeSignaturePart(signature[:32]), decodeSignaturePart(signature[32:])) {
 		t.Fatal("expected issued token to verify against published jwk")
 	}
+}
+
+func findJWK(keys []auth.JWK, keyID string) (auth.JWK, bool) {
+	for _, key := range keys {
+		if key.KeyID == keyID {
+			return key, true
+		}
+	}
+
+	return auth.JWK{}, false
 }
 
 func splitJWTForVerify(t *testing.T, tokenValue string) (string, string, string) {

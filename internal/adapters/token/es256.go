@@ -23,7 +23,8 @@ func NewES256Codec() *ES256Codec {
 
 func (c *ES256Codec) GenerateSigningKey(
 	keyID string,
-	now time.Time,
+	createdAt time.Time,
+	activatesAt time.Time,
 	rotationInterval time.Duration,
 	retentionWindow time.Duration,
 ) (*auth.SigningKey, error) {
@@ -49,11 +50,11 @@ func (c *ES256Codec) GenerateSigningKey(
 		PublicX:       encodeCoordinate(privateKey.PublicKey.X),
 		PublicY:       encodeCoordinate(privateKey.PublicKey.Y),
 		PrivateKeyPEM: string(privateKeyPEM),
-		Status:        auth.SigningKeyStatusActive,
-		CreatedAt:     now,
-		ActivatesAt:   now,
-		RotatesAt:     now.Add(rotationInterval),
-		RetiresAt:     now.Add(retentionWindow),
+		Status:        signingKeyStatus(createdAt, activatesAt),
+		CreatedAt:     createdAt,
+		ActivatesAt:   activatesAt,
+		RotatesAt:     activatesAt.Add(rotationInterval),
+		RetiresAt:     activatesAt.Add(retentionWindow),
 	}, nil
 }
 
@@ -164,4 +165,12 @@ func paddedBytes(value *big.Int, width int) []byte {
 		bytes = padded
 	}
 	return bytes
+}
+
+func signingKeyStatus(createdAt time.Time, activatesAt time.Time) string {
+	if activatesAt.After(createdAt) {
+		return auth.SigningKeyStatusScheduled
+	}
+
+	return auth.SigningKeyStatusActive
 }
