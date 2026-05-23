@@ -156,13 +156,11 @@ func (s *RegisterService) Register(
 		LastOTPSentAt: now,
 		CreatedAt:     now,
 	}
-	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
-		return nil, err
-	}
-
 	message := RegisterOTPMessage(otpCode, registerOTPTTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber, message); err != nil {
-		_ = s.store.Delete(ctx, ticketID)
+		return nil, err
+	}
+	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
 		return nil, err
 	}
 

@@ -237,7 +237,7 @@ func TestNormalizePhoneNumberRejectsInvalidFormat(t *testing.T) {
 	}
 }
 
-func TestRegisterServiceRegisterDeletesCacheWhenSMSFails(t *testing.T) {
+func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
@@ -253,9 +253,11 @@ func TestRegisterServiceRegisterDeletesCacheWhenSMSFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected sms failure")
 	}
-
-	if store.deletedTicket != "reg_fixed123" {
-		t.Fatalf("expected cache cleanup for ticket id, got %q", store.deletedTicket)
+	if _, getErr := store.Get(context.Background(), "reg_fixed123"); !errors.Is(getErr, account.ErrPendingRegistrationNotFound) {
+		t.Fatalf("expected no registration to be saved after sms failure, got %v", getErr)
+	}
+	if store.deletedTicket != "" {
+		t.Fatalf("expected no cleanup delete when registration was never saved, got %q", store.deletedTicket)
 	}
 }
 
