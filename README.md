@@ -6,6 +6,10 @@
 - `POST /register`
 - `POST /register/resend`
 - `POST /register/verify`
+- `POST /login`
+- `POST /login/refresh`
+- `POST /login/refresh/cookie`
+- `GET /.well-known/jwks.json`
 
 The service uses:
 
@@ -32,10 +36,14 @@ Current note: some legacy persistence concerns still live under `internal/domain
 cmd/app/                       Entry point and HTTP server wiring
 config/                        Config loading and default values
 internal/application/register/ Registration use case
+internal/application/login/    Login and refresh use case
+internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/account/       Account and registration domain models
+internal/domain/auth/          Auth tokens, sessions, and signing-key models
 internal/adapters/cache/       Redis client and registration store
 internal/adapters/database/    PostgreSQL connection setup
 internal/adapters/repository/  GORM-backed repositories
+internal/adapters/token/       ES256 signing and JWK helpers
 internal/adapters/sms/         Wenova SMS adapter
 internal/adapters/handler/     HTTP handlers
 internal/adapters/middleware/  HTTP middleware
@@ -107,6 +115,16 @@ DDONE_DATABASE_SSLMODE=disable
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
 
+DDONE_AUTH_ISSUER=ddone-server-auth
+DDONE_AUTH_AUDIENCE=ddone-clients
+DDONE_AUTH_ACCESS_TOKEN_TTL=15m
+DDONE_AUTH_REFRESH_TOKEN_TTL=720h
+DDONE_AUTH_SIGNING_KEY_ROTATION=2160h
+DDONE_AUTH_SIGNING_KEY_RETENTION=4320h
+DDONE_AUTH_REFRESH_COOKIE_NAME=ddone_refresh_token
+DDONE_AUTH_REFRESH_COOKIE_SECURE=false
+DDONE_AUTH_REFRESH_COOKIE_SAME_SITE=lax
+
 DDONE_WENOVA_TOKEN=your-token
 ```
 
@@ -158,6 +176,39 @@ Example body:
   "otp_code": "123456"
 }
 ```
+
+### `POST /login`
+
+Authenticates a verified phone-number account and returns an ES256 access token plus a refresh token.
+
+Example body:
+
+```json
+{
+  "phone_number": "+8562012345678",
+  "password": "secretpass"
+}
+```
+
+### `POST /login/refresh`
+
+Rotates the refresh token from the request body and returns a new access token plus a new refresh token.
+
+Example body:
+
+```json
+{
+  "refresh_token": "opaque-refresh-token"
+}
+```
+
+### `POST /login/refresh/cookie`
+
+Rotates the refresh token from the `HttpOnly` refresh cookie and returns a new access token.
+
+### `GET /.well-known/jwks.json`
+
+Returns the current public JWK set for access-token verification.
 
 ## Development Direction
 

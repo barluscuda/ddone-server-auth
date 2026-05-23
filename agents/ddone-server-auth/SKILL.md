@@ -16,9 +16,12 @@ Use this skill for changes inside this repository.
 ## What This Service Does
 
 - Phone-based registration with OTP
+- Phone-number login with access and refresh tokens
 - OTP resend and verification flows
 - Health check endpoint
+- JWKS publication for ES256 access tokens
 - PostgreSQL-backed account persistence
+- PostgreSQL-backed refresh sessions and signing keys
 - Redis-backed pending registration state
 - Wenova SMS delivery
 

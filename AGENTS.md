@@ -51,12 +51,21 @@ cmd/app/                  Process entrypoint
 - `POST /register`
 - `POST /register/resend`
 - `POST /register/verify`
+- `POST /login`
+- `POST /login/refresh`
+- `POST /login/refresh/cookie`
+- `GET /.well-known/jwks.json`
 
 Registration currently depends on:
 
 - PostgreSQL for account persistence
 - Redis for pending registration and OTP rate-limit state
 - Wenova SMS for OTP delivery
+
+Login currently depends on:
+
+- PostgreSQL for account lookup, refresh sessions, and signing keys
+- ES256 access-token signing with JWKS publication
 
 ## Preferred Change Style
 

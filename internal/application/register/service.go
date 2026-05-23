@@ -33,7 +33,7 @@ const (
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
-var ErrInvalidPhoneNumber = errors.New("phone number format is invalid")
+var ErrInvalidPhoneNumber = account.ErrInvalidPhoneNumber
 var ErrRegisterTicketRequired = errors.New("ticket id is required")
 var ErrOTPCodeRequired = errors.New("otp code is required")
 var ErrPasswordRequired = errors.New("password is required")
@@ -401,48 +401,7 @@ func hashPassword(password string) (string, error) {
 }
 
 func normalizePhoneNumber(raw string) (string, error) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return "", ErrPhoneNumberRequired
-	}
-
-	var builder strings.Builder
-	builder.Grow(len(value))
-
-	for i, r := range value {
-		switch {
-		case r >= '0' && r <= '9':
-			builder.WriteRune(r)
-		case r == '+' && i == 0:
-			continue
-		case r == ' ' || r == '-' || r == '(' || r == ')':
-			continue
-		default:
-			return "", ErrInvalidPhoneNumber
-		}
-	}
-
-	digits := builder.String()
-	if digits == "" {
-		return "", ErrInvalidPhoneNumber
-	}
-
-	switch {
-	case strings.HasPrefix(digits, "00856"):
-		digits = digits[5:]
-	case strings.HasPrefix(digits, "856"):
-		digits = digits[3:]
-	}
-
-	if strings.HasPrefix(digits, "020") {
-		digits = digits[1:]
-	}
-
-	if len(digits) != 10 || !strings.HasPrefix(digits, "20") {
-		return "", ErrInvalidPhoneNumber
-	}
-
-	return digits, nil
+	return account.NormalizePhoneNumber(raw)
 }
 
 func hashRegisterOTP(ticketID string, otpCode string) string {

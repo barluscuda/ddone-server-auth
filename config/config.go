@@ -17,6 +17,7 @@ type Config struct {
 	}
 	Database  DatabaseConfig
 	Redis     RedisConfig
+	Auth      AuthConfig
 	WenovaAPI WenovaAPIConfig
 }
 
@@ -54,6 +55,18 @@ type WenovaAPIConfig struct {
 	Token string
 }
 
+type AuthConfig struct {
+	Issuer                string        `mapstructure:"issuer"`
+	Audience              string        `mapstructure:"audience"`
+	AccessTokenTTL        time.Duration `mapstructure:"access_token_ttl"`
+	RefreshTokenTTL       time.Duration `mapstructure:"refresh_token_ttl"`
+	SigningKeyRotation    time.Duration `mapstructure:"signing_key_rotation"`
+	SigningKeyRetention   time.Duration `mapstructure:"signing_key_retention"`
+	RefreshCookieName     string        `mapstructure:"refresh_cookie_name"`
+	RefreshCookieSecure   bool          `mapstructure:"refresh_cookie_secure"`
+	RefreshCookieSameSite string        `mapstructure:"refresh_cookie_same_site"`
+}
+
 func Load() (*Config, error) {
 	var cfg Config
 
@@ -80,6 +93,15 @@ func Load() (*Config, error) {
 	viper.SetDefault("redis.write_timeout", "3s")
 	viper.SetDefault("redis.pool_size", 10)
 	viper.SetDefault("redis.min_idle_conns", 2)
+	viper.SetDefault("auth.issuer", "ddone-server-auth")
+	viper.SetDefault("auth.audience", "ddone-clients")
+	viper.SetDefault("auth.access_token_ttl", "15m")
+	viper.SetDefault("auth.refresh_token_ttl", "720h")
+	viper.SetDefault("auth.signing_key_rotation", "2160h")
+	viper.SetDefault("auth.signing_key_retention", "4320h")
+	viper.SetDefault("auth.refresh_cookie_name", "ddone_refresh_token")
+	viper.SetDefault("auth.refresh_cookie_secure", false)
+	viper.SetDefault("auth.refresh_cookie_same_site", "lax")
 
 	viper.SetEnvPrefix("DDONE")
 	viper.SetEnvKeyReplacer(
@@ -113,6 +135,15 @@ func Load() (*Config, error) {
 	viper.BindEnv("redis.write_timeout", "DDONE_REDIS_WRITE_TIMEOUT")
 	viper.BindEnv("redis.pool_size", "DDONE_REDIS_POOL_SIZE")
 	viper.BindEnv("redis.min_idle_conns", "DDONE_REDIS_MIN_IDLE_CONNS")
+	viper.BindEnv("auth.issuer", "DDONE_AUTH_ISSUER")
+	viper.BindEnv("auth.audience", "DDONE_AUTH_AUDIENCE")
+	viper.BindEnv("auth.access_token_ttl", "DDONE_AUTH_ACCESS_TOKEN_TTL")
+	viper.BindEnv("auth.refresh_token_ttl", "DDONE_AUTH_REFRESH_TOKEN_TTL")
+	viper.BindEnv("auth.signing_key_rotation", "DDONE_AUTH_SIGNING_KEY_ROTATION")
+	viper.BindEnv("auth.signing_key_retention", "DDONE_AUTH_SIGNING_KEY_RETENTION")
+	viper.BindEnv("auth.refresh_cookie_name", "DDONE_AUTH_REFRESH_COOKIE_NAME")
+	viper.BindEnv("auth.refresh_cookie_secure", "DDONE_AUTH_REFRESH_COOKIE_SECURE")
+	viper.BindEnv("auth.refresh_cookie_same_site", "DDONE_AUTH_REFRESH_COOKIE_SAME_SITE")
 	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN", "DDONE_WENOVA_TOKEN")
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -166,6 +197,36 @@ func (c Config) validate() error {
 		if c.Redis.DB < 0 {
 			return fmt.Errorf("redis.db must be greater than or equal to 0")
 		}
+	}
+
+	if c.Auth.Issuer == "" {
+		return fmt.Errorf("auth.issuer is required")
+	}
+	if c.Auth.Audience == "" {
+		return fmt.Errorf("auth.audience is required")
+	}
+	if c.Auth.AccessTokenTTL <= 0 {
+		return fmt.Errorf("auth.access_token_ttl must be greater than 0")
+	}
+	if c.Auth.RefreshTokenTTL <= 0 {
+		return fmt.Errorf("auth.refresh_token_ttl must be greater than 0")
+	}
+	if c.Auth.SigningKeyRotation <= 0 {
+		return fmt.Errorf("auth.signing_key_rotation must be greater than 0")
+	}
+	if c.Auth.SigningKeyRetention <= 0 {
+		return fmt.Errorf("auth.signing_key_retention must be greater than 0")
+	}
+	if c.Auth.SigningKeyRetention < c.Auth.SigningKeyRotation {
+		return fmt.Errorf("auth.signing_key_retention must be greater than or equal to auth.signing_key_rotation")
+	}
+	if c.Auth.RefreshCookieName == "" {
+		return fmt.Errorf("auth.refresh_cookie_name is required")
+	}
+	switch strings.ToLower(c.Auth.RefreshCookieSameSite) {
+	case "lax", "strict", "none":
+	default:
+		return fmt.Errorf("auth.refresh_cookie_same_site must be one of lax, strict, none")
 	}
 
 	return nil

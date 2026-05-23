@@ -1,0 +1,170 @@
+package login
+
+import (
+	"context"
+	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/auth"
+	"errors"
+	"testing"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type fakeAccountLookup struct {
+	byID    map[string]*account.AccountModel
+	byPhone map[string]*account.AccountModel
+}
+
+func (r *fakeAccountLookup) GetByID(_ context.Context, id string) (*account.AccountModel, error) {
+	if accountModel, ok := r.byID[id]; ok {
+		return accountModel, nil
+	}
+	return nil, account.ErrAccountNotFound
+}
+
+func (r *fakeAccountLookup) GetByPhoneNumber(_ context.Context, phoneNumber string) (*account.AccountModel, error) {
+	if accountModel, ok := r.byPhone[phoneNumber]; ok {
+		return accountModel, nil
+	}
+	return nil, account.ErrAccountNotFound
+}
+
+type fakeRefreshSessionStore struct {
+	created          *auth.RefreshSession
+	sessionsByHash   map[string]*auth.RefreshSession
+	rotatedCurrentID string
+	replacement      *auth.RefreshSession
+	revokedRootID    string
+	rotateErr        error
+}
+
+func (s *fakeRefreshSessionStore) Create(_ context.Context, session *auth.RefreshSession) error {
+	s.created = session
+	return nil
+}
+
+func (s *fakeRefreshSessionStore) GetByTokenHash(_ context.Context, tokenHash string) (*auth.RefreshSession, error) {
+	if session, ok := s.sessionsByHash[tokenHash]; ok {
+		return session, nil
+	}
+	return nil, auth.ErrRefreshSessionNotFound
+}
+
+func (s *fakeRefreshSessionStore) Rotate(
+	_ context.Context,
+	currentSessionID string,
+	replacement *auth.RefreshSession,
+	_ time.Time,
+) error {
+	if s.rotateErr != nil {
+		return s.rotateErr
+	}
+	s.rotatedCurrentID = currentSessionID
+	s.replacement = replacement
+	return nil
+}
+
+func (s *fakeRefreshSessionStore) RevokeLineage(
+	_ context.Context,
+	rootSessionID string,
+	_ string,
+	_ time.Time,
+) error {
+	s.revokedRootID = rootSessionID
+	return nil
+}
+
+type fakeAccessTokenIssuer struct{}
+
+func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, subject string, phoneNumber string) (*auth.AccessToken, error) {
+	return &auth.AccessToken{
+		Token:     "access-token",
+		TokenType: "Bearer",
+		ExpiresAt: time.Now().UTC().Add(15 * time.Minute),
+		ExpiresIn: 900,
+		KeyID:     subject + ":" + phoneNumber,
+	}, nil
+}
+
+func TestLoginCreatesRefreshSession(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	accountModel := &account.AccountModel{
+		ID:           "account-1",
+		PhoneNumber:  "2012345678",
+		PasswordHash: string(passwordHash),
+	}
+	accounts := &fakeAccountLookup{
+		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+		byID:    map[string]*account.AccountModel{"account-1": accountModel},
+	}
+	sessions := &fakeRefreshSessionStore{}
+	service := NewService(accounts, sessions, &fakeAccessTokenIssuer{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	})
+	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+
+	result, err := service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+		ClientIP:    "127.0.0.1",
+		UserAgent:   "test-agent",
+	})
+	if err != nil {
+		t.Fatalf("Login returned error: %v", err)
+	}
+
+	if result.RefreshToken == "" {
+		t.Fatal("expected refresh token")
+	}
+	if sessions.created == nil {
+		t.Fatal("expected session to be created")
+	}
+	if sessions.created.RootSessionID != sessions.created.ID {
+		t.Fatalf("expected root session id to match session id, got %q and %q", sessions.created.RootSessionID, sessions.created.ID)
+	}
+}
+
+func TestRefreshRevokesLineageOnReplay(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	accountModel := &account.AccountModel{
+		ID:           "account-1",
+		PhoneNumber:  "2012345678",
+		PasswordHash: string(passwordHash),
+	}
+	accounts := &fakeAccountLookup{
+		byID: map[string]*account.AccountModel{"account-1": accountModel},
+	}
+	service := NewService(accounts, &fakeRefreshSessionStore{
+		sessionsByHash: map[string]*auth.RefreshSession{
+			hashRefreshToken("refresh-token"): {
+				ID:            "session-1",
+				AccountID:     "account-1",
+				RootSessionID: "session-1",
+				ReplacedAt:    ptrTime(time.Date(2026, 5, 23, 9, 0, 0, 0, time.UTC)),
+				ExpiresAt:     time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	}, &fakeAccessTokenIssuer{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
+
+	_, err = service.Refresh(context.Background(), RefreshInput{RefreshToken: "refresh-token"})
+	if !errors.Is(err, auth.ErrRefreshTokenReplayDetected) {
+		t.Fatalf("expected replay error, got %v", err)
+	}
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
+}

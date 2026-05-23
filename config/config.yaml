@@ -27,3 +27,14 @@ redis:
   write_timeout: 3s
   pool_size: 10
   min_idle_conns: 2
+
+auth:
+  issuer: ddone-server-auth
+  audience: ddone-clients
+  access_token_ttl: 15m
+  refresh_token_ttl: 720h
+  signing_key_rotation: 2160h
+  signing_key_retention: 4320h
+  refresh_cookie_name: ddone_refresh_token
+  refresh_cookie_secure: false
+  refresh_cookie_same_site: lax

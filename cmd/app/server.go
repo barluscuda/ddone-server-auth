@@ -21,6 +21,8 @@ func newHTTPServer(
 	cfg *config.Config,
 	logger *zap.Logger,
 	registerService appregister.UseCase,
+	loginHandler *handler.LoginHandler,
+	jwksHandler *handler.JWKSHandler,
 ) *http.Server {
 	if cfg.App.Debug {
 		gin.SetMode(gin.DebugMode)
@@ -38,7 +40,7 @@ func newHTTPServer(
 	app.NoMethod(middleware.NoMethod())
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler)
+	registerRoutes(app, registerHandler, loginHandler, jwksHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -76,9 +78,18 @@ func run(server *http.Server, logger *zap.Logger) {
 	logger.Info("server stopped")
 }
 
-func registerRoutes(router gin.IRoutes, registerHandler *handler.RegisterHandler) {
+func registerRoutes(
+	router gin.IRoutes,
+	registerHandler *handler.RegisterHandler,
+	loginHandler *handler.LoginHandler,
+	jwksHandler *handler.JWKSHandler,
+) {
 	router.GET("/healthz", handler.Healthz)
 	router.POST("/register", registerHandler.Register)
 	router.POST("/register/resend", registerHandler.ResendOTP)
 	router.POST("/register/verify", registerHandler.VerifyRegister)
+	router.POST("/login", loginHandler.Login)
+	router.POST("/login/refresh", loginHandler.Refresh)
+	router.POST("/login/refresh/cookie", loginHandler.RefreshCookie)
+	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 }
