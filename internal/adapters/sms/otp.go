@@ -2,10 +2,13 @@ package sms
 
 import (
 	"context"
+	appregister "ddone-server-auth/internal/application/register"
 	"errors"
 
 	"github.com/barluscuda/dextools/wenova"
 )
+
+var _ appregister.OTPSender = (*SMS)(nil)
 
 func (s SMS) SendOTP(ctx context.Context, phoneNumber string, msg string) error {
 	if s.wnv == nil {

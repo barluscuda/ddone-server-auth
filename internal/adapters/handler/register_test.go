@@ -88,7 +88,7 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -124,7 +124,7 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -152,7 +152,7 @@ func TestRegisterRejectsInvalidRequestBodyWithSafeMessage(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader([]byte(`{`)))
@@ -183,7 +183,7 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -229,7 +229,7 @@ func TestRegisterRejectsWhitespacePassword(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -257,7 +257,7 @@ func TestVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -299,7 +299,7 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 			},
 		},
 	}
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, store, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, store, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -358,7 +358,7 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 			},
 		},
 	}
-	service := appregister.NewRegisterService(&fakeAccountRepository{}, store, &fakeOTPSender{})
+	service := appregister.NewService(&fakeAccountRepository{}, store, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{

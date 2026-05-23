@@ -15,7 +15,6 @@ import (
 	applogin "ddone-server-auth/internal/application/login"
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/bootstrap/logging"
-	"ddone-server-auth/internal/domain/account"
 	"net/http"
 	"strings"
 
@@ -54,20 +53,16 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	}
 	logger.Info("connected to redis")
 
-	if err := account.Migrate(db); err != nil {
-		logger.Fatal("failed to migrate account tables", zap.Error(err))
+	if err := repository.Migrate(db); err != nil {
+		logger.Fatal("failed to migrate database tables", zap.Error(err))
 	}
-	logger.Info("account tables migrated")
-	if err := repository.MigrateAuth(db); err != nil {
-		logger.Fatal("failed to migrate auth tables", zap.Error(err))
-	}
-	logger.Info("auth tables migrated")
+	logger.Info("database tables migrated")
 
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
 	smsClient := sms.NewSMS(&wnvClient)
 	accountRepository := repository.NewAccountRepository(db)
 	registerStore := cache.NewRegisterStore(redisClient)
-	registerService := appregister.NewRegisterService(accountRepository, registerStore, smsClient)
+	registerService := appregister.NewService(accountRepository, registerStore, smsClient)
 	signingKeyRepository := repository.NewSigningKeyRepository(db)
 	refreshSessionRepository := repository.NewRefreshSessionRepository(db)
 	loginSessionRepository := repository.NewLoginSessionRepository(db)

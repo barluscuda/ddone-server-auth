@@ -128,7 +128,7 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	service.otpGenerator = func(int) (string, error) { return "123456", nil }
 	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
 	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
@@ -241,7 +241,7 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	service.otpGenerator = func(int) (string, error) { return "123456", nil }
 	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
 
@@ -265,7 +265,7 @@ func TestRegisterServiceRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "        ",
@@ -280,7 +280,7 @@ func TestRegisterServiceRegisterRejectsWhitespacePassword(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
@@ -295,7 +295,7 @@ func TestRegisterServiceRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+85620ABC5678",
@@ -310,7 +310,7 @@ func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	service.otpGenerator = func(int) (string, error) { return "123456", nil }
 	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b")
 	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b")
@@ -349,7 +349,7 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 		},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	now := time.Date(2026, 5, 21, 10, 1, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	service.otpGenerator = func(int) (string, error) { return "654321", nil }
@@ -418,7 +418,7 @@ func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *tes
 		},
 	}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	now := time.Date(2026, 5, 21, 10, 1, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	service.otpGenerator = func(int) (string, error) { return "654321", nil }
@@ -468,7 +468,7 @@ func TestRegisterServiceResendRegisterOTPEnforcesCooldown(t *testing.T) {
 			},
 		},
 	}
-	service := NewRegisterService(repo, store, &fakeOTPSender{})
+	service := NewService(repo, store, &fakeOTPSender{})
 	service.now = func() time.Time { return now }
 
 	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
@@ -497,7 +497,7 @@ func TestRegisterServiceResendRegisterOTPRateLimitsAfterThreeResends(t *testing.
 			},
 		},
 	}
-	service := NewRegisterService(repo, store, &fakeOTPSender{})
+	service := NewService(repo, store, &fakeOTPSender{})
 	service.now = func() time.Time { return now }
 
 	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
@@ -514,7 +514,7 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 		values: map[string]*account.RegisterModel{},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	now := time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
@@ -582,7 +582,7 @@ func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
 		},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "reg_fixed123",
@@ -611,7 +611,7 @@ func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T)
 		},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	for i := 0; i < maxVerifyAttempts-1; i++ {
 		_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
@@ -640,7 +640,7 @@ func TestRegisterServiceVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "      ",
@@ -655,7 +655,7 @@ func TestRegisterServiceResendRegisterOTPRejectsWhitespaceTicketID(t *testing.T)
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
 		TicketID: "      ",
@@ -669,7 +669,7 @@ func TestRegisterServiceVerifyRegisterRejectsWhitespaceOTPCode(t *testing.T) {
 	repo := &fakeAccountRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "reg_fixed123",
@@ -694,7 +694,7 @@ func TestRegisterServiceVerifyRegisterRejectsPendingRegistrationWithoutPasswordH
 		},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 
 	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "reg_fixed123",
@@ -729,7 +729,7 @@ func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t 
 		},
 	}
 	sender := &fakeOTPSender{}
-	service := NewRegisterService(repo, store, sender)
+	service := NewService(repo, store, sender)
 	service.usernameGenerator = func() (string, error) { return "user_fresh123", nil }
 
 	accountModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{

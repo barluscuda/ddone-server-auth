@@ -1,4 +1,4 @@
-package ports
+package register
 
 import (
 	"context"
@@ -6,6 +6,12 @@ import (
 
 	"ddone-server-auth/internal/domain/account"
 )
+
+type AccountStore interface {
+	Create(ctx context.Context, account *account.AccountModel) error
+	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*account.AccountModel, error)
+	GetByUsername(ctx context.Context, username string) (*account.AccountModel, error)
+}
 
 type RegistrationStore interface {
 	Save(ctx context.Context, registration *account.RegisterModel, ttl time.Duration) error

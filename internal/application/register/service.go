@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"ddone-server-auth/internal/domain/account"
-	"ddone-server-auth/internal/ports"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -43,16 +42,10 @@ var ErrResendRateLimited = errors.New("too many otp resend requests, request a n
 var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 
-type UseCase interface {
-	Register(ctx context.Context, input RegisterInput) (*RegisterResult, error)
-	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*account.AccountModel, error)
-	ResendRegisterOTP(ctx context.Context, input ResendRegisterOTPInput) (*RegisterResult, error)
-}
-
-type RegisterService struct {
-	accounts          ports.AccountRepository
-	store             ports.RegistrationStore
-	sender            ports.OTPSender
+type Service struct {
+	accounts          AccountStore
+	store             RegistrationStore
+	sender            OTPSender
 	now               func() time.Time
 	otpGenerator      func(int) (string, error)
 	ticketGenerator   func() (string, error)
@@ -60,35 +53,12 @@ type RegisterService struct {
 	passwordHasher    func(string) (string, error)
 }
 
-type RegisterInput struct {
-	PhoneNumber string
-	Password    string
-	ClientID    string
-}
-
-type RegisterResult struct {
-	TicketID             string
-	ExpiresAt            time.Time
-	RemainingResendCount int
-}
-
-type ResendRegisterOTPInput struct {
-	TicketID string
-	ClientID string
-}
-
-type VerifyRegisterInput struct {
-	TicketID string
-	OTPCode  string
-	ClientID string
-}
-
-func NewRegisterService(
-	accounts ports.AccountRepository,
-	store ports.RegistrationStore,
-	sender ports.OTPSender,
-) *RegisterService {
-	return &RegisterService{
+func NewService(
+	accounts AccountStore,
+	store RegistrationStore,
+	sender OTPSender,
+) *Service {
+	return &Service{
 		accounts:          accounts,
 		store:             store,
 		sender:            sender,
@@ -100,7 +70,7 @@ func NewRegisterService(
 	}
 }
 
-func (s *RegisterService) Register(
+func (s *Service) Register(
 	ctx context.Context,
 	input RegisterInput,
 ) (*RegisterResult, error) {
@@ -171,7 +141,7 @@ func (s *RegisterService) Register(
 	}, nil
 }
 
-func (s *RegisterService) VerifyRegister(
+func (s *Service) VerifyRegister(
 	ctx context.Context,
 	input VerifyRegisterInput,
 ) (*account.AccountModel, error) {
@@ -263,7 +233,7 @@ func (s *RegisterService) VerifyRegister(
 	return accountModel, nil
 }
 
-func (s *RegisterService) ResendRegisterOTP(
+func (s *Service) ResendRegisterOTP(
 	ctx context.Context,
 	input ResendRegisterOTPInput,
 ) (*RegisterResult, error) {
@@ -342,7 +312,7 @@ func (s *RegisterService) ResendRegisterOTP(
 	}, nil
 }
 
-func (s *RegisterService) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
+func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
 	phoneCount, err := s.store.IncrementCounter(ctx, registerPhoneRateKey(phoneNumber), registerPhoneWindow)
 	if err != nil {
 		return err
@@ -354,7 +324,7 @@ func (s *RegisterService) enforceRegisterRateLimits(ctx context.Context, phoneNu
 	return nil
 }
 
-func (s *RegisterService) generateUniqueUsername(ctx context.Context) (*string, error) {
+func (s *Service) generateUniqueUsername(ctx context.Context) (*string, error) {
 	for range usernameAttempts {
 		candidate, err := s.usernameGenerator()
 		if err != nil {

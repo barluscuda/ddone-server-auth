@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
+	applogin "ddone-server-auth/internal/application/login"
+	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/account"
-	"ddone-server-auth/internal/ports"
 	"errors"
 
 	"gorm.io/gorm"
@@ -13,7 +15,9 @@ type AccountRepository struct {
 	db *gorm.DB
 }
 
-var _ ports.AccountRepository = (*AccountRepository)(nil)
+var _ appregister.AccountStore = (*AccountRepository)(nil)
+var _ applogin.AccountLookup = (*AccountRepository)(nil)
+var _ appaccountmanager.AccountReader = (*AccountRepository)(nil)
 
 func NewAccountRepository(db *gorm.DB) *AccountRepository {
 	return &AccountRepository{db: db}

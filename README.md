@@ -31,7 +31,7 @@ The project is being shaped toward a hexagonal architecture:
 - `internal/adapters` contains infrastructure and delivery code
 - `cmd/app` is the composition root and HTTP bootstrap
 
-Current note: some legacy persistence concerns still live under `internal/domain/account` through GORM tags and migration helpers. New work should move the codebase further toward pure domain types and outward-facing adapters.
+Current note: some legacy persistence concerns still live under `internal/domain/account` through GORM tags on account models. Database migrations now live under `internal/adapters/repository`. New work should keep moving the codebase toward pure domain types and outward-facing adapters.
 
 ## Project Layout
 

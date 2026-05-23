@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/account"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 type RegisterStore struct {
 	client *redis.Client
 }
+
+var _ appregister.RegistrationStore = (*RegisterStore)(nil)
 
 func NewRegisterStore(client *redis.Client) *RegisterStore {
 	return &RegisterStore{client: client}
