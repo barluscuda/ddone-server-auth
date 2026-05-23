@@ -10,15 +10,19 @@
 - `POST /login/refresh`
 - `POST /login/session`
 - `POST /login/session/token`
+- `POST /password/forgot`
+- `POST /password/forgot/resend`
+- `POST /password/forgot/verify`
 - `GET /account/me`
 - `GET /account/sessions`
+- `POST /account/password`
 - `GET /.well-known/jwks.json`
 
 The service uses:
 
 - `gin` for HTTP delivery
 - `gorm` + PostgreSQL for persistent account storage
-- `redis` for pending registration state, OTP counters, and read-through caches
+- `redis` for pending registration state, password-reset state, OTP counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
 
@@ -40,6 +44,7 @@ cmd/app/                       Entry point and HTTP server wiring
 config/                        Config loading and default values
 internal/application/register/ Registration use case
 internal/application/login/    Login and refresh use case
+internal/application/password/ Password reset and change-password use case
 internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/account/       Account and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
@@ -249,6 +254,44 @@ Example body:
 
 Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while keeping the login session itself active indefinitely.
 
+### `POST /password/forgot`
+
+Starts a phone-based password reset flow and sends an OTP.
+
+Example body:
+
+```json
+{
+  "phoneNumber": "+8562012345678"
+}
+```
+
+### `POST /password/forgot/resend`
+
+Resends the password-reset OTP for an existing reset ticket.
+
+Example body:
+
+```json
+{
+  "ticketId": "pwd_abc123"
+}
+```
+
+### `POST /password/forgot/verify`
+
+Verifies the password-reset OTP, updates the account password, and revokes existing login and refresh sessions.
+
+Example body:
+
+```json
+{
+  "ticketId": "pwd_abc123",
+  "otpCode": "123456",
+  "newPassword": "newsecretpass"
+}
+```
+
 ### `GET /account/me`
 
 Returns the account identity for the current authenticated user.
@@ -267,6 +310,25 @@ Headers:
 
 ```text
 Authorization: Bearer <access-token>
+```
+
+### `POST /account/password`
+
+Changes the password for the current authenticated account after verifying the current password. A successful change revokes existing login and refresh sessions.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+Example body:
+
+```json
+{
+  "currentPassword": "secretpass",
+  "newPassword": "newsecretpass"
+}
 ```
 
 ### `GET /.well-known/jwks.json`

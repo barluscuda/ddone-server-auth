@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "3ba679ca-daf5-4ae7-a16f-13a6bc02eb04",
     "name": "ddone-server-auth",
-    "description": "Postman collection for the DDONE auth service registration, login, refresh, and JWKS flows.",
+    "description": "Postman collection for the DDONE auth service registration, password, login, refresh, and JWKS flows.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -291,6 +291,117 @@
       }
     },
     {
+      "name": "Forgot Password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "  const body = pm.response.json();",
+              "  pm.environment.set('resetTicketId', body.data.ticketId);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/password/forgot",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "password",
+            "forgot"
+          ]
+        },
+        "description": "Starts password reset and stores resetTicketId from the response."
+      }
+    },
+    {
+      "name": "Resend Forgot Password OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticketId\": \"{{resetTicketId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/password/forgot/resend",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "password",
+            "forgot",
+            "resend"
+          ]
+        },
+        "description": "Resends the password-reset OTP for the saved resetTicketId."
+      }
+    },
+    {
+      "name": "Verify Forgot Password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  pm.environment.set('password', pm.environment.get('newPassword'));",
+              "  pm.environment.set('currentPassword', pm.environment.get('newPassword'));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ticketId\": \"{{resetTicketId}}\",\n  \"otpCode\": \"{{resetOtpCode}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/password/forgot/verify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "password",
+            "forgot",
+            "verify"
+          ]
+        },
+        "description": "Completes password reset after you fill in resetOtpCode."
+      }
+    },
+    {
       "name": "Account Me",
       "request": {
         "method": "GET",
@@ -334,6 +445,51 @@
           ]
         },
         "description": "Returns the login sessions for the current authenticated account."
+      }
+    },
+    {
+      "name": "Change Password",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  pm.environment.set('password', pm.environment.get('newPassword'));",
+              "  pm.environment.set('currentPassword', pm.environment.get('newPassword'));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPassword\": \"{{currentPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/account/password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "account",
+            "password"
+          ]
+        },
+        "description": "Changes the current account password and updates the saved password variables on success."
       }
     },
     {

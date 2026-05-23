@@ -4,6 +4,7 @@ import (
 	"context"
 	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	"ddone-server-auth/internal/application/login"
+	apppassword "ddone-server-auth/internal/application/password"
 	"ddone-server-auth/internal/domain/auth"
 	"errors"
 	"time"
@@ -34,6 +35,7 @@ func (loginSessionRecord) TableName() string {
 
 var _ login.LoginSessionStore = (*LoginSessionRepository)(nil)
 var _ appaccountmanager.SessionReader = (*LoginSessionRepository)(nil)
+var _ apppassword.LoginSessionRevoker = (*LoginSessionRepository)(nil)
 
 func NewLoginSessionRepository(db *gorm.DB) *LoginSessionRepository {
 	return &LoginSessionRepository{db: db}
@@ -89,6 +91,22 @@ func (r *LoginSessionRepository) UpdateAccessToken(
 		Updates(map[string]any{
 			"current_access_token":   accessToken.Token,
 			"current_access_expires": accessToken.ExpiresAt,
+		}).
+		Error
+}
+
+func (r *LoginSessionRepository) RevokeByAccountID(
+	ctx context.Context,
+	accountID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	return r.baseQuery(ctx).
+		Model(&loginSessionRecord{}).
+		Where("account_id = ? AND revoked_at IS NULL", accountID).
+		Updates(map[string]any{
+			"revoked_at":    revokedAt,
+			"revoke_reason": reason,
 		}).
 		Error
 }

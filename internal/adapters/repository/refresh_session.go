@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"ddone-server-auth/internal/application/login"
+	apppassword "ddone-server-auth/internal/application/password"
 	"ddone-server-auth/internal/domain/auth"
 	"errors"
 	"time"
@@ -36,6 +37,7 @@ func (refreshSessionRecord) TableName() string {
 }
 
 var _ login.RefreshSessionStore = (*RefreshSessionRepository)(nil)
+var _ apppassword.RefreshSessionRevoker = (*RefreshSessionRepository)(nil)
 
 func NewRefreshSessionRepository(db *gorm.DB) *RefreshSessionRepository {
 	return &RefreshSessionRepository{db: db}
@@ -101,6 +103,44 @@ func (r *RefreshSessionRepository) RevokeLineage(
 	return r.baseQuery(ctx).
 		Model(&refreshSessionRecord{}).
 		Where("root_session_id = ? AND revoked_at IS NULL", rootSessionID).
+		Updates(map[string]any{
+			"revoked_at":    revokedAt,
+			"revoke_reason": reason,
+		}).
+		Error
+}
+
+func (r *RefreshSessionRepository) ListByAccountID(
+	ctx context.Context,
+	accountID string,
+) ([]auth.RefreshSession, error) {
+	var records []refreshSessionRecord
+
+	if err := r.baseQuery(ctx).
+		Where("account_id = ?", accountID).
+		Order("created_at DESC").
+		Find(&records).
+		Error; err != nil {
+		return nil, err
+	}
+
+	sessions := make([]auth.RefreshSession, 0, len(records))
+	for _, record := range records {
+		sessions = append(sessions, *toRefreshSession(record))
+	}
+
+	return sessions, nil
+}
+
+func (r *RefreshSessionRepository) RevokeByAccountID(
+	ctx context.Context,
+	accountID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	return r.baseQuery(ctx).
+		Model(&refreshSessionRecord{}).
+		Where("account_id = ? AND revoked_at IS NULL", accountID).
 		Updates(map[string]any{
 			"revoked_at":    revokedAt,
 			"revoke_reason": reason,

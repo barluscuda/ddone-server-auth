@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	applogin "ddone-server-auth/internal/application/login"
+	apppassword "ddone-server-auth/internal/application/password"
 	"ddone-server-auth/internal/domain/auth"
 	"time"
 
@@ -10,16 +11,23 @@ import (
 )
 
 type CachedRefreshSessionStore struct {
-	next   applogin.RefreshSessionStore
+	next   refreshSessionStoreBackend
 	client *redis.Client
 	cache  jsonCache
 }
 
 var _ applogin.RefreshSessionStore = (*CachedRefreshSessionStore)(nil)
+var _ apppassword.RefreshSessionRevoker = (*CachedRefreshSessionStore)(nil)
+
+type refreshSessionStoreBackend interface {
+	applogin.RefreshSessionStore
+	apppassword.RefreshSessionRevoker
+	ListByAccountID(ctx context.Context, accountID string) ([]auth.RefreshSession, error)
+}
 
 func NewCachedRefreshSessionStore(
 	client *redis.Client,
-	next applogin.RefreshSessionStore,
+	next refreshSessionStoreBackend,
 ) *CachedRefreshSessionStore {
 	return &CachedRefreshSessionStore{
 		next:   next,
@@ -84,6 +92,27 @@ func (s *CachedRefreshSessionStore) RevokeLineage(
 	return nil
 }
 
+func (s *CachedRefreshSessionStore) RevokeByAccountID(
+	ctx context.Context,
+	accountID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	if err := s.next.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+		return err
+	}
+
+	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	for _, session := range sessions {
+		s.invalidateSession(ctx, session)
+	}
+
+	return nil
+}
+
 func (s *CachedRefreshSessionStore) cacheSession(ctx context.Context, session *auth.RefreshSession) {
 	if session == nil {
 		return
@@ -132,6 +161,21 @@ func (s *CachedRefreshSessionStore) invalidateBySessionID(ctx context.Context, s
 				rootKey,
 				refreshSessionByIDKey(sessionID),
 				refreshSessionByTokenHashKey(cached.TokenHash),
+			).Err()
+		}
+	}
+}
+
+func (s *CachedRefreshSessionStore) invalidateSession(ctx context.Context, session auth.RefreshSession) {
+	s.cache.delete(ctx, refreshSessionByIDKey(session.ID), refreshSessionByTokenHashKey(session.TokenHash))
+	if s.client != nil {
+		rootKey := refreshSessionRootKey(session.RootSessionID)
+		if rootKey != "" {
+			_ = s.client.SRem(
+				ctx,
+				rootKey,
+				refreshSessionByIDKey(session.ID),
+				refreshSessionByTokenHashKey(session.TokenHash),
 			).Err()
 		}
 	}

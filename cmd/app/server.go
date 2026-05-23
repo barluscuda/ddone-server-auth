@@ -23,6 +23,7 @@ func newHTTPServer(
 	registerService appregister.UseCase,
 	loginHandler *handler.LoginHandler,
 	accountManagerHandler *handler.AccountManagerHandler,
+	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) *http.Server {
@@ -53,7 +54,7 @@ func newHTTPServer(
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler, loginHandler, accountManagerHandler, requireAccessToken, jwksHandler)
+	registerRoutes(app, registerHandler, loginHandler, accountManagerHandler, passwordHandler, requireAccessToken, jwksHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -96,6 +97,7 @@ func registerRoutes(
 	registerHandler *handler.RegisterHandler,
 	loginHandler *handler.LoginHandler,
 	accountManagerHandler *handler.AccountManagerHandler,
+	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) {
@@ -107,10 +109,14 @@ func registerRoutes(
 	router.POST("/login/refresh", loginHandler.Refresh)
 	router.POST("/login/session", loginHandler.LoginSession)
 	router.POST("/login/session/token", loginHandler.SessionToken)
+	router.POST("/password/forgot", passwordHandler.ForgotPassword)
+	router.POST("/password/forgot/resend", passwordHandler.ResendForgotPassword)
+	router.POST("/password/forgot/verify", passwordHandler.VerifyForgotPassword)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 
 	accountRoutes := router.(*gin.Engine).Group("/account")
 	accountRoutes.Use(requireAccessToken)
 	accountRoutes.GET("/me", accountManagerHandler.GetMe)
 	accountRoutes.GET("/sessions", accountManagerHandler.ListSessions)
+	accountRoutes.POST("/password", passwordHandler.ChangePassword)
 }

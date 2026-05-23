@@ -56,14 +56,24 @@ cmd/app/                  Process entrypoint
 - `POST /login/refresh`
 - `POST /login/session`
 - `POST /login/session/token`
+- `POST /password/forgot`
+- `POST /password/forgot/resend`
+- `POST /password/forgot/verify`
 - `GET /account/me`
 - `GET /account/sessions`
+- `POST /account/password`
 - `GET /.well-known/jwks.json`
 
 Registration currently depends on:
 
 - PostgreSQL for account persistence
 - Redis for pending registration and OTP rate-limit state
+- Wenova SMS for OTP delivery
+
+Password reset currently depends on:
+
+- PostgreSQL for account lookup and password updates
+- Redis for pending password-reset state and OTP rate-limit state
 - Wenova SMS for OTP delivery
 
 Login currently depends on:

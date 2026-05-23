@@ -4,6 +4,7 @@ import (
 	"context"
 	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	applogin "ddone-server-auth/internal/application/login"
+	apppassword "ddone-server-auth/internal/application/password"
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/account"
 	"time"
@@ -28,6 +29,7 @@ type CachedAccountStore struct {
 var _ appregister.AccountStore = (*CachedAccountStore)(nil)
 var _ applogin.AccountLookup = (*CachedAccountStore)(nil)
 var _ appaccountmanager.AccountReader = (*CachedAccountStore)(nil)
+var _ apppassword.AccountStore = (*CachedAccountStore)(nil)
 
 func NewCachedAccountStore(
 	client *redis.Client,

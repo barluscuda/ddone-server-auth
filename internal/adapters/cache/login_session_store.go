@@ -4,6 +4,7 @@ import (
 	"context"
 	appaccountmanager "ddone-server-auth/internal/application/accountmanager"
 	applogin "ddone-server-auth/internal/application/login"
+	apppassword "ddone-server-auth/internal/application/password"
 	"ddone-server-auth/internal/domain/auth"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 type loginSessionStoreBackend interface {
 	applogin.LoginSessionStore
 	appaccountmanager.SessionReader
+	apppassword.LoginSessionRevoker
 }
 
 type CachedLoginSessionStore struct {
@@ -24,6 +26,7 @@ type CachedLoginSessionStore struct {
 
 var _ applogin.LoginSessionStore = (*CachedLoginSessionStore)(nil)
 var _ appaccountmanager.SessionReader = (*CachedLoginSessionStore)(nil)
+var _ apppassword.LoginSessionRevoker = (*CachedLoginSessionStore)(nil)
 
 func NewCachedLoginSessionStore(
 	client *redis.Client,
@@ -110,6 +113,28 @@ func (s *CachedLoginSessionStore) ListByAccountID(
 	}
 
 	return sessions, nil
+}
+
+func (s *CachedLoginSessionStore) RevokeByAccountID(
+	ctx context.Context,
+	accountID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	if err := s.next.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+		return err
+	}
+
+	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+
+	for _, session := range sessions {
+		s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
+	}
+	s.invalidateAccountSessions(ctx, accountID)
+	return nil
 }
 
 func (s *CachedLoginSessionStore) invalidateAccountSessions(ctx context.Context, accountID string) {
