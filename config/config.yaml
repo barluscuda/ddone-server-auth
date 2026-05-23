@@ -1,7 +1,7 @@
 # Local development defaults only.
 # Override these values for deployed environments.
 app:
-  debug: true
+  debug: false
   port: 3000
 
 database:
@@ -17,7 +17,7 @@ database:
   max_idle_conns: 5
   conn_max_lifetime: 30m
   conn_max_idle_time: 15m
-  log_sql: true
+  log_sql: false
 
 redis:
   host: localhost
