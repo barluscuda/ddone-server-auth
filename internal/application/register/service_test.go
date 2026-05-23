@@ -54,10 +54,6 @@ func (r *fakeAccountRepository) GetByUsername(_ context.Context, username string
 	return nil, account.ErrAccountNotFound
 }
 
-func (r *fakeAccountRepository) GetByProvider(_ context.Context, _ account.AuthProvider, _ string) (*account.AccountModel, error) {
-	return nil, account.ErrAccountNotFound
-}
-
 func (r *fakeAccountRepository) Update(_ context.Context, _ *account.AccountModel) error {
 	return nil
 }

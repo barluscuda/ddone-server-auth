@@ -15,7 +15,6 @@ type accountStoreBackend interface {
 	appregister.AccountStore
 	applogin.AccountLookup
 	appaccountmanager.AccountReader
-	GetByProvider(ctx context.Context, provider account.AuthProvider, providerUserID string) (*account.AccountModel, error)
 	Update(ctx context.Context, accountModel *account.AccountModel) error
 	Delete(ctx context.Context, id string) error
 }
@@ -97,20 +96,6 @@ func (s *CachedAccountStore) GetByUsername(ctx context.Context, username string)
 	}
 
 	accountModel, err := s.next.GetByUsername(ctx, username)
-	if err != nil {
-		return nil, err
-	}
-
-	s.cacheAccount(ctx, accountModel)
-	return accountModel, nil
-}
-
-func (s *CachedAccountStore) GetByProvider(
-	ctx context.Context,
-	provider account.AuthProvider,
-	providerUserID string,
-) (*account.AccountModel, error) {
-	accountModel, err := s.next.GetByProvider(ctx, provider, providerUserID)
 	if err != nil {
 		return nil, err
 	}
