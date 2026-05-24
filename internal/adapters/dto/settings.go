@@ -17,6 +17,7 @@ type ResSettingsMeData struct {
 	UsernameChangedAt   *time.Time `json:"usernameChangedAt,omitempty"`
 	UsernameCanChangeAt *time.Time `json:"usernameCanChangeAt,omitempty"`
 	CanChangeUsername   bool       `json:"canChangeUsername"`
+	CanChangePassword   bool       `json:"canChangePassword"`
 	PasswordChangedAt   *time.Time `json:"passwordChangedAt,omitempty"`
 	CreatedAt           time.Time  `json:"createdAt"`
 	UpdatedAt           time.Time  `json:"updatedAt"`

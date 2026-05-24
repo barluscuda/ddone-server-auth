@@ -21,6 +21,7 @@ const (
 	resetPhoneWindow         = 5 * time.Minute
 	resetResendCooldown      = 60 * time.Second
 	resetVerifyAttemptWindow = resetOTPTTL
+	passwordCooldown         = 7 * 24 * time.Hour
 	maxResetPhoneRequests    = 1
 	maxResetResends          = 3
 	maxResetVerifyAttempts   = 5
@@ -42,12 +43,13 @@ var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesti
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrInvalidCurrentPassword = errors.New("current password is incorrect")
+var ErrPasswordCooldownActive = errors.New("password can only be changed once every 7 days")
 
 type Service struct {
-	users        UserStore
+	users           UserStore
 	store           ResetStore
 	sender          OTPSender
-	tokenRecords TokenRevoker
+	tokenRecords    TokenRevoker
 	loginSessions   LoginSessionRevoker
 	now             func() time.Time
 	otpGenerator    func(int) (string, error)
@@ -63,10 +65,10 @@ func NewService(
 	loginSessions LoginSessionRevoker,
 ) *Service {
 	return &Service{
-		users:        users,
+		users:           users,
 		store:           store,
 		sender:          sender,
-		tokenRecords: tokenRecords,
+		tokenRecords:    tokenRecords,
 		loginSessions:   loginSessions,
 		now:             func() time.Time { return time.Now().UTC() },
 		otpGenerator:    GenerateOTP,
@@ -94,6 +96,9 @@ func (s *Service) ForgotPassword(
 	if err != nil {
 		return nil, err
 	}
+	if s.passwordCooldownActive(userModel, s.now()) {
+		return nil, ErrPasswordCooldownActive
+	}
 
 	otpCode, err := s.otpGenerator(resetOTPLength)
 	if err != nil {
@@ -107,7 +112,7 @@ func (s *Service) ForgotPassword(
 	now := s.now()
 	state := &ResetTicketState{
 		TicketID:      ticketID,
-		UserID:     userModel.ID,
+		UserID:        userModel.ID,
 		PhoneNumber:   phoneNumber,
 		OTPCodeHash:   hashResetOTP(ticketID, otpCode),
 		OTPExpiresAt:  now.Add(resetOTPTTL),
@@ -255,6 +260,9 @@ func (s *Service) VerifyForgotPassword(
 	if err != nil {
 		return err
 	}
+	if s.passwordCooldownActive(userModel, now) {
+		return ErrPasswordCooldownActive
+	}
 
 	passwordHash, err := s.passwordHasher(newPassword)
 	if err != nil {
@@ -299,6 +307,10 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 	if err != nil {
 		return err
 	}
+	now := s.now()
+	if s.passwordCooldownActive(userModel, now) {
+		return ErrPasswordCooldownActive
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(currentPassword)); err != nil {
 		return ErrInvalidCurrentPassword
 	}
@@ -308,7 +320,6 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 		return err
 	}
 
-	now := s.now()
 	userModel.PasswordHash = passwordHash
 	userModel.PasswordChangedAt = &now
 	userModel.UpdatedAt = now
@@ -340,6 +351,14 @@ func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string
 	}
 
 	return nil
+}
+
+func (s *Service) passwordCooldownActive(userModel *user.User, now time.Time) bool {
+	if userModel == nil || userModel.PasswordChangedAt == nil {
+		return false
+	}
+
+	return now.Before(userModel.PasswordChangedAt.Add(passwordCooldown))
 }
 
 func generateResetTicket() (string, error) {

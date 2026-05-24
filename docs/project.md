@@ -774,6 +774,7 @@ Rules:
 - Maximum resend count is 3.
 - Resend cooldown is 60 seconds.
 - Maximum invalid verification attempts is 5.
+- Password reset cannot be started within 7 days of the last successful password reset or password change.
 
 ### `POST /password-resets/resend`
 
@@ -805,6 +806,10 @@ Request:
 
 Success response is a message envelope.
 
+Additional rule:
+
+- Verification is rejected if the user's password was changed within the last 7 days.
+
 ### `GET /settings` and `GET /settings/me`
 
 Returns the current authenticated user's profile and change metadata.
@@ -824,6 +829,7 @@ Success fields:
 - `usernameChangedAt`
 - `usernameCanChangeAt`
 - `canChangeUsername`
+- `canChangePassword`
 - `passwordChangedAt`
 - `createdAt`
 - `updatedAt`
@@ -872,6 +878,10 @@ Request:
   "newPassword": "newsecretpass"
 }
 ```
+
+Rules:
+
+- Password change is rejected if the user's password was changed within the last 7 days.
 
 ### `GET /.well-known/jwks.json`
 
@@ -946,10 +956,11 @@ Verification:
 1. Normalize the phone number.
 2. Enforce phone-based reset rate limit.
 3. Load the user by phone number.
-4. Generate a 6-digit OTP and reset ticket.
-5. Store reset ticket state in Redis.
-6. Send OTP by SMS.
-7. Return the reset ticket.
+4. Reject if `PasswordChangedAt` is within the 7-day cooldown window.
+5. Generate a 6-digit OTP and reset ticket.
+6. Store reset ticket state in Redis.
+7. Send OTP by SMS.
+8. Return the reset ticket.
 
 Verification:
 
@@ -957,10 +968,11 @@ Verification:
 2. Reject expired, missing, or malformed ticket state.
 3. Enforce invalid OTP attempt limit.
 4. Load the user by ID.
-5. Hash and store the new password.
-6. Delete ticket and verification counter state.
-7. Revoke raw refresh tokens with reason `password_reset`.
-8. Revoke login sessions with reason `password_reset`.
+5. Reject if `PasswordChangedAt` is within the 7-day cooldown window.
+6. Hash and store the new password.
+7. Delete ticket and verification counter state.
+8. Revoke raw refresh tokens with reason `password_reset`.
+9. Revoke login sessions with reason `password_reset`.
 
 ### Login With Raw Refresh Token
 

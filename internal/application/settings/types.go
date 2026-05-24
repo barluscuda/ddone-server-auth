@@ -19,6 +19,7 @@ type View struct {
 	UsernameChangedAt   *time.Time
 	UsernameCanChangeAt *time.Time
 	CanChangeUsername   bool
+	CanChangePassword   bool
 	PasswordChangedAt   *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time

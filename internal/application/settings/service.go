@@ -16,6 +16,7 @@ var ErrUsernameUnchanged = errors.New("username is unchanged")
 var ErrUsernameCooldownActive = errors.New("username change cooldown is active")
 
 const usernameCooldown = 7 * 24 * time.Hour
+const passwordCooldown = 7 * 24 * time.Hour
 
 type UseCase interface {
 	Get(ctx context.Context, input GetInput) (*View, error)
@@ -53,6 +54,10 @@ func (s *Service) Get(ctx context.Context, input GetInput) (*View, error) {
 		usernameCanChangeAt = &canAt
 		canChangeUsername = !now.Before(canAt)
 	}
+	canChangePassword := true
+	if userModel.PasswordChangedAt != nil {
+		canChangePassword = !now.Before(userModel.PasswordChangedAt.Add(passwordCooldown))
+	}
 
 	return &View{
 		ID:                  userModel.ID,
@@ -62,6 +67,7 @@ func (s *Service) Get(ctx context.Context, input GetInput) (*View, error) {
 		UsernameChangedAt:   userModel.UsernameChangedAt,
 		UsernameCanChangeAt: usernameCanChangeAt,
 		CanChangeUsername:   canChangeUsername,
+		CanChangePassword:   canChangePassword,
 		PasswordChangedAt:   userModel.PasswordChangedAt,
 		CreatedAt:           userModel.CreatedAt,
 		UpdatedAt:           userModel.UpdatedAt,

@@ -74,10 +74,11 @@ func TestResSettingsMeMarshalsCamelCaseFields(t *testing.T) {
 		Code:    "settings_fetched",
 		Message: "settings fetched successfully",
 		Data: ResSettingsMeData{
-			ID:              "user-1",
-			PhoneNumber:     "2012345678",
-			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-			CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+			ID:                "user-1",
+			PhoneNumber:       "2012345678",
+			PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+			CanChangePassword: true,
+			CreatedAt:         time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 		},
 	})
 	if err != nil {
@@ -85,7 +86,7 @@ func TestResSettingsMeMarshalsCamelCaseFields(t *testing.T) {
 	}
 
 	body := string(payload)
-	for _, expected := range []string{"phoneNumber", "phoneVerifiedAt", "createdAt"} {
+	for _, expected := range []string{"phoneNumber", "phoneVerifiedAt", "canChangePassword", "createdAt"} {
 		if !strings.Contains(body, `"`+expected+`"`) {
 			t.Fatalf("expected response body to contain %q, got %s", expected, body)
 		}

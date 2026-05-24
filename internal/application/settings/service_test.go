@@ -84,11 +84,39 @@ func TestGetReturnsCurrentUser(t *testing.T) {
 	if result.CanChangeUsername {
 		t.Fatal("expected username cooldown to be active")
 	}
+	if result.CanChangePassword {
+		t.Fatal("expected password cooldown to be active")
+	}
 	if result.PasswordChangedAt == nil || !result.PasswordChangedAt.Equal(passwordChangedAt) {
 		t.Fatalf("expected password changed at %v, got %v", passwordChangedAt, result.PasswordChangedAt)
 	}
 	if result.UpdatedAt.IsZero() {
 		t.Fatal("expected updated at to be returned")
+	}
+}
+
+func TestGetAllowsPasswordChangeAfterCooldown(t *testing.T) {
+	passwordChangedAt := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	service := NewService(&fakeUserReader{
+		userByID: map[string]*user.User{
+			"user-1": {
+				ID:                "user-1",
+				PhoneNumber:       "2012345678",
+				PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+				PasswordChangedAt: &passwordChangedAt,
+				CreatedAt:         time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:         time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC),
+			},
+		},
+	})
+	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
+
+	result, err := service.Get(context.Background(), GetInput{UserID: "user-1"})
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if !result.CanChangePassword {
+		t.Fatal("expected password cooldown to have expired")
 	}
 }
 

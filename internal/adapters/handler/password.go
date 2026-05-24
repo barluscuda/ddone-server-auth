@@ -28,6 +28,7 @@ const (
 	codePasswordResetResendRateLimited = "password_reset_resend_rate_limited"
 	codePasswordResetResendCooldown    = "password_reset_resend_cooldown_active"
 	codePasswordResetVerifyRateLimited = "password_reset_verify_rate_limited"
+	codePasswordChangeCooldown         = "password_change_cooldown_active"
 	messagePasswordResetOTPSent        = "password reset otp sent successfully"
 	messagePasswordResetOTPResent      = "password reset otp resent successfully"
 	messagePasswordResetVerified       = "password reset completed successfully"
@@ -141,7 +142,7 @@ func (h *PasswordHandler) ChangePassword(c *gin.Context) {
 	}
 
 	err := h.password.ChangePassword(c.Request.Context(), apppassword.ChangePasswordInput{
-		UserID:       authContext.UserID,
+		UserID:          authContext.UserID,
 		CurrentPassword: req.CurrentPassword,
 		NewPassword:     req.NewPassword,
 	})
@@ -173,7 +174,8 @@ func handlePasswordError(c *gin.Context, err error) {
 	case errors.Is(err, apppassword.ErrResetRateLimited),
 		errors.Is(err, apppassword.ErrResendRateLimited),
 		errors.Is(err, apppassword.ErrResendCooldownActive),
-		errors.Is(err, apppassword.ErrVerifyRateLimited):
+		errors.Is(err, apppassword.ErrVerifyRateLimited),
+		errors.Is(err, apppassword.ErrPasswordCooldownActive):
 		respondError(c, http.StatusTooManyRequests, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrPasswordResetTicketNotFound),
 		errors.Is(err, user.ErrUserNotFound):
@@ -214,6 +216,8 @@ func passwordErrorCode(err error) string {
 		return codePasswordResetResendCooldown
 	case errors.Is(err, apppassword.ErrVerifyRateLimited):
 		return codePasswordResetVerifyRateLimited
+	case errors.Is(err, apppassword.ErrPasswordCooldownActive):
+		return codePasswordChangeCooldown
 	case errors.Is(err, apppassword.ErrAuthenticatedUserRequired):
 		return "authorization_required"
 	case errors.Is(err, user.ErrUserNotFound):
@@ -255,6 +259,8 @@ func passwordErrorMessage(err error) string {
 		return "please wait before requesting another otp"
 	case errors.Is(err, apppassword.ErrVerifyRateLimited):
 		return "too many invalid otp attempts, please request a new code"
+	case errors.Is(err, apppassword.ErrPasswordCooldownActive):
+		return "password can only be changed once every 7 days"
 	case errors.Is(err, apppassword.ErrAuthenticatedUserRequired):
 		return "authorization header is required"
 	case errors.Is(err, user.ErrUserNotFound):

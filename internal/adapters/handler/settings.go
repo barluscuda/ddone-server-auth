@@ -54,6 +54,7 @@ func (h *SettingsHandler) GetMe(c *gin.Context) {
 			UsernameChangedAt:   result.UsernameChangedAt,
 			UsernameCanChangeAt: result.UsernameCanChangeAt,
 			CanChangeUsername:   result.CanChangeUsername,
+			CanChangePassword:   result.CanChangePassword,
 			PasswordChangedAt:   result.PasswordChangedAt,
 			CreatedAt:           result.CreatedAt,
 			UpdatedAt:           result.UpdatedAt,

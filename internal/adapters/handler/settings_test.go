@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,10 +39,11 @@ func TestSettingsHandlerReturnsMe(t *testing.T) {
 
 	handler := NewSettingsHandler(&fakeSettingsUseCase{
 		me: &appsettings.View{
-			ID:              "user-1",
-			PhoneNumber:     "2012345678",
-			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-			CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+			ID:                "user-1",
+			PhoneNumber:       "2012345678",
+			PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+			CanChangePassword: true,
+			CreatedAt:         time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 		},
 	})
 
@@ -57,6 +59,22 @@ func TestSettingsHandlerReturnsMe(t *testing.T) {
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected response data object, got %#v", body["data"])
+	}
+	value, ok := data["canChangePassword"].(bool)
+	if !ok {
+		t.Fatalf("expected canChangePassword boolean, got %#v", data["canChangePassword"])
+	}
+	if !value {
+		t.Fatal("expected canChangePassword to default to true")
 	}
 }
 

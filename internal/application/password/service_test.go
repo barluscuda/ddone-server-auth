@@ -151,6 +151,41 @@ func TestForgotPasswordCreatesResetTicketAndSendsOTP(t *testing.T) {
 	}
 }
 
+func TestForgotPasswordRejectsPasswordCooldown(t *testing.T) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
+	userModel := &user.User{
+		ID:                "user-1",
+		PhoneNumber:       "2012345678",
+		PasswordHash:      string(hashed),
+		PasswordChangedAt: &changedAt,
+	}
+	users := &fakeUserStore{
+		byID:    map[string]*user.User{"user-1": userModel},
+		byPhone: map[string]*user.User{"2012345678": userModel},
+	}
+	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
+	service := NewService(users, store, &fakeSender{}, &fakeRevoker{}, &fakeRevoker{})
+	service.now = func() time.Time { return changedAt.Add(24 * time.Hour) }
+
+	err = func() error {
+		_, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{
+			PhoneNumber: "+8562012345678",
+		})
+		return err
+	}()
+	if !errors.Is(err, ErrPasswordCooldownActive) {
+		t.Fatalf("expected ErrPasswordCooldownActive, got %v", err)
+	}
+	if len(store.states) != 0 {
+		t.Fatal("expected no reset ticket to be stored during cooldown")
+	}
+}
+
 func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
 	if err != nil {
@@ -209,6 +244,57 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	}
 }
 
+func TestVerifyForgotPasswordRejectsPasswordCooldown(t *testing.T) {
+	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
+	userModel := &user.User{
+		ID:                "user-1",
+		PhoneNumber:       "2012345678",
+		PasswordHash:      string(currentHash),
+		PasswordChangedAt: &changedAt,
+	}
+	users := &fakeUserStore{
+		byID:    map[string]*user.User{"user-1": userModel},
+		byPhone: map[string]*user.User{"2012345678": userModel},
+	}
+	store := &fakeResetStore{
+		states: map[string]*ResetTicketState{
+			"pwd_fixed123": {
+				TicketID:     "pwd_fixed123",
+				UserID:       "user-1",
+				PhoneNumber:  "2012345678",
+				OTPCodeHash:  hashResetOTP("pwd_fixed123", "123456"),
+				OTPExpiresAt: changedAt.Add(25 * time.Hour),
+				CreatedAt:    changedAt.Add(24 * time.Hour),
+			},
+		},
+		counters: map[string]int64{},
+	}
+	refreshRevoker := &fakeRevoker{}
+	loginRevoker := &fakeRevoker{}
+	service := NewService(users, store, &fakeSender{}, refreshRevoker, loginRevoker)
+	service.now = func() time.Time { return changedAt.Add(24 * time.Hour) }
+
+	err = service.VerifyForgotPassword(context.Background(), VerifyForgotPasswordInput{
+		TicketID:    "pwd_fixed123",
+		OTPCode:     "123456",
+		NewPassword: "new-password",
+	})
+	if !errors.Is(err, ErrPasswordCooldownActive) {
+		t.Fatalf("expected ErrPasswordCooldownActive, got %v", err)
+	}
+	if users.updated != nil {
+		t.Fatal("expected password not to be updated during cooldown")
+	}
+	if refreshRevoker.calls != 0 || loginRevoker.calls != 0 {
+		t.Fatal("expected no revocation during cooldown")
+	}
+}
+
 func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
 	if err != nil {
@@ -254,6 +340,50 @@ func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	}
 	if refreshRevoker.calls != 1 || loginRevoker.calls != 1 {
 		t.Fatal("expected both session stores to be revoked")
+	}
+}
+
+func TestChangePasswordRejectsPasswordCooldown(t *testing.T) {
+	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
+	userModel := &user.User{
+		ID:                "user-1",
+		PhoneNumber:       "2012345678",
+		PasswordHash:      string(currentHash),
+		PasswordChangedAt: &changedAt,
+	}
+	users := &fakeUserStore{
+		byID:    map[string]*user.User{"user-1": userModel},
+		byPhone: map[string]*user.User{"2012345678": userModel},
+	}
+	refreshRevoker := &fakeRevoker{}
+	loginRevoker := &fakeRevoker{}
+	service := NewService(
+		users,
+		&fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}},
+		&fakeSender{},
+		refreshRevoker,
+		loginRevoker,
+	)
+	service.now = func() time.Time { return changedAt.Add(24 * time.Hour) }
+
+	err = service.ChangePassword(context.Background(), ChangePasswordInput{
+		UserID:          "user-1",
+		CurrentPassword: "old-password",
+		NewPassword:     "new-password",
+	})
+	if !errors.Is(err, ErrPasswordCooldownActive) {
+		t.Fatalf("expected ErrPasswordCooldownActive, got %v", err)
+	}
+	if users.updated != nil {
+		t.Fatal("expected password not to be updated during cooldown")
+	}
+	if refreshRevoker.calls != 0 || loginRevoker.calls != 0 {
+		t.Fatal("expected no revocation during cooldown")
 	}
 }
 

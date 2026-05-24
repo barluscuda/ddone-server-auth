@@ -282,6 +282,8 @@ Reads the `HttpOnly` session cookie and returns the access token for that sessio
 
 Starts a phone-based password reset flow and sends an OTP.
 
+This endpoint is blocked for 7 days after the last successful password reset or password change.
+
 Example body:
 
 ```json
@@ -306,6 +308,8 @@ Example body:
 
 Verifies the password-reset OTP, updates the user password, and revokes existing login sessions and raw token records.
 
+This endpoint is also blocked if the user's password was changed within the previous 7 days.
+
 Example body:
 
 ```json
@@ -326,7 +330,7 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-Response data includes `id`, `username`, `phoneNumber`, `phoneVerifiedAt`, `canChangeUsername`, optional `usernameChangedAt`, optional `usernameCanChangeAt`, optional `passwordChangedAt`, `createdAt`, and `updatedAt`.
+Response data includes `id`, `username`, `phoneNumber`, `phoneVerifiedAt`, `canChangeUsername`, `canChangePassword`, optional `usernameChangedAt`, optional `usernameCanChangeAt`, optional `passwordChangedAt`, `createdAt`, and `updatedAt`.
 
 ### `GET /settings/me`
 
@@ -439,6 +443,8 @@ Cookie: ddone_session=<session-token>
 ### `POST /settings/password`
 
 Changes the password for the current authenticated user after verifying the current password. A successful change revokes existing login sessions and raw token records.
+
+This endpoint is blocked for 7 days after the last successful password reset or password change.
 
 Headers:
 

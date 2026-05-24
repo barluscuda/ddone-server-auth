@@ -58,6 +58,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - The `Forgot Password` request stores `resetTicketId` into the active Postman environment.
 - The `Login` and `Refresh Token` requests are body-token flows and store both `accessToken` and `refreshToken`.
 - The `Verify Forgot Password` and `Change Password` requests update the `password` environment variable to match `newPassword` after a successful change.
+- `POST /password-resets`, `POST /password-resets/verify`, and `POST /settings/password` are blocked for 7 days after the last successful password reset or password change.
 - The `Create Login Session` request relies on Postman's cookie jar receiving the `ddone_session` cookie; the JWT stays in server-side session state.
 - The `Session Access Token` request depends on that cookie jar entry and returns the currently active access token for the session, or a fresh one if the stored token has already expired.
 - The `Settings`, `Update Username`, token-manager requests, session-control requests, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.

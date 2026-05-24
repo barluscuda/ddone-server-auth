@@ -126,3 +126,35 @@ func TestPasswordHandlerChangePasswordReturnsSuccess(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
 	}
 }
+
+func TestPasswordHandlerChangePasswordReturnsCooldown(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewPasswordHandler(&fakePasswordUseCase{
+		changeErr: apppassword.ErrPasswordCooldownActive,
+	})
+
+	body, err := json.Marshal(map[string]string{
+		"currentPassword": "old-password",
+		"newPassword":     "new-password",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/settings/password", func(c *gin.Context) {
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
+		handler.ChangePassword(c)
+	})
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, recorder.Code)
+	}
+}
