@@ -1,0 +1,22 @@
+[Unit]
+Description=DDONE Auth Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ddone
+Group=ddone
+WorkingDirectory=/opt/ddone-server-auth
+EnvironmentFile=/etc/ddone-server-auth/ddone-server-auth.env
+ExecStart=/usr/local/bin/ddone-server-auth
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ddone-server-auth
+
+[Install]
+WantedBy=multi-user.target

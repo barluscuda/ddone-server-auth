@@ -8,6 +8,7 @@
 *.so
 *.dylib
 app
+ddone-server-auth
 
 # Test binary, built with `go test -c`
 *.test
@@ -27,6 +28,9 @@ go.work.sum
 
 # env file
 .env
+.env.local
+.env.*
+!.env.example
 
 # Editor/IDE
 # .idea/

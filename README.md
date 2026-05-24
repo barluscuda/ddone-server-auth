@@ -107,6 +107,12 @@ Run tests:
 make test
 ```
 
+Build the production binary:
+
+```bash
+make build
+```
+
 Format code:
 
 ```bash
@@ -125,6 +131,62 @@ Postman assets:
 - Environment template: [postman/ddone-server-auth.local.postman_environment.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.local.postman_environment.json)
 - Usage guide: [docs/postman.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/postman.md)
 - Full project handbook: [docs/project.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/project.md)
+
+## systemd
+
+Repo-provided systemd assets:
+
+- Unit file: [deploy/systemd/ddone-server-auth.service](/home/mrbarlus/coding/DDONE/ddone-server-auth/deploy/systemd/ddone-server-auth.service)
+- Environment template: [deploy/systemd/ddone-server-auth.env.example](/home/mrbarlus/coding/DDONE/ddone-server-auth/deploy/systemd/ddone-server-auth.env.example)
+
+Expected install layout:
+
+- Binary: `/usr/local/bin/ddone-server-auth`
+- Working directory: `/opt/ddone-server-auth`
+- Environment file: `/etc/ddone-server-auth/ddone-server-auth.env`
+
+Suggested install flow:
+
+```bash
+sudo useradd --system --home /opt/ddone-server-auth --shell /usr/sbin/nologin ddone
+sudo mkdir -p /opt/ddone-server-auth/config /etc/ddone-server-auth
+make build
+sudo install -m 0755 ./ddone-server-auth /usr/local/bin/ddone-server-auth
+sudo cp -R ./config/. /opt/ddone-server-auth/config/
+sudo install -m 0644 ./deploy/systemd/ddone-server-auth.service /etc/systemd/system/ddone-server-auth.service
+sudo install -m 0640 ./deploy/systemd/ddone-server-auth.env.example /etc/ddone-server-auth/ddone-server-auth.env
+sudo chown -R ddone:ddone /opt/ddone-server-auth /etc/ddone-server-auth
+sudo systemctl daemon-reload
+sudo systemctl enable --now ddone-server-auth
+```
+
+Equivalent Makefile targets:
+
+```bash
+make systemd-install
+make systemd-enable
+make systemd-start
+```
+
+One-shot bootstrap:
+
+```bash
+make systemd-bootstrap
+```
+
+Useful commands:
+
+```bash
+make systemd-status
+make systemd-logs
+make systemd-restart
+```
+
+Useful overrides:
+
+```bash
+make systemd-install SERVICE_USER=authsvc SERVICE_GROUP=authsvc APP_DIR=/srv/ddone-auth
+```
 
 ## Configuration
 
