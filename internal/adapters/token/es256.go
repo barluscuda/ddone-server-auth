@@ -22,6 +22,11 @@ func NewES256Codec() *ES256Codec {
 	return &ES256Codec{}
 }
 
+var (
+	p256Order     = elliptic.P256().Params().N
+	p256HalfOrder = new(big.Int).Rsh(new(big.Int).Set(p256Order), 1)
+)
+
 func (c *ES256Codec) GenerateSigningKey(
 	keyID string,
 	createdAt time.Time,
@@ -107,6 +112,7 @@ func (c *ES256Codec) IssueAccessToken(
 	if err != nil {
 		return nil, err
 	}
+	s = canonicalECDSAS(s)
 	signature := joseSignature(r, s)
 
 	tokenValue := signingInput + "." + base64.RawURLEncoding.EncodeToString(signature)
@@ -151,7 +157,9 @@ func (c *ES256Codec) VerifyAccessToken(
 	if err := decodeJWTSegment(headerSegment, &header); err != nil {
 		return nil, auth.ErrInvalidAccessToken
 	}
-	if header.Algorithm != "ES256" || strings.TrimSpace(header.KeyID) == "" {
+	if header.Algorithm != "ES256" ||
+		strings.TrimSpace(header.KeyID) == "" ||
+		(header.Type != "" && !strings.EqualFold(header.Type, "JWT")) {
 		return nil, auth.ErrInvalidAccessToken
 	}
 
@@ -159,9 +167,17 @@ func (c *ES256Codec) VerifyAccessToken(
 	if !ok {
 		return nil, auth.ErrInvalidAccessToken
 	}
+	if signingKey.Algorithm != "ES256" || signingKey.Curve != "P-256" || now.Before(signingKey.ActivatesAt) || !signingKey.IsPublishedAt(now) {
+		return nil, auth.ErrInvalidAccessToken
+	}
 
 	signature, err := base64.RawURLEncoding.DecodeString(signatureSegment)
 	if err != nil || len(signature) != 64 {
+		return nil, auth.ErrInvalidAccessToken
+	}
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	if !validECDSASignatureValues(r, s) {
 		return nil, auth.ErrInvalidAccessToken
 	}
 
@@ -170,7 +186,7 @@ func (c *ES256Codec) VerifyAccessToken(
 	if err != nil {
 		return nil, auth.ErrInvalidAccessToken
 	}
-	if !ecdsa.Verify(publicKey, sum[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
+	if !ecdsa.Verify(publicKey, sum[:], r, s) {
 		return nil, auth.ErrInvalidAccessToken
 	}
 
@@ -189,14 +205,22 @@ func (c *ES256Codec) VerifyAccessToken(
 	if err := decodeJWTSegment(payloadSegment, &payload); err != nil {
 		return nil, auth.ErrInvalidAccessToken
 	}
-	if payload.Issuer != expectedIssuer || payload.Audience != expectedAudience {
+	if payload.Issuer != expectedIssuer ||
+		payload.Audience != expectedAudience ||
+		strings.TrimSpace(payload.Subject) == "" ||
+		strings.TrimSpace(payload.JWTID) == "" {
 		return nil, auth.ErrInvalidAccessToken
 	}
 
 	issuedAt := time.Unix(payload.IssuedAt, 0).UTC()
 	notBefore := time.Unix(payload.NotBefore, 0).UTC()
 	expiresAt := time.Unix(payload.ExpiresAt, 0).UTC()
-	if now.Before(notBefore) || !now.Before(expiresAt) {
+	if payload.IssuedAt <= 0 ||
+		payload.NotBefore <= 0 ||
+		payload.ExpiresAt <= 0 ||
+		expiresAt.Before(issuedAt) ||
+		now.Before(notBefore) ||
+		!now.Before(expiresAt) {
 		return nil, auth.ErrInvalidAccessToken
 	}
 	userID := payload.UserID
@@ -248,6 +272,25 @@ func joseSignature(r *big.Int, s *big.Int) []byte {
 	copy(signature[:32], paddedBytes(r, 32))
 	copy(signature[32:], paddedBytes(s, 32))
 	return signature
+}
+
+func canonicalECDSAS(s *big.Int) *big.Int {
+	if s.Cmp(p256HalfOrder) <= 0 {
+		return s
+	}
+
+	return new(big.Int).Sub(p256Order, s)
+}
+
+func validECDSASignatureValues(r *big.Int, s *big.Int) bool {
+	if r.Sign() <= 0 || s.Sign() <= 0 {
+		return false
+	}
+	if r.Cmp(p256Order) >= 0 || s.Cmp(p256Order) >= 0 {
+		return false
+	}
+
+	return s.Cmp(p256HalfOrder) <= 0
 }
 
 func paddedBytes(value *big.Int, width int) []byte {

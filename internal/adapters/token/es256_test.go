@@ -42,6 +42,10 @@ func TestIssueAccessTokenUsesJOSESignatureFormat(t *testing.T) {
 	if len(signature) != 64 {
 		t.Fatalf("expected 64-byte JOSE signature, got %d bytes", len(signature))
 	}
+	signatureS := new(big.Int).SetBytes(signature[32:])
+	if signatureS.Cmp(p256HalfOrder) > 0 {
+		t.Fatal("expected issued signature to use canonical low-S form")
+	}
 
 	signingInput := headerSegment + "." + payloadSegment
 	sum := sha256.Sum256([]byte(signingInput))
@@ -135,6 +139,35 @@ func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
 	}
 	if claims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", claims.PhoneNumber)
+	}
+}
+
+func TestVerifyAccessTokenRejectsScheduledKeyBeforeActivation(t *testing.T) {
+	codec := NewES256Codec()
+	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
+
+	key, err := codec.GenerateSigningKey("kid-1", now, now, 90*24*time.Hour, 180*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSigningKey returned error: %v", err)
+	}
+
+	issued, err := codec.IssueAccessToken(key, auth.AccessTokenClaims{
+		Issuer:    "issuer",
+		UserID:    "user-1",
+		Subject:   "user-1",
+		Audience:  "audience",
+		JWTID:     "token-1",
+		IssuedAt:  now,
+		NotBefore: now,
+		ExpiresAt: now.Add(15 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("IssueAccessToken returned error: %v", err)
+	}
+
+	key.ActivatesAt = now.Add(time.Minute)
+	if _, err := codec.VerifyAccessToken(issued.Token, []auth.SigningKey{*key}, "issuer", "audience", now); err == nil {
+		t.Fatal("expected token signed by future key to be rejected before activation")
 	}
 }
 

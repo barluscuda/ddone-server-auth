@@ -17,8 +17,10 @@ import (
 )
 
 type fakeSigningKeyStore struct {
-	keys      []auth.SigningKey
-	deletedAt []time.Time
+	keys               []auth.SigningKey
+	deletedAt          []time.Time
+	signingKeyListHits int
+	publicKeyListHits  int
 }
 
 func (s *fakeSigningKeyStore) Create(_ context.Context, key *auth.SigningKey) error {
@@ -26,8 +28,19 @@ func (s *fakeSigningKeyStore) Create(_ context.Context, key *auth.SigningKey) er
 	return nil
 }
 
-func (s *fakeSigningKeyStore) ListPublicKeys(_ context.Context, _ time.Time) ([]auth.SigningKey, error) {
+func (s *fakeSigningKeyStore) ListSigningKeys(_ context.Context, _ time.Time) ([]auth.SigningKey, error) {
+	s.signingKeyListHits++
 	return append([]auth.SigningKey(nil), s.keys...), nil
+}
+
+func (s *fakeSigningKeyStore) ListPublicKeys(_ context.Context, _ time.Time) ([]auth.SigningKey, error) {
+	s.publicKeyListHits++
+	keys := append([]auth.SigningKey(nil), s.keys...)
+	for i := range keys {
+		keys[i].PrivateKeyPEM = ""
+	}
+
+	return keys, nil
 }
 
 func (s *fakeSigningKeyStore) DeleteExpired(_ context.Context, now time.Time) error {
@@ -43,6 +56,7 @@ type fakeTokenCodec struct {
 	generatedKeys  []*auth.SigningKey
 	issuedClaims   auth.AccessTokenClaims
 	verifiedClaims *auth.AccessTokenClaims
+	verifiedKeys   []auth.SigningKey
 }
 
 func (c *fakeTokenCodec) GenerateSigningKey(
@@ -106,11 +120,12 @@ func (c *fakeTokenCodec) PublicJWK(key auth.SigningKey) auth.JWK {
 
 func (c *fakeTokenCodec) VerifyAccessToken(
 	_ string,
-	_ []auth.SigningKey,
+	keys []auth.SigningKey,
 	_ string,
 	_ string,
 	_ time.Time,
 ) (*auth.AccessTokenClaims, error) {
+	c.verifiedKeys = append([]auth.SigningKey(nil), keys...)
 	if c.verifiedClaims == nil {
 		return nil, auth.ErrInvalidAccessToken
 	}
@@ -257,10 +272,24 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 
 func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
-	store := &fakeSigningKeyStore{}
+	store := &fakeSigningKeyStore{
+		keys: []auth.SigningKey{{
+			KeyID:         "kid-1",
+			Algorithm:     "ES256",
+			Curve:         "P-256",
+			PublicX:       "x",
+			PublicY:       "y",
+			PrivateKeyPEM: "private-key",
+			Status:        auth.SigningKeyStatusActive,
+			CreatedAt:     now.Add(-time.Hour),
+			ActivatesAt:   now.Add(-time.Hour),
+			RotatesAt:     now.Add(time.Hour),
+			RetiresAt:     now.Add(90 * 24 * time.Hour),
+		}},
+	}
 	codec := &fakeTokenCodec{
 		verifiedClaims: &auth.AccessTokenClaims{
-			UserID: "user-1",
+			UserID:    "user-1",
 			Subject:   "user-1",
 			Audience:  "audience",
 			Issuer:    "issuer",
@@ -285,6 +314,18 @@ func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	}
 	if claims.UserID != "user-1" {
 		t.Fatalf("expected user id %q, got %q", "user-1", claims.UserID)
+	}
+	if store.signingKeyListHits != 0 {
+		t.Fatalf("expected verification to avoid private signing-key reads, got %d", store.signingKeyListHits)
+	}
+	if store.publicKeyListHits == 0 {
+		t.Fatal("expected verification to read public keys")
+	}
+	if len(codec.verifiedKeys) != 1 {
+		t.Fatalf("expected codec to receive one public key, got %d", len(codec.verifiedKeys))
+	}
+	if codec.verifiedKeys[0].PrivateKeyPEM != "" {
+		t.Fatal("expected verification key material to exclude private pem")
 	}
 }
 

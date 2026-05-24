@@ -40,6 +40,13 @@ func (s *CachedSigningKeyStore) Create(ctx context.Context, key *auth.SigningKey
 	return nil
 }
 
+func (s *CachedSigningKeyStore) ListSigningKeys(
+	ctx context.Context,
+	now time.Time,
+) ([]auth.SigningKey, error) {
+	return s.next.ListSigningKeys(ctx, now)
+}
+
 func (s *CachedSigningKeyStore) ListPublicKeys(
 	ctx context.Context,
 	now time.Time,
@@ -50,7 +57,7 @@ func (s *CachedSigningKeyStore) ListPublicKeys(
 
 	var cached []auth.SigningKey
 	if s.cache.get(ctx, signingKeysCacheKey(), &cached) {
-		return cached, nil
+		return publicSigningKeys(cached), nil
 	}
 
 	keys, err := s.next.ListPublicKeys(ctx, now)
@@ -58,8 +65,9 @@ func (s *CachedSigningKeyStore) ListPublicKeys(
 		return nil, err
 	}
 
-	s.cache.set(ctx, signingKeysCacheKey(), keys, s.ttl)
-	return keys, nil
+	publicKeys := publicSigningKeys(keys)
+	s.cache.set(ctx, signingKeysCacheKey(), publicKeys, s.ttl)
+	return publicKeys, nil
 }
 
 func (s *CachedSigningKeyStore) DeleteExpired(ctx context.Context, now time.Time) error {
@@ -96,5 +104,15 @@ func (s *CachedSigningKeyStore) invalidate(ctx context.Context) {
 }
 
 func signingKeysCacheKey() string {
-	return "cache:signing_keys:all"
+	return "cache:signing_keys:public:v1"
+}
+
+func publicSigningKeys(keys []auth.SigningKey) []auth.SigningKey {
+	publicKeys := make([]auth.SigningKey, 0, len(keys))
+	for _, key := range keys {
+		key.PrivateKeyPEM = ""
+		publicKeys = append(publicKeys, key)
+	}
+
+	return publicKeys
 }

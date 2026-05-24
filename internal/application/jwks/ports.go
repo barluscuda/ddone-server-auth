@@ -9,6 +9,7 @@ import (
 
 type SigningKeyStore interface {
 	Create(ctx context.Context, key *auth.SigningKey) error
+	ListSigningKeys(ctx context.Context, now time.Time) ([]auth.SigningKey, error)
 	ListPublicKeys(ctx context.Context, now time.Time) ([]auth.SigningKey, error)
 	DeleteExpired(ctx context.Context, now time.Time) error
 	WithRotationLock(ctx context.Context, fn func(context.Context) error) error

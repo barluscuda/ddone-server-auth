@@ -43,12 +43,45 @@ func (r *SigningKeyRepository) Create(ctx context.Context, key *auth.SigningKey)
 	return r.baseQuery(ctx).Create(toSigningKeyRecord(key)).Error
 }
 
+func (r *SigningKeyRepository) ListSigningKeys(
+	ctx context.Context,
+	now time.Time,
+) ([]auth.SigningKey, error) {
+	var records []signingKeyRecord
+	if err := r.baseQuery(ctx).
+		Where("retires_at > ?", now).
+		Order("activates_at ASC").
+		Find(&records).
+		Error; err != nil {
+		return nil, err
+	}
+
+	keys := make([]auth.SigningKey, 0, len(records))
+	for _, record := range records {
+		keys = append(keys, *toSigningKey(record))
+	}
+
+	return keys, nil
+}
+
 func (r *SigningKeyRepository) ListPublicKeys(
 	ctx context.Context,
 	now time.Time,
 ) ([]auth.SigningKey, error) {
 	var records []signingKeyRecord
 	if err := r.baseQuery(ctx).
+		Select(
+			"key_id",
+			"algorithm",
+			"curve",
+			"public_x",
+			"public_y",
+			"status",
+			"created_at",
+			"activates_at",
+			"rotates_at",
+			"retires_at",
+		).
 		Where("retires_at > ?", now).
 		Order("activates_at ASC").
 		Find(&records).

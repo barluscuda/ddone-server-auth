@@ -33,7 +33,7 @@ func (s *Service) EnsureActiveSigningKey(ctx context.Context) (*auth.SigningKey,
 		return nil, err
 	}
 
-	keys, err := s.store.ListPublicKeys(ctx, now)
+	keys, err := s.store.ListSigningKeys(ctx, now)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (s *Service) EnsureActiveSigningKey(ctx context.Context) (*auth.SigningKey,
 			return err
 		}
 
-		lockedKeys, err := s.store.ListPublicKeys(lockCtx, now)
+		lockedKeys, err := s.store.ListSigningKeys(lockCtx, now)
 		if err != nil {
 			return err
 		}
@@ -145,7 +145,7 @@ func (s *Service) IssueAccessToken(
 
 	return s.codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:      s.settings.Issuer,
-		UserID:   userID,
+		UserID:      userID,
 		Subject:     userID,
 		Audience:    s.settings.Audience,
 		JWTID:       tokenID,
