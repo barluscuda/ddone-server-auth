@@ -2,7 +2,7 @@ package login
 
 import (
 	"context"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"ddone-server-auth/internal/domain/auth"
 	"errors"
 	"testing"
@@ -11,23 +11,23 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type fakeAccountLookup struct {
-	byID    map[string]*account.AccountModel
-	byPhone map[string]*account.AccountModel
+type fakeUserLookup struct {
+	byID    map[string]*user.UserModel
+	byPhone map[string]*user.UserModel
 }
 
-func (r *fakeAccountLookup) GetByID(_ context.Context, id string) (*account.AccountModel, error) {
-	if accountModel, ok := r.byID[id]; ok {
-		return accountModel, nil
+func (r *fakeUserLookup) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+	if userModel, ok := r.byID[id]; ok {
+		return userModel, nil
 	}
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountLookup) GetByPhoneNumber(_ context.Context, phoneNumber string) (*account.AccountModel, error) {
-	if accountModel, ok := r.byPhone[phoneNumber]; ok {
-		return accountModel, nil
+func (r *fakeUserLookup) GetByPhoneNumber(_ context.Context, phoneNumber string) (*user.UserModel, error) {
+	if userModel, ok := r.byPhone[phoneNumber]; ok {
+		return userModel, nil
 	}
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
 type fakeTokenStore struct {
@@ -110,13 +110,13 @@ func (s *fakeLoginSessionStore) UpdateAccessToken(
 
 type fakeAccessTokenIssuer struct{}
 
-func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, accountID string, phoneNumber string) (*auth.AccessToken, error) {
+func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, userID string, phoneNumber string) (*auth.AccessToken, error) {
 	return &auth.AccessToken{
 		Token:     "access-token",
 		TokenType: "Bearer",
 		ExpiresAt: time.Now().UTC().Add(15 * time.Minute),
 		ExpiresIn: 900,
-		KeyID:     accountID + ":" + phoneNumber,
+		KeyID:     userID + ":" + phoneNumber,
 	}, nil
 }
 
@@ -126,18 +126,18 @@ func TestLoginCreatesTokenRecord(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
-	accounts := &fakeAccountLookup{
-		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
-		byID:    map[string]*account.AccountModel{"account-1": accountModel},
+	users := &fakeUserLookup{
+		byPhone: map[string]*user.UserModel{"2012345678": userModel},
+		byID:    map[string]*user.UserModel{"user-1": userModel},
 	}
 	tokenRecords := &fakeTokenStore{}
 	loginSessions := &fakeLoginSessionStore{}
-	service := NewService(accounts, tokenRecords, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, tokenRecords, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -171,19 +171,19 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
-	accounts := &fakeAccountLookup{
-		byID: map[string]*account.AccountModel{"account-1": accountModel},
+	users := &fakeUserLookup{
+		byID: map[string]*user.UserModel{"user-1": userModel},
 	}
-	service := NewService(accounts, &fakeTokenStore{
+	service := NewService(users, &fakeTokenStore{
 		tokensByHash: map[string]*auth.TokenRecord{
 			hashRefreshToken("refresh-token"): {
 				ID:          "token-1",
-				AccountID:   "account-1",
+				UserID:   "user-1",
 				RootTokenID: "token-1",
 				ReplacedAt:  ptrTime(time.Date(2026, 5, 23, 9, 0, 0, 0, time.UTC)),
 				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
@@ -207,26 +207,26 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
-	accounts := &fakeAccountLookup{
-		byID: map[string]*account.AccountModel{"account-1": accountModel},
+	users := &fakeUserLookup{
+		byID: map[string]*user.UserModel{"user-1": userModel},
 	}
 	tokenRecords := &fakeTokenStore{
 		tokensByHash: map[string]*auth.TokenRecord{
 			hashRefreshToken("refresh-token"): {
 				ID:          "token-1",
-				AccountID:   "account-1",
+				UserID:   "user-1",
 				RootTokenID: "root-token",
 				TokenHash:   hashRefreshToken("refresh-token"),
 				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 			},
 		},
 	}
-	service := NewService(accounts, tokenRecords, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, tokenRecords, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -263,17 +263,17 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
-	accounts := &fakeAccountLookup{
-		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
-		byID:    map[string]*account.AccountModel{"account-1": accountModel},
+	users := &fakeUserLookup{
+		byPhone: map[string]*user.UserModel{"2012345678": userModel},
+		byID:    map[string]*user.UserModel{"user-1": userModel},
 	}
 	loginSessions := &fakeLoginSessionStore{}
-	service := NewService(accounts, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -309,7 +309,7 @@ func TestSessionTokenReturnsStoredAccessTokenWhenStillValid(t *testing.T) {
 		sessionsByHash: map[string]*auth.LoginSession{
 			hashSessionToken("session-token"): {
 				ID:                   "session-1",
-				AccountID:            "account-1",
+				UserID:            "user-1",
 				TokenHash:            hashSessionToken("session-token"),
 				CurrentAccessToken:   "stored-access-token",
 				CurrentAccessExpires: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
@@ -317,7 +317,7 @@ func TestSessionTokenReturnsStoredAccessTokenWhenStillValid(t *testing.T) {
 			},
 		},
 	}
-	service := NewService(&fakeAccountLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(&fakeUserLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -342,19 +342,19 @@ func TestSessionTokenRefreshesExpiredAccessToken(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
-	accounts := &fakeAccountLookup{
-		byID: map[string]*account.AccountModel{"account-1": accountModel},
+	users := &fakeUserLookup{
+		byID: map[string]*user.UserModel{"user-1": userModel},
 	}
 	loginSessions := &fakeLoginSessionStore{
 		sessionsByHash: map[string]*auth.LoginSession{
 			hashSessionToken("session-token"): {
 				ID:                   "session-1",
-				AccountID:            "account-1",
+				UserID:            "user-1",
 				TokenHash:            hashSessionToken("session-token"),
 				CurrentAccessToken:   "expired-access-token",
 				CurrentAccessExpires: time.Date(2026, 5, 23, 9, 59, 0, 0, time.UTC),
@@ -362,7 +362,7 @@ func TestSessionTokenRefreshesExpiredAccessToken(t *testing.T) {
 			},
 		},
 	}
-	service := NewService(accounts, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -392,7 +392,7 @@ func TestSessionTokenRejectsExpiredLoginSession(t *testing.T) {
 		sessionsByHash: map[string]*auth.LoginSession{
 			hashSessionToken("session-token"): {
 				ID:                   "session-1",
-				AccountID:            "account-1",
+				UserID:            "user-1",
 				TokenHash:            hashSessionToken("session-token"),
 				CurrentAccessToken:   "stored-access-token",
 				CurrentAccessExpires: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
@@ -400,7 +400,7 @@ func TestSessionTokenRejectsExpiredLoginSession(t *testing.T) {
 			},
 		},
 	}
-	service := NewService(&fakeAccountLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(&fakeUserLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})

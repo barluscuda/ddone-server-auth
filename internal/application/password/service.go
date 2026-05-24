@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -29,7 +29,7 @@ const (
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
-var ErrInvalidPhoneNumber = account.ErrInvalidPhoneNumber
+var ErrInvalidPhoneNumber = user.ErrInvalidPhoneNumber
 var ErrPasswordResetTicketRequired = errors.New("ticket id is required")
 var ErrPasswordResetTicketNotFound = errors.New("password reset ticket not found")
 var ErrOTPCodeRequired = errors.New("otp code is required")
@@ -40,11 +40,11 @@ var ErrResetRateLimited = errors.New("too many password reset requests, try agai
 var ErrResendRateLimited = errors.New("too many otp resend requests, request a new password reset")
 var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
-var ErrAuthenticatedAccountRequired = errors.New("authenticated account is required")
+var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrInvalidCurrentPassword = errors.New("current password is incorrect")
 
 type Service struct {
-	accounts        AccountStore
+	users        UserStore
 	store           ResetStore
 	sender          OTPSender
 	tokenRecords TokenRevoker
@@ -56,14 +56,14 @@ type Service struct {
 }
 
 func NewService(
-	accounts AccountStore,
+	users UserStore,
 	store ResetStore,
 	sender OTPSender,
 	tokenRecords TokenRevoker,
 	loginSessions LoginSessionRevoker,
 ) *Service {
 	return &Service{
-		accounts:        accounts,
+		users:        users,
 		store:           store,
 		sender:          sender,
 		tokenRecords: tokenRecords,
@@ -79,7 +79,7 @@ func (s *Service) ForgotPassword(
 	ctx context.Context,
 	input ForgotPasswordInput,
 ) (*ResetTicketResult, error) {
-	phoneNumber, err := account.NormalizePhoneNumber(input.PhoneNumber)
+	phoneNumber, err := user.NormalizePhoneNumber(input.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (s *Service) ForgotPassword(
 		return nil, err
 	}
 
-	accountModel, err := s.accounts.GetByPhoneNumber(ctx, phoneNumber)
+	userModel, err := s.users.GetByPhoneNumber(ctx, phoneNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *Service) ForgotPassword(
 	now := s.now()
 	state := &ResetTicketState{
 		TicketID:      ticketID,
-		AccountID:     accountModel.ID,
+		UserID:     userModel.ID,
 		PhoneNumber:   phoneNumber,
 		OTPCodeHash:   hashResetOTP(ticketID, otpCode),
 		OTPExpiresAt:  now.Add(resetOTPTTL),
@@ -150,9 +150,9 @@ func (s *Service) ResendForgotPasswordOTP(
 	if now.After(state.OTPExpiresAt) {
 		_ = s.store.Delete(ctx, ticketID)
 		_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
-		return nil, account.ErrOTPExpired
+		return nil, user.ErrOTPExpired
 	}
-	if state.AccountID == "" || state.PhoneNumber == "" || state.OTPCodeHash == "" {
+	if state.UserID == "" || state.PhoneNumber == "" || state.OTPCodeHash == "" {
 		_ = s.store.Delete(ctx, ticketID)
 		_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
 		return nil, ErrPendingPasswordResetInvalid
@@ -229,9 +229,9 @@ func (s *Service) VerifyForgotPassword(
 	if now.After(state.OTPExpiresAt) {
 		_ = s.store.Delete(ctx, ticketID)
 		_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
-		return account.ErrOTPExpired
+		return user.ErrOTPExpired
 	}
-	if state.AccountID == "" || state.PhoneNumber == "" || state.OTPCodeHash == "" {
+	if state.UserID == "" || state.PhoneNumber == "" || state.OTPCodeHash == "" {
 		_ = s.store.Delete(ctx, ticketID)
 		_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
 		return ErrPendingPasswordResetInvalid
@@ -248,10 +248,10 @@ func (s *Service) VerifyForgotPassword(
 			return ErrVerifyRateLimited
 		}
 
-		return account.ErrInvalidOTPCode
+		return user.ErrInvalidOTPCode
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, state.AccountID)
+	userModel, err := s.users.GetByID(ctx, state.UserID)
 	if err != nil {
 		return err
 	}
@@ -261,13 +261,13 @@ func (s *Service) VerifyForgotPassword(
 		return err
 	}
 
-	accountModel.PasswordHash = passwordHash
-	accountModel.PasswordChangedAt = &now
-	accountModel.UpdatedAt = now
-	if err := s.accounts.Update(ctx, accountModel); err != nil {
+	userModel.PasswordHash = passwordHash
+	userModel.PasswordChangedAt = &now
+	userModel.UpdatedAt = now
+	if err := s.users.Update(ctx, userModel); err != nil {
 		return err
 	}
-	if err := s.revokeSessions(ctx, accountModel.ID, "password_reset", now); err != nil {
+	if err := s.revokeSessions(ctx, userModel.ID, "password_reset", now); err != nil {
 		return err
 	}
 	if err := s.store.Delete(ctx, ticketID); err != nil {
@@ -281,12 +281,12 @@ func (s *Service) VerifyForgotPassword(
 }
 
 func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput) error {
-	accountID := strings.TrimSpace(input.AccountID)
+	userID := strings.TrimSpace(input.UserID)
 	currentPassword := strings.TrimSpace(input.CurrentPassword)
 	newPassword := strings.TrimSpace(input.NewPassword)
 
-	if accountID == "" {
-		return ErrAuthenticatedAccountRequired
+	if userID == "" {
+		return ErrAuthenticatedUserRequired
 	}
 	if currentPassword == "" {
 		return ErrCurrentPasswordRequired
@@ -295,11 +295,11 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 		return ErrNewPasswordRequired
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, accountID)
+	userModel, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(accountModel.PasswordHash), []byte(currentPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(currentPassword)); err != nil {
 		return ErrInvalidCurrentPassword
 	}
 
@@ -309,21 +309,21 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 	}
 
 	now := s.now()
-	accountModel.PasswordHash = passwordHash
-	accountModel.PasswordChangedAt = &now
-	accountModel.UpdatedAt = now
-	if err := s.accounts.Update(ctx, accountModel); err != nil {
+	userModel.PasswordHash = passwordHash
+	userModel.PasswordChangedAt = &now
+	userModel.UpdatedAt = now
+	if err := s.users.Update(ctx, userModel); err != nil {
 		return err
 	}
 
-	return s.revokeSessions(ctx, accountModel.ID, "password_changed", now)
+	return s.revokeSessions(ctx, userModel.ID, "password_changed", now)
 }
 
-func (s *Service) revokeSessions(ctx context.Context, accountID string, reason string, revokedAt time.Time) error {
-	if err := s.tokenRecords.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+func (s *Service) revokeSessions(ctx context.Context, userID string, reason string, revokedAt time.Time) error {
+	if err := s.tokenRecords.RevokeByUserID(ctx, userID, reason, revokedAt); err != nil {
 		return err
 	}
-	if err := s.loginSessions.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+	if err := s.loginSessions.RevokeByUserID(ctx, userID, reason, revokedAt); err != nil {
 		return err
 	}
 

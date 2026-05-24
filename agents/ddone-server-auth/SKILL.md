@@ -23,7 +23,7 @@ Use this skill for changes inside this repository.
 - OTP resend and verification flows
 - Health check endpoint
 - JWKS publication for ES256 access tokens
-- PostgreSQL-backed account persistence
+- PostgreSQL-backed user persistence
 - PostgreSQL-backed raw token records, login sessions, and signing keys
 - Redis-backed pending registration state
 - Redis-backed pending password-reset state
@@ -46,7 +46,7 @@ Use this skill for changes inside this repository.
 - Handlers should depend on application contracts, not concrete repositories.
 - Avoid importing adapter packages into application or domain code.
 - Avoid adding new GORM tags, migration logic, or transport DTOs to domain packages.
-- If touching `internal/domain/account`, note that it still has legacy persistence leakage. Move it toward pure domain types instead of expanding that pattern.
+- If touching `internal/domain/user`, note that it still has legacy persistence leakage. Move it toward pure domain types instead of expanding that pattern.
 
 ## Current Runtime Shape
 

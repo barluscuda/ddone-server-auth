@@ -3,11 +3,11 @@ package settings
 import (
 	"context"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 )
 
-type AccountReader interface {
-	GetByID(ctx context.Context, id string) (*account.AccountModel, error)
-	GetByUsername(ctx context.Context, username string) (*account.AccountModel, error)
-	Update(ctx context.Context, accountModel *account.AccountModel) error
+type UserReader interface {
+	GetByID(ctx context.Context, id string) (*user.UserModel, error)
+	GetByUsername(ctx context.Context, username string) (*user.UserModel, error)
+	Update(ctx context.Context, userModel *user.UserModel) error
 }

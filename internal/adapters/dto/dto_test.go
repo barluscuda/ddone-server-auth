@@ -74,7 +74,7 @@ func TestResSettingsMeMarshalsCamelCaseFields(t *testing.T) {
 		Code:    "settings_fetched",
 		Message: "settings fetched successfully",
 		Data: ResSettingsMeData{
-			ID:              "account-1",
+			ID:              "user-1",
 			PhoneNumber:     "2012345678",
 			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 			CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),

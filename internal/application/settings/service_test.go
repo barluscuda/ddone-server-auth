@@ -6,50 +6,50 @@ import (
 	"testing"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 )
 
-type fakeAccountReader struct {
-	accountByID map[string]*account.AccountModel
-	byUsername  map[string]*account.AccountModel
-	updated     *account.AccountModel
+type fakeUserReader struct {
+	userByID map[string]*user.UserModel
+	byUsername  map[string]*user.UserModel
+	updated     *user.UserModel
 }
 
-func (r *fakeAccountReader) GetByID(_ context.Context, id string) (*account.AccountModel, error) {
-	if value, ok := r.accountByID[id]; ok {
+func (r *fakeUserReader) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+	if value, ok := r.userByID[id]; ok {
 		return value, nil
 	}
 
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountReader) GetByUsername(_ context.Context, username string) (*account.AccountModel, error) {
+func (r *fakeUserReader) GetByUsername(_ context.Context, username string) (*user.UserModel, error) {
 	if value, ok := r.byUsername[username]; ok {
 		copyValue := *value
 		return &copyValue, nil
 	}
 
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountReader) Update(_ context.Context, accountModel *account.AccountModel) error {
-	copyValue := *accountModel
+func (r *fakeUserReader) Update(_ context.Context, userModel *user.UserModel) error {
+	copyValue := *userModel
 	r.updated = &copyValue
-	r.accountByID[accountModel.ID] = &copyValue
+	r.userByID[userModel.ID] = &copyValue
 	if r.byUsername == nil {
-		r.byUsername = map[string]*account.AccountModel{}
+		r.byUsername = map[string]*user.UserModel{}
 	}
-	if accountModel.Username != nil {
-		r.byUsername[*accountModel.Username] = &copyValue
+	if userModel.Username != nil {
+		r.byUsername[*userModel.Username] = &copyValue
 	}
 	return nil
 }
 
-func TestGetReturnsCurrentAccount(t *testing.T) {
-	service := NewService(&fakeAccountReader{
-		accountByID: map[string]*account.AccountModel{
-			"account-1": {
-				ID:              "account-1",
+func TestGetReturnsCurrentUser(t *testing.T) {
+	service := NewService(&fakeUserReader{
+		userByID: map[string]*user.UserModel{
+			"user-1": {
+				ID:              "user-1",
 				PhoneNumber:     "2012345678",
 				PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 				CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
@@ -57,39 +57,39 @@ func TestGetReturnsCurrentAccount(t *testing.T) {
 		},
 	})
 
-	result, err := service.Get(context.Background(), GetInput{AccountID: "account-1"})
+	result, err := service.Get(context.Background(), GetInput{UserID: "user-1"})
 	if err != nil {
 		t.Fatalf("Get returned error: %v", err)
 	}
-	if result.ID != "account-1" {
-		t.Fatalf("expected account id %q, got %q", "account-1", result.ID)
+	if result.ID != "user-1" {
+		t.Fatalf("expected user id %q, got %q", "user-1", result.ID)
 	}
 }
 
-func TestGetRequiresAuthenticatedAccount(t *testing.T) {
-	service := NewService(&fakeAccountReader{})
+func TestGetRequiresAuthenticatedUser(t *testing.T) {
+	service := NewService(&fakeUserReader{})
 
 	_, err := service.Get(context.Background(), GetInput{})
-	if !errors.Is(err, ErrAuthenticatedAccountRequired) {
-		t.Fatalf("expected ErrAuthenticatedAccountRequired, got %v", err)
+	if !errors.Is(err, ErrAuthenticatedUserRequired) {
+		t.Fatalf("expected ErrAuthenticatedUserRequired, got %v", err)
 	}
 }
 
 func TestUpdateUsernamePersistsNormalizedValue(t *testing.T) {
-	accounts := &fakeAccountReader{
-		accountByID: map[string]*account.AccountModel{
-			"account-1": {
-				ID:        "account-1",
+	users := &fakeUserReader{
+		userByID: map[string]*user.UserModel{
+			"user-1": {
+				ID:        "user-1",
 				CreatedAt: time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 			},
 		},
-		byUsername: map[string]*account.AccountModel{},
+		byUsername: map[string]*user.UserModel{},
 	}
-	service := NewService(accounts)
+	service := NewService(users)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 
 	result, err := service.UpdateUsername(context.Background(), UpdateUsernameInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		Username:  " New_Name ",
 	})
 	if err != nil {
@@ -98,30 +98,30 @@ func TestUpdateUsernamePersistsNormalizedValue(t *testing.T) {
 	if result.Username != "new_name" {
 		t.Fatalf("expected normalized username %q, got %q", "new_name", result.Username)
 	}
-	if accounts.updated == nil || accounts.updated.Username == nil || *accounts.updated.Username != "new_name" {
+	if users.updated == nil || users.updated.Username == nil || *users.updated.Username != "new_name" {
 		t.Fatal("expected updated username to be persisted")
 	}
-	if accounts.updated.UsernameChangedAt == nil {
+	if users.updated.UsernameChangedAt == nil {
 		t.Fatal("expected username changed at to be recorded")
 	}
 }
 
 func TestUpdateUsernameRejectsCooldown(t *testing.T) {
 	lastChange := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
-	accounts := &fakeAccountReader{
-		accountByID: map[string]*account.AccountModel{
-			"account-1": {
-				ID:                "account-1",
+	users := &fakeUserReader{
+		userByID: map[string]*user.UserModel{
+			"user-1": {
+				ID:                "user-1",
 				UsernameChangedAt: &lastChange,
 			},
 		},
-		byUsername: map[string]*account.AccountModel{},
+		byUsername: map[string]*user.UserModel{},
 	}
-	service := NewService(accounts)
+	service := NewService(users)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 
 	_, err := service.UpdateUsername(context.Background(), UpdateUsernameInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		Username:  "new_name",
 	})
 	if !errors.Is(err, ErrUsernameCooldownActive) {

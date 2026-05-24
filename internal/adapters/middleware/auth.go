@@ -17,7 +17,7 @@ type AccessTokenVerifier interface {
 }
 
 type AuthContext struct {
-	AccountID   string
+	UserID   string
 	PhoneNumber string
 	TokenID     string
 	AccessToken string
@@ -45,13 +45,13 @@ func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
 			return
 		}
 
-		accountID := claims.AccountID
-		if accountID == "" {
-			accountID = claims.Subject
+		userID := claims.UserID
+		if userID == "" {
+			userID = claims.Subject
 		}
 
 		c.Set(authContextKey, AuthContext{
-			AccountID:   accountID,
+			UserID:   userID,
 			PhoneNumber: claims.PhoneNumber,
 			TokenID:     claims.JWTID,
 			AccessToken: tokenValue,

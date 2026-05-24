@@ -1,8 +1,8 @@
-package account
+package user
 
 import "time"
 
-type AccountModel struct {
+type UserModel struct {
 	ID                string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	Username          *string   `gorm:"size:50;uniqueIndex"`
 	PasswordHash      string    `gorm:"size:255;not null"`
@@ -26,6 +26,6 @@ type RegisterModel struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-func (AccountModel) TableName() string {
+func (UserModel) TableName() string {
 	return "accounts"
 }

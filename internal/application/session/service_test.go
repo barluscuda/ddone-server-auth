@@ -12,17 +12,17 @@ import (
 type fakeStore struct {
 	byID               map[string]auth.LoginSession
 	byAccessToken      map[string]auth.LoginSession
-	byAccount          map[string][]auth.LoginSession
+	byUser          map[string][]auth.LoginSession
 	revokedSessionID   string
 	revokedReason      string
 	revokedAt          time.Time
-	revokedAccountID   string
+	revokedUserID   string
 	revokedExceptID    string
 	revokedAllReason   string
 	revokedAllAt       time.Time
 	revokeByIDErr      error
 	revokeOthersErr    error
-	revokeByAccountErr error
+	revokeByUserErr error
 }
 
 func (f *fakeStore) GetByID(_ context.Context, sessionID string) (*auth.LoginSession, error) {
@@ -34,8 +34,8 @@ func (f *fakeStore) GetByID(_ context.Context, sessionID string) (*auth.LoginSes
 	return cloneSession(session), nil
 }
 
-func (f *fakeStore) ListByAccountID(_ context.Context, accountID string) ([]auth.LoginSession, error) {
-	sessions := f.byAccount[accountID]
+func (f *fakeStore) ListByUserID(_ context.Context, userID string) ([]auth.LoginSession, error) {
+	sessions := f.byUser[userID]
 	result := make([]auth.LoginSession, 0, len(sessions))
 	for _, session := range sessions {
 		result = append(result, *cloneSession(session))
@@ -64,9 +64,9 @@ func (f *fakeStore) RevokeByID(_ context.Context, sessionID string, reason strin
 	return nil
 }
 
-func (f *fakeStore) RevokeByAccountIDExcept(
+func (f *fakeStore) RevokeByUserIDExcept(
 	_ context.Context,
-	accountID string,
+	userID string,
 	excludedSessionID string,
 	reason string,
 	revokedAt time.Time,
@@ -75,19 +75,19 @@ func (f *fakeStore) RevokeByAccountIDExcept(
 		return f.revokeOthersErr
 	}
 
-	f.revokedAccountID = accountID
+	f.revokedUserID = userID
 	f.revokedExceptID = excludedSessionID
 	f.revokedAllReason = reason
 	f.revokedAllAt = revokedAt
 	return nil
 }
 
-func (f *fakeStore) RevokeByAccountID(_ context.Context, accountID string, reason string, revokedAt time.Time) error {
-	if f.revokeByAccountErr != nil {
-		return f.revokeByAccountErr
+func (f *fakeStore) RevokeByUserID(_ context.Context, userID string, reason string, revokedAt time.Time) error {
+	if f.revokeByUserErr != nil {
+		return f.revokeByUserErr
 	}
 
-	f.revokedAccountID = accountID
+	f.revokedUserID = userID
 	f.revokedAllReason = reason
 	f.revokedAllAt = revokedAt
 	return nil
@@ -95,11 +95,11 @@ func (f *fakeStore) RevokeByAccountID(_ context.Context, accountID string, reaso
 
 func TestListReturnsOwnedSessions(t *testing.T) {
 	service := NewService(&fakeStore{
-		byAccount: map[string][]auth.LoginSession{
-			"account-1": {
+		byUser: map[string][]auth.LoginSession{
+			"user-1": {
 				{
 					ID:                   "session-1",
-					AccountID:            "account-1",
+					UserID:            "user-1",
 					ClientIP:             "127.0.0.1",
 					UserAgent:            "test-agent",
 					CurrentAccessExpires: time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC),
@@ -109,7 +109,7 @@ func TestListReturnsOwnedSessions(t *testing.T) {
 		},
 	})
 
-	result, err := service.List(context.Background(), ListInput{AccountID: "account-1"})
+	result, err := service.List(context.Background(), ListInput{UserID: "user-1"})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -121,27 +121,27 @@ func TestListReturnsOwnedSessions(t *testing.T) {
 	}
 }
 
-func TestListRequiresAuthenticatedAccount(t *testing.T) {
+func TestListRequiresAuthenticatedUser(t *testing.T) {
 	service := NewService(&fakeStore{})
 
 	_, err := service.List(context.Background(), ListInput{})
-	if !errors.Is(err, ErrAuthenticatedAccountRequired) {
-		t.Fatalf("expected ErrAuthenticatedAccountRequired, got %v", err)
+	if !errors.Is(err, ErrAuthenticatedUserRequired) {
+		t.Fatalf("expected ErrAuthenticatedUserRequired, got %v", err)
 	}
 }
 
-func TestRevokeRejectsSessionFromAnotherAccount(t *testing.T) {
+func TestRevokeRejectsSessionFromAnotherUser(t *testing.T) {
 	service := NewService(&fakeStore{
 		byID: map[string]auth.LoginSession{
 			"session-1": {
 				ID:        "session-1",
-				AccountID: "account-2",
+				UserID: "user-2",
 			},
 		},
 	})
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		SessionID: "session-1",
 	})
 	if !errors.Is(err, auth.ErrLoginSessionNotFound) {
@@ -154,7 +154,7 @@ func TestRevokeMarksSessionByID(t *testing.T) {
 		byID: map[string]auth.LoginSession{
 			"session-1": {
 				ID:        "session-1",
-				AccountID: "account-1",
+				UserID: "user-1",
 			},
 		},
 	}
@@ -162,7 +162,7 @@ func TestRevokeMarksSessionByID(t *testing.T) {
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 2, 0, 0, 0, time.UTC) }
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		SessionID: "session-1",
 	})
 	if err != nil {
@@ -181,13 +181,13 @@ func TestCurrentReturnsSessionMatchedByAccessToken(t *testing.T) {
 		byAccessToken: map[string]auth.LoginSession{
 			"access-token": {
 				ID:        "session-1",
-				AccountID: "account-1",
+				UserID: "user-1",
 			},
 		},
 	})
 
 	result, err := service.Current(context.Background(), CurrentInput{
-		AccountID:   "account-1",
+		UserID:   "user-1",
 		AccessToken: "access-token",
 	})
 	if err != nil {
@@ -203,7 +203,7 @@ func TestRevokeOthersKeepsCurrentSession(t *testing.T) {
 		byAccessToken: map[string]auth.LoginSession{
 			"access-token": {
 				ID:        "session-1",
-				AccountID: "account-1",
+				UserID: "user-1",
 			},
 		},
 	}
@@ -211,14 +211,14 @@ func TestRevokeOthersKeepsCurrentSession(t *testing.T) {
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 2, 30, 0, 0, time.UTC) }
 
 	err := service.RevokeOthers(context.Background(), RevokeOthersInput{
-		AccountID:   "account-1",
+		UserID:   "user-1",
 		AccessToken: "access-token",
 	})
 	if err != nil {
 		t.Fatalf("RevokeOthers returned error: %v", err)
 	}
-	if store.revokedAccountID != "account-1" {
-		t.Fatalf("expected revoked account id %q, got %q", "account-1", store.revokedAccountID)
+	if store.revokedUserID != "user-1" {
+		t.Fatalf("expected revoked user id %q, got %q", "user-1", store.revokedUserID)
 	}
 	if store.revokedExceptID != "session-1" {
 		t.Fatalf("expected excluded session id %q, got %q", "session-1", store.revokedExceptID)
@@ -228,17 +228,17 @@ func TestRevokeOthersKeepsCurrentSession(t *testing.T) {
 	}
 }
 
-func TestRevokeAllRevokesAccountSessions(t *testing.T) {
+func TestRevokeAllRevokesUserSessions(t *testing.T) {
 	store := &fakeStore{}
 	service := NewService(store)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 3, 0, 0, 0, time.UTC) }
 
-	err := service.RevokeAll(context.Background(), RevokeAllInput{AccountID: "account-1"})
+	err := service.RevokeAll(context.Background(), RevokeAllInput{UserID: "user-1"})
 	if err != nil {
 		t.Fatalf("RevokeAll returned error: %v", err)
 	}
-	if store.revokedAccountID != "account-1" {
-		t.Fatalf("expected revoked account id %q, got %q", "account-1", store.revokedAccountID)
+	if store.revokedUserID != "user-1" {
+		t.Fatalf("expected revoked user id %q, got %q", "user-1", store.revokedUserID)
 	}
 	if store.revokedAllReason != reasonAllSessionsRevoked {
 		t.Fatalf("expected revoke reason %q, got %q", reasonAllSessionsRevoked, store.revokedAllReason)

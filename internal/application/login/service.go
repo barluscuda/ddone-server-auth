@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"ddone-server-auth/internal/domain/account"
 	"ddone-server-auth/internal/domain/auth"
+	"ddone-server-auth/internal/domain/user"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -21,7 +21,7 @@ const (
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
-var ErrInvalidPhoneNumber = account.ErrInvalidPhoneNumber
+var ErrInvalidPhoneNumber = user.ErrInvalidPhoneNumber
 var ErrPasswordRequired = errors.New("password is required")
 
 type UseCase interface {
@@ -32,7 +32,7 @@ type UseCase interface {
 }
 
 type Service struct {
-	accounts       AccountLookup
+	users          UserLookup
 	tokenRecords   TokenStore
 	serverSessions LoginSessionStore
 	accessTokens   AccessTokenIssuer
@@ -41,14 +41,14 @@ type Service struct {
 }
 
 func NewService(
-	accounts AccountLookup,
+	users UserLookup,
 	tokenRecords TokenStore,
 	loginSessions LoginSessionStore,
 	tokens AccessTokenIssuer,
 	settings Settings,
 ) *Service {
 	return &Service{
-		accounts:       accounts,
+		users:          users,
 		tokenRecords:   tokenRecords,
 		serverSessions: loginSessions,
 		accessTokens:   tokens,
@@ -58,18 +58,18 @@ func NewService(
 }
 
 func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) {
-	accountModel, err := s.authenticateAccount(ctx, input.PhoneNumber, input.Password)
+	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
 	refreshToken, tokenRecord, err := s.newRefreshTokenRecord(
-		accountModel.ID,
+		userModel.ID,
 		"",
 		"",
 		input.ClientIP,
@@ -92,18 +92,18 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) 
 }
 
 func (s *Service) LoginSession(ctx context.Context, input LoginInput) (*SessionResult, error) {
-	accountModel, err := s.authenticateAccount(ctx, input.PhoneNumber, input.Password)
+	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
 	sessionToken, session, err := s.newServerSession(
-		accountModel.ID,
+		userModel.ID,
 		accessToken,
 		input.ClientIP,
 		input.UserAgent,
@@ -151,15 +151,15 @@ func (s *Service) SessionToken(ctx context.Context, input SessionTokenInput) (*S
 		}, nil
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, session.AccountID)
+	userModel, err := s.users.GetByID(ctx, session.UserID)
 	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
+		if errors.Is(err, user.ErrUserNotFound) {
 			return nil, auth.ErrInvalidCredentials
 		}
 		return nil, err
 	}
 
-	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -201,21 +201,21 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 		return nil, auth.ErrTokenExpired
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, tokenRecord.AccountID)
+	userModel, err := s.users.GetByID(ctx, tokenRecord.UserID)
 	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
+		if errors.Is(err, user.ErrUserNotFound) {
 			return nil, auth.ErrInvalidCredentials
 		}
 		return nil, err
 	}
 
-	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
 	refreshToken, replacement, err := s.newRefreshTokenRecord(
-		accountModel.ID,
+		userModel.ID,
 		rootTokenID,
 		tokenRecord.ID,
 		input.ClientIP,
@@ -241,7 +241,7 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 }
 
 func (s *Service) newRefreshTokenRecord(
-	accountID string,
+	userID string,
 	rootTokenID string,
 	parentTokenID string,
 	clientIP string,
@@ -259,7 +259,7 @@ func (s *Service) newRefreshTokenRecord(
 	now := s.now()
 	tokenRecord := &auth.TokenRecord{
 		ID:          tokenID,
-		AccountID:   accountID,
+		UserID:      userID,
 		RootTokenID: rootTokenID,
 		TokenHash:   hashRefreshToken(tokenValue),
 		UserAgent:   strings.TrimSpace(userAgent),
@@ -275,7 +275,7 @@ func (s *Service) newRefreshTokenRecord(
 }
 
 func (s *Service) newServerSession(
-	accountID string,
+	userID string,
 	accessToken *auth.AccessToken,
 	clientIP string,
 	userAgent string,
@@ -292,7 +292,7 @@ func (s *Service) newServerSession(
 	now := s.now()
 	session := &auth.LoginSession{
 		ID:                   sessionID,
-		AccountID:            accountID,
+		UserID:               userID,
 		TokenHash:            hashSessionToken(tokenValue),
 		UserAgent:            strings.TrimSpace(userAgent),
 		ClientIP:             strings.TrimSpace(clientIP),
@@ -305,12 +305,12 @@ func (s *Service) newServerSession(
 	return tokenValue, session, nil
 }
 
-func (s *Service) authenticateAccount(
+func (s *Service) authenticateUser(
 	ctx context.Context,
 	rawPhoneNumber string,
 	password string,
-) (*account.AccountModel, error) {
-	phoneNumber, err := account.NormalizePhoneNumber(rawPhoneNumber)
+) (*user.UserModel, error) {
+	phoneNumber, err := user.NormalizePhoneNumber(rawPhoneNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -321,18 +321,18 @@ func (s *Service) authenticateAccount(
 		return nil, ErrPasswordRequired
 	}
 
-	accountModel, err := s.accounts.GetByPhoneNumber(ctx, phoneNumber)
+	userModel, err := s.users.GetByPhoneNumber(ctx, phoneNumber)
 	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
+		if errors.Is(err, user.ErrUserNotFound) {
 			return nil, auth.ErrInvalidCredentials
 		}
 		return nil, err
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(accountModel.PasswordHash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(password)); err != nil {
 		return nil, auth.ErrInvalidCredentials
 	}
 
-	return accountModel, nil
+	return userModel, nil
 }
 
 func existingAccessToken(session *auth.LoginSession, now time.Time) *auth.AccessToken {

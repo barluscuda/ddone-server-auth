@@ -29,7 +29,7 @@ cmd/app/                  Process entrypoint
 - HTTP JSON request and response field names should use camelCase in DTOs and public examples.
 - Do not introduce new adapter imports into application or domain code.
 - Do not put migrations, GORM tags, Redis logic, or HTTP types into new domain packages.
-- `internal/domain/account` still contains legacy GORM tags and migration helpers. If touching that area, move it toward pure domain models instead of extending the leakage.
+- `internal/domain/user` still contains legacy GORM tags and migration helpers. If touching that area, move it toward pure domain models instead of extending the leakage.
 - `internal/ports` exists today, but avoid turning it into a dumping ground. Prefer interfaces close to the owning use case or domain.
 
 ## Commands
@@ -75,19 +75,19 @@ cmd/app/                  Process entrypoint
 
 Registration currently depends on:
 
-- PostgreSQL for account persistence
+- PostgreSQL for user persistence
 - Redis for pending registration and OTP rate-limit state
 - Wenova SMS for OTP delivery
 
 Password reset currently depends on:
 
-- PostgreSQL for account lookup and password updates
+- PostgreSQL for user lookup and password updates
 - Redis for pending password-reset state and OTP rate-limit state
 - Wenova SMS for OTP delivery
 
 Login currently depends on:
 
-- PostgreSQL for account lookup, raw token records, login sessions, and signing keys
+- PostgreSQL for user lookup, raw token records, login sessions, and signing keys
 - ES256 access-token signing with JWKS publication
 
 Session-login currently also depends on:

@@ -15,7 +15,7 @@ const (
 	reasonAllSessionsRevoked   = "all_sessions_revoked"
 )
 
-var ErrAuthenticatedAccountRequired = errors.New("authenticated account is required")
+var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrSessionIDRequired = errors.New("session id is required")
 var ErrAccessTokenRequired = errors.New("access token is required")
 
@@ -32,12 +32,12 @@ func NewService(store Store) *Service {
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) ([]View, error) {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return nil, ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return nil, ErrAuthenticatedUserRequired
 	}
 
-	sessions, err := s.store.ListByAccountID(ctx, accountID)
+	sessions, err := s.store.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]View, error) {
 }
 
 func (s *Service) Current(ctx context.Context, input CurrentInput) (*View, error) {
-	session, err := s.currentSession(ctx, input.AccountID, input.AccessToken)
+	session, err := s.currentSession(ctx, input.UserID, input.AccessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +61,9 @@ func (s *Service) Current(ctx context.Context, input CurrentInput) (*View, error
 }
 
 func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return ErrAuthenticatedUserRequired
 	}
 
 	sessionID := strings.TrimSpace(input.SessionID)
@@ -75,7 +75,7 @@ func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
 	if err != nil {
 		return err
 	}
-	if session.AccountID != accountID {
+	if session.UserID != userID {
 		return auth.ErrLoginSessionNotFound
 	}
 	if session.IsRevoked() {
@@ -86,14 +86,14 @@ func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
 }
 
 func (s *Service) RevokeOthers(ctx context.Context, input RevokeOthersInput) error {
-	session, err := s.currentSession(ctx, input.AccountID, input.AccessToken)
+	session, err := s.currentSession(ctx, input.UserID, input.AccessToken)
 	if err != nil {
 		return err
 	}
 
-	return s.store.RevokeByAccountIDExcept(
+	return s.store.RevokeByUserIDExcept(
 		ctx,
-		session.AccountID,
+		session.UserID,
 		session.ID,
 		reasonOtherSessionsRevoked,
 		s.now(),
@@ -101,18 +101,18 @@ func (s *Service) RevokeOthers(ctx context.Context, input RevokeOthersInput) err
 }
 
 func (s *Service) RevokeAll(ctx context.Context, input RevokeAllInput) error {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return ErrAuthenticatedUserRequired
 	}
 
-	return s.store.RevokeByAccountID(ctx, accountID, reasonAllSessionsRevoked, s.now())
+	return s.store.RevokeByUserID(ctx, userID, reasonAllSessionsRevoked, s.now())
 }
 
-func (s *Service) currentSession(ctx context.Context, rawAccountID string, rawAccessToken string) (*auth.LoginSession, error) {
-	accountID := strings.TrimSpace(rawAccountID)
-	if accountID == "" {
-		return nil, ErrAuthenticatedAccountRequired
+func (s *Service) currentSession(ctx context.Context, rawUserID string, rawAccessToken string) (*auth.LoginSession, error) {
+	userID := strings.TrimSpace(rawUserID)
+	if userID == "" {
+		return nil, ErrAuthenticatedUserRequired
 	}
 
 	accessToken := strings.TrimSpace(rawAccessToken)
@@ -124,7 +124,7 @@ func (s *Service) currentSession(ctx context.Context, rawAccountID string, rawAc
 	if err != nil {
 		return nil, err
 	}
-	if session.AccountID != accountID {
+	if session.UserID != userID {
 		return nil, auth.ErrLoginSessionNotFound
 	}
 

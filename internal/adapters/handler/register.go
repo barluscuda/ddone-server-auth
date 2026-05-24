@@ -3,7 +3,7 @@ package handler
 import (
 	"ddone-server-auth/internal/adapters/dto"
 	appregister "ddone-server-auth/internal/application/register"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"net/http"
 
@@ -85,7 +85,7 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 		return
 	}
 
-	accountModel, err := h.register.VerifyRegister(c.Request.Context(), appregister.VerifyRegisterInput{
+	userModel, err := h.register.VerifyRegister(c.Request.Context(), appregister.VerifyRegisterInput{
 		TicketID: req.TicketID,
 		OTPCode:  req.OTPCode,
 		ClientID: c.ClientIP(),
@@ -95,16 +95,16 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.ResRegisteredAccount{
+	c.JSON(http.StatusCreated, dto.ResRegisteredUser{
 		Success: true,
 		Code:    codeRegisterVerified,
 		Message: messageRegisterVerified,
-		Data: dto.ResRegisteredAccountData{
-			ID:              accountModel.ID,
-			Username:        accountModel.Username,
-			PhoneNumber:     accountModel.PhoneNumber,
-			PhoneVerifiedAt: accountModel.PhoneVerifiedAt,
-			CreatedAt:       accountModel.CreatedAt,
+		Data: dto.ResRegisteredUserData{
+			ID:              userModel.ID,
+			Username:        userModel.Username,
+			PhoneNumber:     userModel.PhoneNumber,
+			PhoneVerifiedAt: userModel.PhoneVerifiedAt,
+			CreatedAt:       userModel.CreatedAt,
 		},
 	})
 }
@@ -154,12 +154,12 @@ func handleRegisterError(c *gin.Context, err error) {
 		errors.Is(err, appregister.ErrResendCooldownActive),
 		errors.Is(err, appregister.ErrVerifyRateLimited):
 		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), registerErrorMessage(err))
-	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered),
-		errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered),
+		errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		respondError(c, http.StatusConflict, registerErrorCode(err), registerErrorMessage(err))
-	case errors.Is(err, account.ErrPendingRegistrationNotFound),
-		errors.Is(err, account.ErrInvalidOTPCode),
-		errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrPendingRegistrationNotFound),
+		errors.Is(err, user.ErrInvalidOTPCode),
+		errors.Is(err, user.ErrOTPExpired):
 		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	default:
 		respondError(c, http.StatusInternalServerError, codeInternalServerError, registerErrorMessage(err))
@@ -196,15 +196,15 @@ func registerErrorCode(err error) string {
 		return codeResendCooldownActive
 	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return codeVerifyRateLimited
-	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered):
+	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return codePhoneAlreadyRegistered
-	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		return codeUsernameAlreadyRegistered
-	case errors.Is(err, account.ErrPendingRegistrationNotFound):
+	case errors.Is(err, user.ErrPendingRegistrationNotFound):
 		return codePendingRegistrationNotFound
-	case errors.Is(err, account.ErrInvalidOTPCode):
+	case errors.Is(err, user.ErrInvalidOTPCode):
 		return codeInvalidOTPCode
-	case errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrOTPExpired):
 		return codeOTPExpired
 	default:
 		return codeInternalServerError
@@ -233,15 +233,15 @@ func registerErrorMessage(err error) string {
 		return "please wait before requesting another otp"
 	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return "too many invalid otp attempts, please request a new code"
-	case errors.Is(err, account.ErrPhoneNumberAlreadyRegistered):
+	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return "phone number is already registered"
-	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		return "username is already registered"
-	case errors.Is(err, account.ErrPendingRegistrationNotFound):
+	case errors.Is(err, user.ErrPendingRegistrationNotFound):
 		return "registration session not found"
-	case errors.Is(err, account.ErrInvalidOTPCode):
+	case errors.Is(err, user.ErrInvalidOTPCode):
 		return "invalid otp code"
-	case errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrOTPExpired):
 		return "otp code has expired"
 	default:
 		return "internal server error"

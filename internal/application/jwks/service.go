@@ -129,7 +129,7 @@ func hasPreparedSuccessor(keys []auth.SigningKey, current auth.SigningKey) bool 
 
 func (s *Service) IssueAccessToken(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	phoneNumber string,
 ) (*auth.AccessToken, error) {
 	key, err := s.EnsureActiveSigningKey(ctx)
@@ -145,8 +145,8 @@ func (s *Service) IssueAccessToken(
 
 	return s.codec.IssueAccessToken(key, auth.AccessTokenClaims{
 		Issuer:      s.settings.Issuer,
-		AccountID:   accountID,
-		Subject:     accountID,
+		UserID:   userID,
+		Subject:     userID,
 		Audience:    s.settings.Audience,
 		JWTID:       tokenID,
 		PhoneNumber: phoneNumber,

@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 )
 
 type UseCase interface {
 	Register(ctx context.Context, input RegisterInput) (*RegisterResult, error)
-	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*account.AccountModel, error)
+	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*user.UserModel, error)
 	ResendRegisterOTP(ctx context.Context, input ResendRegisterOTPInput) (*RegisterResult, error)
 }
 

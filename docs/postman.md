@@ -19,7 +19,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - `resetTicketId`: saved automatically after `/password-resets`
 - `refreshToken`: saved automatically after `/tokens` and `/tokens/refresh`
 - `accessToken`: saved automatically after `/tokens`, `/tokens/refresh`, and `/sessions/token`
-- `accountId`: saved automatically after `/registrations/verify`
+- `userId`: saved automatically after `/registrations/verify`
 - `username`: saved automatically after `/registrations/verify`
 - `currentPassword`: current password used for `/settings/password`
 - `newPassword`: replacement password used for password reset and change-password flows

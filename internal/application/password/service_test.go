@@ -6,42 +6,42 @@ import (
 	"testing"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-type fakeAccountStore struct {
-	byID    map[string]*account.AccountModel
-	byPhone map[string]*account.AccountModel
-	updated *account.AccountModel
+type fakeUserStore struct {
+	byID    map[string]*user.UserModel
+	byPhone map[string]*user.UserModel
+	updated *user.UserModel
 }
 
-func (f *fakeAccountStore) GetByID(_ context.Context, id string) (*account.AccountModel, error) {
-	accountModel, ok := f.byID[id]
+func (f *fakeUserStore) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+	userModel, ok := f.byID[id]
 	if !ok {
-		return nil, account.ErrAccountNotFound
+		return nil, user.ErrUserNotFound
 	}
 
-	copyValue := *accountModel
+	copyValue := *userModel
 	return &copyValue, nil
 }
 
-func (f *fakeAccountStore) GetByPhoneNumber(_ context.Context, phoneNumber string) (*account.AccountModel, error) {
-	accountModel, ok := f.byPhone[phoneNumber]
+func (f *fakeUserStore) GetByPhoneNumber(_ context.Context, phoneNumber string) (*user.UserModel, error) {
+	userModel, ok := f.byPhone[phoneNumber]
 	if !ok {
-		return nil, account.ErrAccountNotFound
+		return nil, user.ErrUserNotFound
 	}
 
-	copyValue := *accountModel
+	copyValue := *userModel
 	return &copyValue, nil
 }
 
-func (f *fakeAccountStore) Update(_ context.Context, accountModel *account.AccountModel) error {
-	copyValue := *accountModel
+func (f *fakeUserStore) Update(_ context.Context, userModel *user.UserModel) error {
+	copyValue := *userModel
 	f.updated = &copyValue
-	f.byID[accountModel.ID] = &copyValue
-	f.byPhone[accountModel.PhoneNumber] = &copyValue
+	f.byID[userModel.ID] = &copyValue
+	f.byPhone[userModel.PhoneNumber] = &copyValue
 	return nil
 }
 
@@ -94,19 +94,19 @@ func (f *fakeSender) SendOTP(_ context.Context, phoneNumber string, message stri
 }
 
 type fakeRevoker struct {
-	accountID string
+	userID string
 	reason    string
 	calls     int
 	err       error
 }
 
-func (f *fakeRevoker) RevokeByAccountID(_ context.Context, accountID string, reason string, _ time.Time) error {
+func (f *fakeRevoker) RevokeByUserID(_ context.Context, userID string, reason string, _ time.Time) error {
 	if f.err != nil {
 		return f.err
 	}
 
 	f.calls++
-	f.accountID = accountID
+	f.userID = userID
 	f.reason = reason
 	return nil
 }
@@ -117,19 +117,19 @@ func TestForgotPasswordCreatesResetTicketAndSendsOTP(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accounts := &fakeAccountStore{
-		byID: map[string]*account.AccountModel{
-			"account-1": {ID: "account-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
+	users := &fakeUserStore{
+		byID: map[string]*user.UserModel{
+			"user-1": {ID: "user-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
 		},
-		byPhone: map[string]*account.AccountModel{
-			"2012345678": {ID: "account-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
+		byPhone: map[string]*user.UserModel{
+			"2012345678": {ID: "user-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
 		},
 	}
 	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
 	sender := &fakeSender{}
 	refreshRevoker := &fakeRevoker{}
 	loginRevoker := &fakeRevoker{}
-	service := NewService(accounts, store, sender, refreshRevoker, loginRevoker)
+	service := NewService(users, store, sender, refreshRevoker, loginRevoker)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 	service.ticketGenerator = func() (string, error) { return "pwd_fixed123", nil }
 	service.otpGenerator = func(int) (string, error) { return "123456", nil }
@@ -157,21 +157,21 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(currentHash),
 		UpdatedAt:    time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 	}
-	accounts := &fakeAccountStore{
-		byID:    map[string]*account.AccountModel{"account-1": accountModel},
-		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+	users := &fakeUserStore{
+		byID:    map[string]*user.UserModel{"user-1": userModel},
+		byPhone: map[string]*user.UserModel{"2012345678": userModel},
 	}
 	store := &fakeResetStore{
 		states: map[string]*ResetTicketState{
 			"pwd_fixed123": {
 				TicketID:     "pwd_fixed123",
-				AccountID:    "account-1",
+				UserID:    "user-1",
 				PhoneNumber:  "2012345678",
 				OTPCodeHash:  hashResetOTP("pwd_fixed123", "123456"),
 				OTPExpiresAt: time.Date(2026, 5, 24, 0, 5, 0, 0, time.UTC),
@@ -182,7 +182,7 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	}
 	refreshRevoker := &fakeRevoker{}
 	loginRevoker := &fakeRevoker{}
-	service := NewService(accounts, store, &fakeSender{}, refreshRevoker, loginRevoker)
+	service := NewService(users, store, &fakeSender{}, refreshRevoker, loginRevoker)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 1, 0, 0, time.UTC) }
 
 	if err := service.VerifyForgotPassword(context.Background(), VerifyForgotPasswordInput{
@@ -192,13 +192,13 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("verify forgot password: %v", err)
 	}
-	if accounts.updated == nil {
-		t.Fatal("expected account to be updated")
+	if users.updated == nil {
+		t.Fatal("expected user to be updated")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(accounts.updated.PasswordHash), []byte("new-password")); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(users.updated.PasswordHash), []byte("new-password")); err != nil {
 		t.Fatal("expected password hash to be replaced")
 	}
-	if accounts.updated.PasswordChangedAt == nil {
+	if users.updated.PasswordChangedAt == nil {
 		t.Fatal("expected password changed at to be recorded")
 	}
 	if refreshRevoker.calls != 1 || loginRevoker.calls != 1 {
@@ -215,19 +215,19 @@ func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(currentHash),
 	}
-	accounts := &fakeAccountStore{
-		byID:    map[string]*account.AccountModel{"account-1": accountModel},
-		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+	users := &fakeUserStore{
+		byID:    map[string]*user.UserModel{"user-1": userModel},
+		byPhone: map[string]*user.UserModel{"2012345678": userModel},
 	}
 	refreshRevoker := &fakeRevoker{}
 	loginRevoker := &fakeRevoker{}
 	service := NewService(
-		accounts,
+		users,
 		&fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}},
 		&fakeSender{},
 		refreshRevoker,
@@ -236,20 +236,20 @@ func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC) }
 
 	err = service.ChangePassword(context.Background(), ChangePasswordInput{
-		AccountID:       "account-1",
+		UserID:       "user-1",
 		CurrentPassword: "old-password",
 		NewPassword:     "new-password",
 	})
 	if err != nil {
 		t.Fatalf("ChangePassword returned error: %v", err)
 	}
-	if accounts.updated == nil {
-		t.Fatal("expected account to be updated")
+	if users.updated == nil {
+		t.Fatal("expected user to be updated")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(accounts.updated.PasswordHash), []byte("new-password")); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(users.updated.PasswordHash), []byte("new-password")); err != nil {
 		t.Fatal("expected password hash to be replaced")
 	}
-	if accounts.updated.PasswordChangedAt == nil {
+	if users.updated.PasswordChangedAt == nil {
 		t.Fatal("expected password changed at to be recorded")
 	}
 	if refreshRevoker.calls != 1 || loginRevoker.calls != 1 {
@@ -263,17 +263,17 @@ func TestChangePasswordRejectsInvalidCurrentPassword(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	accountModel := &account.AccountModel{
-		ID:           "account-1",
+	userModel := &user.UserModel{
+		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(currentHash),
 	}
-	accounts := &fakeAccountStore{
-		byID:    map[string]*account.AccountModel{"account-1": accountModel},
-		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+	users := &fakeUserStore{
+		byID:    map[string]*user.UserModel{"user-1": userModel},
+		byPhone: map[string]*user.UserModel{"2012345678": userModel},
 	}
 	service := NewService(
-		accounts,
+		users,
 		&fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}},
 		&fakeSender{},
 		&fakeRevoker{},
@@ -281,7 +281,7 @@ func TestChangePasswordRejectsInvalidCurrentPassword(t *testing.T) {
 	)
 
 	err = service.ChangePassword(context.Background(), ChangePasswordInput{
-		AccountID:       "account-1",
+		UserID:       "user-1",
 		CurrentPassword: "wrong-password",
 		NewPassword:     "new-password",
 	})

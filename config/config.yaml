@@ -32,8 +32,8 @@ redis:
   min_idle_conns: 2
 
 cache:
-  account_ttl: 5m
-  account_session_list_ttl: 1m
+  user_ttl: 5m
+  user_session_list_ttl: 1m
   signing_keys_ttl: 1m
 
 cors:

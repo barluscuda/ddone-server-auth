@@ -38,7 +38,7 @@ func (h *TokenManagerHandler) List(c *gin.Context) {
 	}
 
 	result, err := h.tokens.List(c.Request.Context(), apptokenmanager.ListInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 	})
 	if err != nil {
 		handleTokenManagerError(c, err)
@@ -75,7 +75,7 @@ func (h *TokenManagerHandler) Revoke(c *gin.Context) {
 	}
 
 	err := h.tokens.Revoke(c.Request.Context(), apptokenmanager.RevokeInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 		TokenID:   c.Param("tokenId"),
 	})
 	if err != nil {
@@ -98,7 +98,7 @@ func (h *TokenManagerHandler) RevokeAll(c *gin.Context) {
 	}
 
 	err := h.tokens.RevokeAll(c.Request.Context(), apptokenmanager.RevokeAllInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 	})
 	if err != nil {
 		handleTokenManagerError(c, err)
@@ -114,7 +114,7 @@ func (h *TokenManagerHandler) RevokeAll(c *gin.Context) {
 
 func handleTokenManagerError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, apptokenmanager.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, apptokenmanager.ErrAuthenticatedUserRequired):
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 	case errors.Is(err, apptokenmanager.ErrTokenIDRequired):
 		respondError(c, http.StatusBadRequest, codeTokenIDRequired, "token id is required")

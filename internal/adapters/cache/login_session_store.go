@@ -18,10 +18,10 @@ type loginSessionStoreBackend interface {
 }
 
 type CachedLoginSessionStore struct {
-	next           loginSessionStoreBackend
-	client         *redis.Client
-	cache          jsonCache
-	accountListTTL time.Duration
+	next        loginSessionStoreBackend
+	client      *redis.Client
+	cache       jsonCache
+	userListTTL time.Duration
 }
 
 var _ applogin.LoginSessionStore = (*CachedLoginSessionStore)(nil)
@@ -31,13 +31,13 @@ var _ apppassword.LoginSessionRevoker = (*CachedLoginSessionStore)(nil)
 func NewCachedLoginSessionStore(
 	client *redis.Client,
 	next loginSessionStoreBackend,
-	accountListTTL time.Duration,
+	userListTTL time.Duration,
 ) *CachedLoginSessionStore {
 	return &CachedLoginSessionStore{
-		next:           next,
-		client:         client,
-		cache:          newJSONCache(client),
-		accountListTTL: accountListTTL,
+		next:        next,
+		client:      client,
+		cache:       newJSONCache(client),
+		userListTTL: userListTTL,
 	}
 }
 
@@ -47,7 +47,7 @@ func (s *CachedLoginSessionStore) Create(ctx context.Context, session *auth.Logi
 	}
 
 	s.cacheSession(ctx, session)
-	s.invalidateAccountSessions(ctx, session.AccountID)
+	s.invalidateUserSessions(ctx, session.UserID)
 	return nil
 }
 
@@ -111,29 +111,29 @@ func (s *CachedLoginSessionStore) UpdateAccessToken(
 		cached.CurrentAccessToken = accessToken.Token
 		cached.CurrentAccessExpires = accessToken.ExpiresAt
 		s.cacheSession(ctx, &cached)
-		s.invalidateAccountSessions(ctx, cached.AccountID)
+		s.invalidateUserSessions(ctx, cached.UserID)
 	}
 	return nil
 }
 
-func (s *CachedLoginSessionStore) ListByAccountID(
+func (s *CachedLoginSessionStore) ListByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 ) ([]auth.LoginSession, error) {
-	if s.accountListTTL > 0 {
+	if s.userListTTL > 0 {
 		var cached []auth.LoginSession
-		if s.cache.get(ctx, loginSessionsByAccountKey(accountID), &cached) {
+		if s.cache.get(ctx, loginSessionsByUserKey(userID), &cached) {
 			return cached, nil
 		}
 	}
 
-	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	sessions, err := s.next.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	if s.accountListTTL > 0 {
-		s.cache.set(ctx, loginSessionsByAccountKey(accountID), sessions, s.accountListTTL)
+	if s.userListTTL > 0 {
+		s.cache.set(ctx, loginSessionsByUserKey(userID), sessions, s.userListTTL)
 	}
 	for i := range sessions {
 		session := sessions[i]
@@ -143,17 +143,17 @@ func (s *CachedLoginSessionStore) ListByAccountID(
 	return sessions, nil
 }
 
-func (s *CachedLoginSessionStore) RevokeByAccountID(
+func (s *CachedLoginSessionStore) RevokeByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
-	if err := s.next.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+	if err := s.next.RevokeByUserID(ctx, userID, reason, revokedAt); err != nil {
 		return err
 	}
 
-	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	sessions, err := s.next.ListByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (s *CachedLoginSessionStore) RevokeByAccountID(
 	for _, session := range sessions {
 		s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
 	}
-	s.invalidateAccountSessions(ctx, accountID)
+	s.invalidateUserSessions(ctx, userID)
 	return nil
 }
 
@@ -180,22 +180,22 @@ func (s *CachedLoginSessionStore) RevokeByID(
 	}
 
 	s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
-	s.invalidateAccountSessions(ctx, session.AccountID)
+	s.invalidateUserSessions(ctx, session.UserID)
 	return nil
 }
 
-func (s *CachedLoginSessionStore) RevokeByAccountIDExcept(
+func (s *CachedLoginSessionStore) RevokeByUserIDExcept(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	excludedSessionID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
-	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	sessions, err := s.next.ListByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if err := s.next.RevokeByAccountIDExcept(ctx, accountID, excludedSessionID, reason, revokedAt); err != nil {
+	if err := s.next.RevokeByUserIDExcept(ctx, userID, excludedSessionID, reason, revokedAt); err != nil {
 		return err
 	}
 
@@ -205,16 +205,16 @@ func (s *CachedLoginSessionStore) RevokeByAccountIDExcept(
 		}
 		s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
 	}
-	s.invalidateAccountSessions(ctx, accountID)
+	s.invalidateUserSessions(ctx, userID)
 	return nil
 }
 
-func (s *CachedLoginSessionStore) invalidateAccountSessions(ctx context.Context, accountID string) {
-	s.cache.delete(ctx, loginSessionsByAccountKey(accountID))
+func (s *CachedLoginSessionStore) invalidateUserSessions(ctx context.Context, userID string) {
+	s.cache.delete(ctx, loginSessionsByUserKey(userID))
 }
 
-func loginSessionsByAccountKey(accountID string) string {
-	return "cache:login_sessions:account:" + accountID
+func loginSessionsByUserKey(userID string) string {
+	return "cache:login_sessions:user:" + userID
 }
 
 func (s *CachedLoginSessionStore) cacheSession(ctx context.Context, session *auth.LoginSession) {

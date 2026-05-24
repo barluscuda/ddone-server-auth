@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 	appregister "ddone-server-auth/internal/application/register"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +22,7 @@ func NewRegisterStore(client *redis.Client) *RegisterStore {
 	return &RegisterStore{client: client}
 }
 
-func (s *RegisterStore) Save(ctx context.Context, registration *account.RegisterModel, ttl time.Duration) error {
+func (s *RegisterStore) Save(ctx context.Context, registration *user.RegisterModel, ttl time.Duration) error {
 	payload, err := json.Marshal(registration)
 	if err != nil {
 		return err
@@ -31,17 +31,17 @@ func (s *RegisterStore) Save(ctx context.Context, registration *account.Register
 	return s.client.Set(ctx, registerKey(registration.TicketID), payload, ttl).Err()
 }
 
-func (s *RegisterStore) Get(ctx context.Context, ticketID string) (*account.RegisterModel, error) {
+func (s *RegisterStore) Get(ctx context.Context, ticketID string) (*user.RegisterModel, error) {
 	payload, err := s.client.Get(ctx, registerKey(ticketID)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, account.ErrPendingRegistrationNotFound
+			return nil, user.ErrPendingRegistrationNotFound
 		}
 
 		return nil, err
 	}
 
-	var registration account.RegisterModel
+	var registration user.RegisterModel
 	if err := json.Unmarshal([]byte(payload), &registration); err != nil {
 		return nil, err
 	}

@@ -63,13 +63,13 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 
 	wnvClient := dextools.WenovaAPI(cfg.WenovaAPI.Token)
 	smsClient := sms.NewSMS(&wnvClient)
-	accountRepository := cache.NewCachedAccountStore(
+	userRepository := cache.NewCachedUserStore(
 		redisClient,
-		repository.NewAccountRepository(db),
-		cfg.Cache.AccountTTL,
+		repository.NewUserRepository(db),
+		cfg.Cache.UserTTL,
 	)
 	registerStore := cache.NewRegisterStore(redisClient)
-	registerService := appregister.NewService(accountRepository, registerStore, smsClient)
+	registerService := appregister.NewService(userRepository, registerStore, smsClient)
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
 		redisClient,
@@ -83,7 +83,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	loginSessionRepository := cache.NewCachedLoginSessionStore(
 		redisClient,
 		repository.NewLoginSessionRepository(db),
-		cfg.Cache.AccountSessionListTTL,
+		cfg.Cache.UserSessionListTTL,
 	)
 	tokenCodec := token.NewES256Codec()
 	jwksService := appjwks.NewService(signingKeyRepository, tokenCodec, appjwks.Settings{
@@ -96,18 +96,18 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	if _, err := jwksService.EnsureActiveSigningKey(context.Background()); err != nil {
 		logger.Fatal("failed to ensure active signing key", zap.Error(err))
 	}
-	loginService := applogin.NewService(accountRepository, tokenRepository, loginSessionRepository, jwksService, applogin.Settings{
+	loginService := applogin.NewService(userRepository, tokenRepository, loginSessionRepository, jwksService, applogin.Settings{
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
 	})
 	passwordService := apppassword.NewService(
-		accountRepository,
+		userRepository,
 		passwordResetStore,
 		smsClient,
 		tokenRepository,
 		loginSessionRepository,
 	)
-	settingsService := appsettings.NewService(accountRepository)
+	settingsService := appsettings.NewService(userRepository)
 	sessionService := appsession.NewService(loginSessionRepository)
 	tokenManagerService := apptokenmanager.NewService(tokenRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{

@@ -25,7 +25,7 @@ type tokenStoreBackend interface {
 	applogin.TokenStore
 	apppassword.TokenRevoker
 	apptokenmanager.Store
-	ListByAccountID(ctx context.Context, accountID string) ([]auth.TokenRecord, error)
+	ListByUserID(ctx context.Context, userID string) ([]auth.TokenRecord, error)
 }
 
 func NewCachedTokenStore(
@@ -81,11 +81,11 @@ func (s *CachedTokenStore) GetByID(ctx context.Context, tokenID string) (*auth.T
 	return token, nil
 }
 
-func (s *CachedTokenStore) ListByAccountID(
+func (s *CachedTokenStore) ListByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 ) ([]auth.TokenRecord, error) {
-	return s.next.ListByAccountID(ctx, accountID)
+	return s.next.ListByUserID(ctx, userID)
 }
 
 func (s *CachedTokenStore) Rotate(
@@ -117,17 +117,17 @@ func (s *CachedTokenStore) RevokeLineage(
 	return nil
 }
 
-func (s *CachedTokenStore) RevokeByAccountID(
+func (s *CachedTokenStore) RevokeByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
-	if err := s.next.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+	if err := s.next.RevokeByUserID(ctx, userID, reason, revokedAt); err != nil {
 		return err
 	}
 
-	tokens, err := s.next.ListByAccountID(ctx, accountID)
+	tokens, err := s.next.ListByUserID(ctx, userID)
 	if err != nil {
 		return err
 	}

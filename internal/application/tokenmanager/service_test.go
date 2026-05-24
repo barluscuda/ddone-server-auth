@@ -11,13 +11,13 @@ import (
 
 type fakeStore struct {
 	byID               map[string]auth.TokenRecord
-	byAccount          map[string][]auth.TokenRecord
+	byUser          map[string][]auth.TokenRecord
 	revokedTokenID     string
 	revokedReason      string
-	revokedAccountID   string
+	revokedUserID   string
 	revokedAllReason   string
 	revokeByIDErr      error
-	revokeByAccountErr error
+	revokeByUserErr error
 }
 
 func (f *fakeStore) GetByID(_ context.Context, tokenID string) (*auth.TokenRecord, error) {
@@ -30,8 +30,8 @@ func (f *fakeStore) GetByID(_ context.Context, tokenID string) (*auth.TokenRecor
 	return &copyValue, nil
 }
 
-func (f *fakeStore) ListByAccountID(_ context.Context, accountID string) ([]auth.TokenRecord, error) {
-	tokens := f.byAccount[accountID]
+func (f *fakeStore) ListByUserID(_ context.Context, userID string) ([]auth.TokenRecord, error) {
+	tokens := f.byUser[userID]
 	result := make([]auth.TokenRecord, 0, len(tokens))
 	for _, token := range tokens {
 		result = append(result, token)
@@ -50,23 +50,23 @@ func (f *fakeStore) RevokeByID(_ context.Context, tokenID string, reason string,
 	return nil
 }
 
-func (f *fakeStore) RevokeByAccountID(_ context.Context, accountID string, reason string, _ time.Time) error {
-	if f.revokeByAccountErr != nil {
-		return f.revokeByAccountErr
+func (f *fakeStore) RevokeByUserID(_ context.Context, userID string, reason string, _ time.Time) error {
+	if f.revokeByUserErr != nil {
+		return f.revokeByUserErr
 	}
 
-	f.revokedAccountID = accountID
+	f.revokedUserID = userID
 	f.revokedAllReason = reason
 	return nil
 }
 
-func TestListReturnsAccountTokens(t *testing.T) {
+func TestListReturnsUserTokens(t *testing.T) {
 	service := NewService(&fakeStore{
-		byAccount: map[string][]auth.TokenRecord{
-			"account-1": {
+		byUser: map[string][]auth.TokenRecord{
+			"user-1": {
 				{
 					ID:        "token-1",
-					AccountID: "account-1",
+					UserID: "user-1",
 					ExpiresAt: time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC),
 					CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 				},
@@ -74,7 +74,7 @@ func TestListReturnsAccountTokens(t *testing.T) {
 		},
 	})
 
-	result, err := service.List(context.Background(), ListInput{AccountID: "account-1"})
+	result, err := service.List(context.Background(), ListInput{UserID: "user-1"})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -86,18 +86,18 @@ func TestListReturnsAccountTokens(t *testing.T) {
 	}
 }
 
-func TestRevokeRejectsTokenFromAnotherAccount(t *testing.T) {
+func TestRevokeRejectsTokenFromAnotherUser(t *testing.T) {
 	service := NewService(&fakeStore{
 		byID: map[string]auth.TokenRecord{
 			"token-1": {
 				ID:        "token-1",
-				AccountID: "account-2",
+				UserID: "user-2",
 			},
 		},
 	})
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		TokenID:   "token-1",
 	})
 	if !errors.Is(err, auth.ErrTokenNotFound) {
@@ -110,14 +110,14 @@ func TestRevokeMarksTokenByID(t *testing.T) {
 		byID: map[string]auth.TokenRecord{
 			"token-1": {
 				ID:        "token-1",
-				AccountID: "account-1",
+				UserID: "user-1",
 			},
 		},
 	}
 	service := NewService(store)
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		AccountID: "account-1",
+		UserID: "user-1",
 		TokenID:   "token-1",
 	})
 	if err != nil {
@@ -131,16 +131,16 @@ func TestRevokeMarksTokenByID(t *testing.T) {
 	}
 }
 
-func TestRevokeAllRevokesAccountTokens(t *testing.T) {
+func TestRevokeAllRevokesUserTokens(t *testing.T) {
 	store := &fakeStore{}
 	service := NewService(store)
 
-	err := service.RevokeAll(context.Background(), RevokeAllInput{AccountID: "account-1"})
+	err := service.RevokeAll(context.Background(), RevokeAllInput{UserID: "user-1"})
 	if err != nil {
 		t.Fatalf("RevokeAll returned error: %v", err)
 	}
-	if store.revokedAccountID != "account-1" {
-		t.Fatalf("expected revoked account id %q, got %q", "account-1", store.revokedAccountID)
+	if store.revokedUserID != "user-1" {
+		t.Fatalf("expected revoked user id %q, got %q", "user-1", store.revokedUserID)
 	}
 	if store.revokedAllReason != reasonAllTokensRevoked {
 		t.Fatalf("expected revoke reason %q, got %q", reasonAllTokensRevoked, store.revokedAllReason)

@@ -38,7 +38,7 @@ func TestSettingsHandlerReturnsMe(t *testing.T) {
 
 	handler := NewSettingsHandler(&fakeSettingsUseCase{
 		me: &appsettings.View{
-			ID:              "account-1",
+			ID:              "user-1",
 			PhoneNumber:     "2012345678",
 			PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 			CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
@@ -50,7 +50,7 @@ func TestSettingsHandlerReturnsMe(t *testing.T) {
 
 	router := gin.New()
 	router.GET("/settings/me", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.GetMe(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -77,7 +77,7 @@ func TestSettingsHandlerUpdatesUsername(t *testing.T) {
 
 	router := gin.New()
 	router.PATCH("/settings/username", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.PatchUsername(c)
 	})
 	router.ServeHTTP(recorder, req)

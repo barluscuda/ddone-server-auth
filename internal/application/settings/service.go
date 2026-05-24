@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 )
 
-var ErrAuthenticatedAccountRequired = errors.New("authenticated account is required")
+var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrUsernameRequired = errors.New("username is required")
 var ErrInvalidUsername = errors.New("username is invalid")
 var ErrUsernameUnchanged = errors.New("username is unchanged")
@@ -23,41 +23,41 @@ type UseCase interface {
 }
 
 type Service struct {
-	accounts AccountReader
+	users UserReader
 	now      func() time.Time
 }
 
-func NewService(accounts AccountReader) *Service {
+func NewService(users UserReader) *Service {
 	return &Service{
-		accounts: accounts,
+		users: users,
 		now:      func() time.Time { return time.Now().UTC() },
 	}
 }
 
 func (s *Service) Get(ctx context.Context, input GetInput) (*View, error) {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return nil, ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return nil, ErrAuthenticatedUserRequired
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, accountID)
+	userModel, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &View{
-		ID:              accountModel.ID,
-		Username:        accountModel.Username,
-		PhoneNumber:     accountModel.PhoneNumber,
-		PhoneVerifiedAt: accountModel.PhoneVerifiedAt,
-		CreatedAt:       accountModel.CreatedAt,
+		ID:              userModel.ID,
+		Username:        userModel.Username,
+		PhoneNumber:     userModel.PhoneNumber,
+		PhoneVerifiedAt: userModel.PhoneVerifiedAt,
+		CreatedAt:       userModel.CreatedAt,
 	}, nil
 }
 
 func (s *Service) UpdateUsername(ctx context.Context, input UpdateUsernameInput) (*UsernameView, error) {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return nil, ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return nil, ErrAuthenticatedUserRequired
 	}
 
 	username, err := normalizeUsername(input.Username)
@@ -65,34 +65,34 @@ func (s *Service) UpdateUsername(ctx context.Context, input UpdateUsernameInput)
 		return nil, err
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, accountID)
+	userModel, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	if accountModel.Username != nil && *accountModel.Username == username {
+	if userModel.Username != nil && *userModel.Username == username {
 		return nil, ErrUsernameUnchanged
 	}
 
 	now := s.now()
-	if accountModel.UsernameChangedAt != nil && now.Before(accountModel.UsernameChangedAt.Add(usernameCooldown)) {
+	if userModel.UsernameChangedAt != nil && now.Before(userModel.UsernameChangedAt.Add(usernameCooldown)) {
 		return nil, ErrUsernameCooldownActive
 	}
 
-	existing, err := s.accounts.GetByUsername(ctx, username)
+	existing, err := s.users.GetByUsername(ctx, username)
 	switch {
-	case err == nil && existing.ID != accountID:
-		return nil, account.ErrUsernameAlreadyRegistered
-	case err == nil && existing.ID == accountID:
+	case err == nil && existing.ID != userID:
+		return nil, user.ErrUsernameAlreadyRegistered
+	case err == nil && existing.ID == userID:
 		return nil, ErrUsernameUnchanged
-	case err != nil && !errors.Is(err, account.ErrAccountNotFound):
+	case err != nil && !errors.Is(err, user.ErrUserNotFound):
 		return nil, err
 	}
 
-	accountModel.Username = &username
-	accountModel.UsernameChangedAt = &now
-	accountModel.UpdatedAt = now
-	if err := s.accounts.Update(ctx, accountModel); err != nil {
+	userModel.Username = &username
+	userModel.UsernameChangedAt = &now
+	userModel.UpdatedAt = now
+	if err := s.users.Update(ctx, userModel); err != nil {
 		return nil, err
 	}
 

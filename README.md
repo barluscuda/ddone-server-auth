@@ -30,7 +30,7 @@
 The service uses:
 
 - `gin` for HTTP delivery
-- `gorm` + PostgreSQL for persistent account storage
+- `gorm` + PostgreSQL for persistent user storage
 - `redis` for pending registration state, password-reset state, OTP counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
@@ -44,7 +44,7 @@ The project is being shaped toward a hexagonal architecture:
 - `internal/adapters` contains infrastructure and delivery code
 - `cmd/app` is the composition root and HTTP bootstrap
 
-Current note: some legacy persistence concerns still live under `internal/domain/account` through GORM tags on account models. Database migrations now live under `internal/adapters/repository`. New work should keep moving the codebase toward pure domain types and outward-facing adapters.
+Current note: some legacy persistence concerns still live under `internal/domain/user` through GORM tags on user models. Database migrations now live under `internal/adapters/repository`. New work should keep moving the codebase toward pure domain types and outward-facing adapters.
 
 ## Project Layout
 
@@ -54,11 +54,11 @@ config/                        Config loading and default values
 internal/application/register/ Registration use case
 internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
-internal/application/settings/ Current authenticated-account settings view and username update use case
+internal/application/settings/ Current authenticated-user settings view and username update use case
 internal/application/session/  Login-session current/list/revocation use case
 internal/application/tokenmanager/ Raw refresh-token listing and revocation use case
 internal/application/jwks/     Signing-key and JWKS use case
-internal/domain/account/       Account and registration domain models
+internal/domain/user/       User and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
 internal/adapters/cache/       Redis client and registration store
 internal/adapters/database/    PostgreSQL connection setup
@@ -142,8 +142,8 @@ DDONE_DATABASE_LOG_SQL=true
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
 
-DDONE_CACHE_ACCOUNT_TTL=5m
-DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL=1m
+DDONE_CACHE_USER_TTL=5m
+DDONE_CACHE_USER_SESSION_LIST_TTL=1m
 DDONE_CACHE_SIGNING_KEYS_TTL=1m
 
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
@@ -178,7 +178,7 @@ Safe defaults:
 - `database.log_sql` defaults to `false`
 - `auth.session_cookie_secure` defaults to `true`
 - `auth.login_session_ttl` defaults to `720h`
-- cache TTLs default to short read-through values for account, session-list, and signing-key lookups
+- cache TTLs default to short read-through values for user, session-list, and signing-key lookups
 
 `DDONE_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.
 
@@ -217,7 +217,7 @@ Example body:
 
 ### `POST /registrations/verify`
 
-Verifies the OTP and creates the account.
+Verifies the OTP and creates the user.
 
 Example body:
 
@@ -230,7 +230,7 @@ Example body:
 
 ### `POST /tokens`
 
-Authenticates a verified phone-number account and returns an ES256 access token plus a refresh token in the response body.
+Authenticates a verified phone-number user and returns an ES256 access token plus a refresh token in the response body.
 
 Example body:
 
@@ -255,7 +255,7 @@ Example body:
 
 ### `POST /sessions`
 
-Authenticates a verified phone-number account, creates a database-backed login session with a configured expiry, stores the JWT in server-side session state, and sets an `HttpOnly` session cookie. This route does not return access or session tokens in the response body.
+Authenticates a verified phone-number user, creates a database-backed login session with a configured expiry, stores the JWT in server-side session state, and sets an `HttpOnly` session cookie. This route does not return access or session tokens in the response body.
 
 Example body:
 
@@ -296,7 +296,7 @@ Example body:
 
 ### `POST /password-resets/verify`
 
-Verifies the password-reset OTP, updates the account password, and revokes existing login sessions and raw token records.
+Verifies the password-reset OTP, updates the user password, and revokes existing login sessions and raw token records.
 
 Example body:
 
@@ -310,7 +310,7 @@ Example body:
 
 ### `GET /settings`
 
-Returns the account identity for the current authenticated user.
+Returns the user identity for the current authenticated user.
 
 Headers:
 
@@ -320,7 +320,7 @@ Authorization: Bearer <access-token>
 
 ### `GET /settings/me`
 
-Returns the account identity for the current authenticated user.
+Returns the user identity for the current authenticated user.
 
 Headers:
 
@@ -330,7 +330,7 @@ Authorization: Bearer <access-token>
 
 ### `GET /tokens`
 
-Returns the current account's raw refresh-token sessions.
+Returns the current user's raw refresh-token sessions.
 
 Headers:
 
@@ -340,7 +340,7 @@ Authorization: Bearer <access-token>
 
 ### `DELETE /tokens/:tokenId`
 
-Revokes a specific raw refresh-token session owned by the current authenticated account.
+Revokes a specific raw refresh-token session owned by the current authenticated user.
 
 Headers:
 
@@ -350,7 +350,7 @@ Authorization: Bearer <access-token>
 
 ### `POST /tokens/revoke-all`
 
-Revokes all raw refresh-token sessions owned by the current authenticated account.
+Revokes all raw refresh-token sessions owned by the current authenticated user.
 
 Headers:
 
@@ -360,7 +360,7 @@ Authorization: Bearer <access-token>
 
 ### `GET /sessions`
 
-Returns the current account's known login sessions.
+Returns the current user's known login sessions.
 
 Headers:
 
@@ -380,7 +380,7 @@ Authorization: Bearer <access-token>
 
 ### `PATCH /settings/username`
 
-Updates the username for the current authenticated account.
+Updates the username for the current authenticated user.
 
 Headers:
 
@@ -398,7 +398,7 @@ Example body:
 
 ### `DELETE /sessions/:sessionId`
 
-Revokes a specific login session owned by the current authenticated account.
+Revokes a specific login session owned by the current authenticated user.
 
 Headers:
 
@@ -418,7 +418,7 @@ Authorization: Bearer <access-token>
 
 ### `POST /sessions/revoke-all`
 
-Revokes all login sessions owned by the current authenticated account.
+Revokes all login sessions owned by the current authenticated user.
 
 Headers:
 
@@ -428,7 +428,7 @@ Authorization: Bearer <access-token>
 
 ### `POST /settings/password`
 
-Changes the password for the current authenticated account after verifying the current password. A successful change revokes existing login sessions and raw token records.
+Changes the password for the current authenticated user after verifying the current password. A successful change revokes existing login sessions and raw token records.
 
 Headers:
 

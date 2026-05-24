@@ -14,26 +14,26 @@ type UseCase interface {
 }
 
 type ListInput struct {
-	AccountID string
+	UserID string
 }
 
 type RevokeInput struct {
-	AccountID string
+	UserID string
 	SessionID string
 }
 
 type CurrentInput struct {
-	AccountID   string
+	UserID   string
 	AccessToken string
 }
 
 type RevokeOthersInput struct {
-	AccountID   string
+	UserID   string
 	AccessToken string
 }
 
 type RevokeAllInput struct {
-	AccountID string
+	UserID string
 }
 
 type View struct {

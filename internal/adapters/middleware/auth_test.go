@@ -48,7 +48,7 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 	router := gin.New()
 	router.Use(RequireAccessToken(&fakeAccessTokenVerifier{
 		claims: &auth.AccessTokenClaims{
-			Subject:     "account-1",
+			Subject:     "user-1",
 			PhoneNumber: "2012345678",
 			JWTID:       "token-1",
 			ExpiresAt:   time.Now().UTC().Add(time.Minute),
@@ -59,8 +59,8 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 		if !ok {
 			t.Fatal("expected auth context")
 		}
-		if authContext.AccountID != "account-1" {
-			t.Fatalf("expected account id %q, got %q", "account-1", authContext.AccountID)
+		if authContext.UserID != "user-1" {
+			t.Fatalf("expected user id %q, got %q", "user-1", authContext.UserID)
 		}
 		if authContext.AccessToken != "access-token" {
 			t.Fatalf("expected access token %q, got %q", "access-token", authContext.AccessToken)

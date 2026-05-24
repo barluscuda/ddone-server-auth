@@ -42,7 +42,7 @@ func (h *SessionHandler) List(c *gin.Context) {
 	}
 
 	result, err := h.session.List(c.Request.Context(), appsession.ListInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 	})
 	if err != nil {
 		handleSessionError(c, err)
@@ -77,7 +77,7 @@ func (h *SessionHandler) Current(c *gin.Context) {
 	}
 
 	result, err := h.session.Current(c.Request.Context(), appsession.CurrentInput{
-		AccountID:   authContext.AccountID,
+		UserID:   authContext.UserID,
 		AccessToken: authContext.AccessToken,
 	})
 	if err != nil {
@@ -108,7 +108,7 @@ func (h *SessionHandler) Revoke(c *gin.Context) {
 	}
 
 	err := h.session.Revoke(c.Request.Context(), appsession.RevokeInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 		SessionID: c.Param("sessionId"),
 	})
 	if err != nil {
@@ -131,7 +131,7 @@ func (h *SessionHandler) RevokeAll(c *gin.Context) {
 	}
 
 	err := h.session.RevokeAll(c.Request.Context(), appsession.RevokeAllInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 	})
 	if err != nil {
 		handleSessionError(c, err)
@@ -153,7 +153,7 @@ func (h *SessionHandler) RevokeOthers(c *gin.Context) {
 	}
 
 	err := h.session.RevokeOthers(c.Request.Context(), appsession.RevokeOthersInput{
-		AccountID:   authContext.AccountID,
+		UserID:   authContext.UserID,
 		AccessToken: authContext.AccessToken,
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func (h *SessionHandler) RevokeOthers(c *gin.Context) {
 
 func handleSessionError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, appsession.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, appsession.ErrAuthenticatedUserRequired):
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 	case errors.Is(err, appsession.ErrSessionIDRequired):
 		respondError(c, http.StatusBadRequest, codeSessionIDRequired, "session id is required")

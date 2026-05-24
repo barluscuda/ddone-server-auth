@@ -4,7 +4,7 @@ import (
 	"ddone-server-auth/internal/adapters/dto"
 	"ddone-server-auth/internal/adapters/middleware"
 	apppassword "ddone-server-auth/internal/application/password"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"net/http"
 
@@ -141,7 +141,7 @@ func (h *PasswordHandler) ChangePassword(c *gin.Context) {
 	}
 
 	err := h.password.ChangePassword(c.Request.Context(), apppassword.ChangePasswordInput{
-		AccountID:       authContext.AccountID,
+		UserID:       authContext.UserID,
 		CurrentPassword: req.CurrentPassword,
 		NewPassword:     req.NewPassword,
 	})
@@ -167,7 +167,7 @@ func handlePasswordError(c *gin.Context, err error) {
 		errors.Is(err, apppassword.ErrPendingPasswordResetInvalid):
 		respondError(c, http.StatusBadRequest, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrInvalidPhoneNumber),
-		errors.Is(err, apppassword.ErrAuthenticatedAccountRequired),
+		errors.Is(err, apppassword.ErrAuthenticatedUserRequired),
 		errors.Is(err, apppassword.ErrInvalidCurrentPassword):
 		respondError(c, http.StatusBadRequest, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrResetRateLimited),
@@ -176,10 +176,10 @@ func handlePasswordError(c *gin.Context, err error) {
 		errors.Is(err, apppassword.ErrVerifyRateLimited):
 		respondError(c, http.StatusTooManyRequests, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrPasswordResetTicketNotFound),
-		errors.Is(err, account.ErrAccountNotFound):
+		errors.Is(err, user.ErrUserNotFound):
 		respondError(c, http.StatusNotFound, passwordErrorCode(err), passwordErrorMessage(err))
-	case errors.Is(err, account.ErrInvalidOTPCode),
-		errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrInvalidOTPCode),
+		errors.Is(err, user.ErrOTPExpired):
 		respondError(c, http.StatusBadRequest, passwordErrorCode(err), passwordErrorMessage(err))
 	default:
 		respondError(c, http.StatusInternalServerError, codeInternalServerError, "internal server error")
@@ -214,13 +214,13 @@ func passwordErrorCode(err error) string {
 		return codePasswordResetResendCooldown
 	case errors.Is(err, apppassword.ErrVerifyRateLimited):
 		return codePasswordResetVerifyRateLimited
-	case errors.Is(err, apppassword.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, apppassword.ErrAuthenticatedUserRequired):
 		return "authorization_required"
-	case errors.Is(err, account.ErrAccountNotFound):
-		return "account_not_found"
-	case errors.Is(err, account.ErrInvalidOTPCode):
+	case errors.Is(err, user.ErrUserNotFound):
+		return "user_not_found"
+	case errors.Is(err, user.ErrInvalidOTPCode):
 		return codeInvalidOTPCode
-	case errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrOTPExpired):
 		return codeOTPExpired
 	default:
 		return codeInternalServerError
@@ -255,13 +255,13 @@ func passwordErrorMessage(err error) string {
 		return "please wait before requesting another otp"
 	case errors.Is(err, apppassword.ErrVerifyRateLimited):
 		return "too many invalid otp attempts, please request a new code"
-	case errors.Is(err, apppassword.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, apppassword.ErrAuthenticatedUserRequired):
 		return "authorization header is required"
-	case errors.Is(err, account.ErrAccountNotFound):
-		return "account not found"
-	case errors.Is(err, account.ErrInvalidOTPCode):
+	case errors.Is(err, user.ErrUserNotFound):
+		return "user not found"
+	case errors.Is(err, user.ErrInvalidOTPCode):
 		return "invalid otp code"
-	case errors.Is(err, account.ErrOTPExpired):
+	case errors.Is(err, user.ErrOTPExpired):
 		return "otp code has expired"
 	default:
 		return "internal server error"

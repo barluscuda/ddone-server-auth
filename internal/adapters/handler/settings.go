@@ -7,7 +7,7 @@ import (
 	"ddone-server-auth/internal/adapters/dto"
 	"ddone-server-auth/internal/adapters/middleware"
 	appsettings "ddone-server-auth/internal/application/settings"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,7 +35,7 @@ func (h *SettingsHandler) GetMe(c *gin.Context) {
 	}
 
 	result, err := h.settings.Get(c.Request.Context(), appsettings.GetInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 	})
 	if err != nil {
 		handleSettingsError(c, err)
@@ -70,7 +70,7 @@ func (h *SettingsHandler) PatchUsername(c *gin.Context) {
 	}
 
 	result, err := h.settings.UpdateUsername(c.Request.Context(), appsettings.UpdateUsernameInput{
-		AccountID: authContext.AccountID,
+		UserID: authContext.UserID,
 		Username:  req.Username,
 	})
 	if err != nil {
@@ -91,7 +91,7 @@ func (h *SettingsHandler) PatchUsername(c *gin.Context) {
 
 func handleSettingsError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, appsettings.ErrAuthenticatedAccountRequired):
+	case errors.Is(err, appsettings.ErrAuthenticatedUserRequired):
 		respondError(c, http.StatusUnauthorized, "authorization_required", "authorization header is required")
 	case errors.Is(err, appsettings.ErrUsernameRequired),
 		errors.Is(err, appsettings.ErrInvalidUsername),
@@ -99,9 +99,9 @@ func handleSettingsError(c *gin.Context, err error) {
 		respondError(c, http.StatusBadRequest, settingsErrorCode(err), settingsErrorMessage(err))
 	case errors.Is(err, appsettings.ErrUsernameCooldownActive):
 		respondError(c, http.StatusTooManyRequests, settingsErrorCode(err), settingsErrorMessage(err))
-	case errors.Is(err, account.ErrAccountNotFound):
-		respondError(c, http.StatusNotFound, "account_not_found", "account not found")
-	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrUserNotFound):
+		respondError(c, http.StatusNotFound, "user_not_found", "user not found")
+	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		respondError(c, http.StatusConflict, settingsErrorCode(err), settingsErrorMessage(err))
 	default:
 		respondError(c, http.StatusInternalServerError, codeInternalServerError, "internal server error")
@@ -118,7 +118,7 @@ func settingsErrorCode(err error) string {
 		return "username_unchanged"
 	case errors.Is(err, appsettings.ErrUsernameCooldownActive):
 		return "username_change_cooldown_active"
-	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		return "username_already_registered"
 	default:
 		return codeInternalServerError
@@ -135,7 +135,7 @@ func settingsErrorMessage(err error) string {
 		return "username is unchanged"
 	case errors.Is(err, appsettings.ErrUsernameCooldownActive):
 		return "username can only be changed once every 7 days"
-	case errors.Is(err, account.ErrUsernameAlreadyRegistered):
+	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		return "username is already registered"
 	default:
 		return "internal server error"

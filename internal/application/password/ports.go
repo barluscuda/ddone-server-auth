@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 )
 
-type AccountStore interface {
-	GetByID(ctx context.Context, id string) (*account.AccountModel, error)
-	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*account.AccountModel, error)
-	Update(ctx context.Context, accountModel *account.AccountModel) error
+type UserStore interface {
+	GetByID(ctx context.Context, id string) (*user.UserModel, error)
+	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.UserModel, error)
+	Update(ctx context.Context, userModel *user.UserModel) error
 }
 
 type ResetStore interface {
@@ -26,9 +26,9 @@ type OTPSender interface {
 }
 
 type TokenRevoker interface {
-	RevokeByAccountID(ctx context.Context, accountID string, reason string, revokedAt time.Time) error
+	RevokeByUserID(ctx context.Context, userID string, reason string, revokedAt time.Time) error
 }
 
 type LoginSessionRevoker interface {
-	RevokeByAccountID(ctx context.Context, accountID string, reason string, revokedAt time.Time) error
+	RevokeByUserID(ctx context.Context, userID string, reason string, revokedAt time.Time) error
 }

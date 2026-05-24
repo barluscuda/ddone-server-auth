@@ -18,7 +18,7 @@ type LoginSessionRepository struct {
 
 type loginSessionRecord struct {
 	ID                   string     `gorm:"type:uuid;primaryKey"`
-	AccountID            string     `gorm:"type:uuid;not null;index"`
+	UserID               string     `gorm:"column:account_id;type:uuid;not null;index"`
 	TokenHash            string     `gorm:"size:64;not null;uniqueIndex"`
 	UserAgent            string     `gorm:"type:text"`
 	ClientIP             string     `gorm:"size:64"`
@@ -82,14 +82,14 @@ func (r *LoginSessionRepository) GetByCurrentAccessToken(
 	return toLoginSession(record), nil
 }
 
-func (r *LoginSessionRepository) ListByAccountID(
+func (r *LoginSessionRepository) ListByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 ) ([]auth.LoginSession, error) {
 	var records []loginSessionRecord
 
 	if err := r.baseQuery(ctx).
-		Where("account_id = ?", accountID).
+		Where("account_id = ?", userID).
 		Order("created_at DESC").
 		Find(&records).
 		Error; err != nil {
@@ -119,15 +119,15 @@ func (r *LoginSessionRepository) UpdateAccessToken(
 		Error
 }
 
-func (r *LoginSessionRepository) RevokeByAccountID(
+func (r *LoginSessionRepository) RevokeByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
 	return r.baseQuery(ctx).
 		Model(&loginSessionRecord{}).
-		Where("account_id = ? AND revoked_at IS NULL", accountID).
+		Where("account_id = ? AND revoked_at IS NULL", userID).
 		Updates(map[string]any{
 			"revoked_at":    revokedAt,
 			"revoke_reason": reason,
@@ -158,16 +158,16 @@ func (r *LoginSessionRepository) RevokeByID(
 	return nil
 }
 
-func (r *LoginSessionRepository) RevokeByAccountIDExcept(
+func (r *LoginSessionRepository) RevokeByUserIDExcept(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	excludedSessionID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
 	return r.baseQuery(ctx).
 		Model(&loginSessionRecord{}).
-		Where("account_id = ? AND id <> ? AND revoked_at IS NULL", accountID, excludedSessionID).
+		Where("account_id = ? AND id <> ? AND revoked_at IS NULL", userID, excludedSessionID).
 		Updates(map[string]any{
 			"revoked_at":    revokedAt,
 			"revoke_reason": reason,
@@ -187,7 +187,7 @@ func toLoginSessionRecord(session *auth.LoginSession) *loginSessionRecord {
 
 	return &loginSessionRecord{
 		ID:                   session.ID,
-		AccountID:            session.AccountID,
+		UserID:               session.UserID,
 		TokenHash:            session.TokenHash,
 		UserAgent:            session.UserAgent,
 		ClientIP:             session.ClientIP,
@@ -208,7 +208,7 @@ func toLoginSession(record loginSessionRecord) *auth.LoginSession {
 
 	return &auth.LoginSession{
 		ID:                   record.ID,
-		AccountID:            record.AccountID,
+		UserID:               record.UserID,
 		TokenHash:            record.TokenHash,
 		UserAgent:            record.UserAgent,
 		ClientIP:             record.ClientIP,

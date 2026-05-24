@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"ddone-server-auth/internal/domain/auth"
 )
 
-type AccountLookup interface {
-	GetByID(ctx context.Context, id string) (*account.AccountModel, error)
-	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*account.AccountModel, error)
+type UserLookup interface {
+	GetByID(ctx context.Context, id string) (*user.UserModel, error)
+	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.UserModel, error)
 }
 
 type TokenStore interface {
@@ -27,5 +27,5 @@ type LoginSessionStore interface {
 }
 
 type AccessTokenIssuer interface {
-	IssueAccessToken(ctx context.Context, accountID string, phoneNumber string) (*auth.AccessToken, error)
+	IssueAccessToken(ctx context.Context, userID string, phoneNumber string) (*auth.AccessToken, error)
 }

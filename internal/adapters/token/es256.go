@@ -82,8 +82,8 @@ func (c *ES256Codec) IssueAccessToken(
 		"nbf": claims.NotBefore.Unix(),
 		"exp": claims.ExpiresAt.Unix(),
 	}
-	if claims.AccountID != "" {
-		payload["accountId"] = claims.AccountID
+	if claims.UserID != "" {
+		payload["userId"] = claims.UserID
 	}
 	if claims.PhoneNumber != "" {
 		payload["phone_number"] = claims.PhoneNumber
@@ -175,15 +175,16 @@ func (c *ES256Codec) VerifyAccessToken(
 	}
 
 	var payload struct {
-		Issuer      string `json:"iss"`
-		AccountID   string `json:"accountId"`
-		Subject     string `json:"sub"`
-		Audience    string `json:"aud"`
-		JWTID       string `json:"jti"`
-		IssuedAt    int64  `json:"iat"`
-		NotBefore   int64  `json:"nbf"`
-		ExpiresAt   int64  `json:"exp"`
-		PhoneNumber string `json:"phone_number"`
+		Issuer       string `json:"iss"`
+		UserID       string `json:"userId"`
+		LegacyUserID string `json:"accountId"`
+		Subject      string `json:"sub"`
+		Audience     string `json:"aud"`
+		JWTID        string `json:"jti"`
+		IssuedAt     int64  `json:"iat"`
+		NotBefore    int64  `json:"nbf"`
+		ExpiresAt    int64  `json:"exp"`
+		PhoneNumber  string `json:"phone_number"`
 	}
 	if err := decodeJWTSegment(payloadSegment, &payload); err != nil {
 		return nil, auth.ErrInvalidAccessToken
@@ -198,14 +199,17 @@ func (c *ES256Codec) VerifyAccessToken(
 	if now.Before(notBefore) || !now.Before(expiresAt) {
 		return nil, auth.ErrInvalidAccessToken
 	}
-	accountID := payload.AccountID
-	if accountID == "" {
-		accountID = payload.Subject
+	userID := payload.UserID
+	if userID == "" {
+		userID = payload.LegacyUserID
+	}
+	if userID == "" {
+		userID = payload.Subject
 	}
 
 	return &auth.AccessTokenClaims{
 		Issuer:      payload.Issuer,
-		AccountID:   accountID,
+		UserID:      userID,
 		Subject:     payload.Subject,
 		Audience:    payload.Audience,
 		JWTID:       payload.JWTID,

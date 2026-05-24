@@ -2,7 +2,7 @@ package register
 
 import (
 	"context"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"strings"
 	"testing"
@@ -11,78 +11,78 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type fakeAccountRepository struct {
-	accountsByPhone map[string]*account.AccountModel
-	accountsByUser  map[string]*account.AccountModel
-	created         *account.AccountModel
+type fakeUserRepository struct {
+	usersByPhone map[string]*user.UserModel
+	usersByUser  map[string]*user.UserModel
+	created         *user.UserModel
 }
 
-func (r *fakeAccountRepository) Create(_ context.Context, accountModel *account.AccountModel) error {
-	r.created = accountModel
-	if r.accountsByPhone == nil {
-		r.accountsByPhone = map[string]*account.AccountModel{}
+func (r *fakeUserRepository) Create(_ context.Context, userModel *user.UserModel) error {
+	r.created = userModel
+	if r.usersByPhone == nil {
+		r.usersByPhone = map[string]*user.UserModel{}
 	}
-	r.accountsByPhone[accountModel.PhoneNumber] = accountModel
+	r.usersByPhone[userModel.PhoneNumber] = userModel
 
-	if accountModel.Username != nil {
-		if r.accountsByUser == nil {
-			r.accountsByUser = map[string]*account.AccountModel{}
+	if userModel.Username != nil {
+		if r.usersByUser == nil {
+			r.usersByUser = map[string]*user.UserModel{}
 		}
-		r.accountsByUser[*accountModel.Username] = accountModel
+		r.usersByUser[*userModel.Username] = userModel
 	}
 
 	return nil
 }
 
-func (r *fakeAccountRepository) GetByID(_ context.Context, _ string) (*account.AccountModel, error) {
-	return nil, account.ErrAccountNotFound
+func (r *fakeUserRepository) GetByID(_ context.Context, _ string) (*user.UserModel, error) {
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) GetByPhoneNumber(_ context.Context, phoneNumber string) (*account.AccountModel, error) {
-	if accountModel, ok := r.accountsByPhone[phoneNumber]; ok {
-		return accountModel, nil
+func (r *fakeUserRepository) GetByPhoneNumber(_ context.Context, phoneNumber string) (*user.UserModel, error) {
+	if userModel, ok := r.usersByPhone[phoneNumber]; ok {
+		return userModel, nil
 	}
 
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) GetByUsername(_ context.Context, username string) (*account.AccountModel, error) {
-	if accountModel, ok := r.accountsByUser[username]; ok {
-		return accountModel, nil
+func (r *fakeUserRepository) GetByUsername(_ context.Context, username string) (*user.UserModel, error) {
+	if userModel, ok := r.usersByUser[username]; ok {
+		return userModel, nil
 	}
 
-	return nil, account.ErrAccountNotFound
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) Update(_ context.Context, _ *account.AccountModel) error {
+func (r *fakeUserRepository) Update(_ context.Context, _ *user.UserModel) error {
 	return nil
 }
 
-func (r *fakeAccountRepository) Delete(_ context.Context, _ string) error {
+func (r *fakeUserRepository) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
 type fakeRegistrationStore struct {
-	values        map[string]*account.RegisterModel
+	values        map[string]*user.RegisterModel
 	deletedTicket string
 	counters      map[string]int64
 	deletedKeys   []string
 }
 
-func (s *fakeRegistrationStore) Save(_ context.Context, registration *account.RegisterModel, _ time.Duration) error {
+func (s *fakeRegistrationStore) Save(_ context.Context, registration *user.RegisterModel, _ time.Duration) error {
 	if s.values == nil {
-		s.values = map[string]*account.RegisterModel{}
+		s.values = map[string]*user.RegisterModel{}
 	}
 	s.values[registration.TicketID] = registration
 	return nil
 }
 
-func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*account.RegisterModel, error) {
+func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*user.RegisterModel, error) {
 	if registration, ok := s.values[ticketID]; ok {
 		return registration, nil
 	}
 
-	return nil, account.ErrPendingRegistrationNotFound
+	return nil, user.ErrPendingRegistrationNotFound
 }
 
 func (s *fakeRegistrationStore) Delete(_ context.Context, ticketID string) error {
@@ -121,7 +121,7 @@ func (s *fakeOTPSender) SendOTP(_ context.Context, phoneNumber string, msg strin
 }
 
 func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -234,7 +234,7 @@ func TestNormalizePhoneNumberRejectsInvalidFormat(t *testing.T) {
 }
 
 func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{err: errors.New("sms unavailable")}
 	service := NewService(repo, store, sender)
@@ -249,7 +249,7 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 	if err == nil {
 		t.Fatal("expected sms failure")
 	}
-	if _, getErr := store.Get(context.Background(), "reg_fixed123"); !errors.Is(getErr, account.ErrPendingRegistrationNotFound) {
+	if _, getErr := store.Get(context.Background(), "reg_fixed123"); !errors.Is(getErr, user.ErrPendingRegistrationNotFound) {
 		t.Fatalf("expected no registration to be saved after sms failure, got %v", getErr)
 	}
 	if store.deletedTicket != "" {
@@ -258,7 +258,7 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 }
 
 func TestRegisterServiceRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -273,7 +273,7 @@ func TestRegisterServiceRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 }
 
 func TestRegisterServiceRegisterRejectsWhitespacePassword(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -288,7 +288,7 @@ func TestRegisterServiceRegisterRejectsWhitespacePassword(t *testing.T) {
 }
 
 func TestRegisterServiceRegisterRejectsInvalidPhoneNumber(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -303,7 +303,7 @@ func TestRegisterServiceRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 }
 
 func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -329,9 +329,9 @@ func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
 }
 
 func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -398,9 +398,9 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 }
 
 func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -448,10 +448,10 @@ func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *tes
 }
 
 func TestRegisterServiceResendRegisterOTPEnforcesCooldown(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	now := time.Date(2026, 5, 21, 10, 0, 30, 0, time.UTC)
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -476,10 +476,10 @@ func TestRegisterServiceResendRegisterOTPEnforcesCooldown(t *testing.T) {
 }
 
 func TestRegisterServiceResendRegisterOTPRateLimitsAfterThreeResends(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	now := time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC)
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -504,10 +504,10 @@ func TestRegisterServiceResendRegisterOTPRateLimitsAfterThreeResends(t *testing.
 	}
 }
 
-func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T) {
-	repo := &fakeAccountRepository{}
+func TestRegisterServiceVerifyRegisterCreatesUserAndDeletesCache(t *testing.T) {
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{},
+		values: map[string]*user.RegisterModel{},
 	}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -522,7 +522,7 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 		t.Fatalf("generate password hash: %v", err)
 	}
 
-	store.values[ticketID] = &account.RegisterModel{
+	store.values[ticketID] = &user.RegisterModel{
 		TicketID:     ticketID,
 		Username:     &username,
 		PasswordHash: string(passwordHash),
@@ -532,7 +532,7 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 		CreatedAt:    now.Add(-time.Minute),
 	}
 
-	accountModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+	userModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: ticketID,
 		OTPCode:  "123456",
 	})
@@ -540,20 +540,20 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 		t.Fatalf("VerifyRegister returned error: %v", err)
 	}
 
-	if accountModel.PhoneVerifiedAt != now {
-		t.Fatalf("expected verified at %v, got %v", now, accountModel.PhoneVerifiedAt)
+	if userModel.PhoneVerifiedAt != now {
+		t.Fatalf("expected verified at %v, got %v", now, userModel.PhoneVerifiedAt)
 	}
 
 	if repo.created == nil {
-		t.Fatal("expected account to be created")
+		t.Fatal("expected user to be created")
 	}
 
 	if repo.created.Username == nil || *repo.created.Username != username {
-		t.Fatalf("expected generated username to be carried to account, got %#v", repo.created.Username)
+		t.Fatalf("expected generated username to be carried to user, got %#v", repo.created.Username)
 	}
 
 	if repo.created.PasswordHash != string(passwordHash) {
-		t.Fatal("expected password hash to be persisted on account creation")
+		t.Fatal("expected password hash to be persisted on user creation")
 	}
 
 	if store.deletedTicket != ticketID {
@@ -565,9 +565,9 @@ func TestRegisterServiceVerifyRegisterCreatesAccountAndDeletesCache(t *testing.T
 }
 
 func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:     "reg_fixed123",
 				PasswordHash: "hashed-password",
@@ -584,19 +584,19 @@ func TestRegisterServiceVerifyRegisterRejectsInvalidCode(t *testing.T) {
 		TicketID: "reg_fixed123",
 		OTPCode:  "654321",
 	})
-	if !errors.Is(err, account.ErrInvalidOTPCode) {
+	if !errors.Is(err, user.ErrInvalidOTPCode) {
 		t.Fatalf("expected invalid otp error, got %v", err)
 	}
 
 	if repo.created != nil {
-		t.Fatal("did not expect account creation on invalid otp")
+		t.Fatal("did not expect user creation on invalid otp")
 	}
 }
 
 func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:     "reg_fixed123",
 				PasswordHash: "hashed-password",
@@ -614,7 +614,7 @@ func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T)
 			TicketID: "reg_fixed123",
 			OTPCode:  "654321",
 		})
-		if !errors.Is(err, account.ErrInvalidOTPCode) {
+		if !errors.Is(err, user.ErrInvalidOTPCode) {
 			t.Fatalf("expected invalid otp on attempt %d, got %v", i+1, err)
 		}
 	}
@@ -633,7 +633,7 @@ func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T)
 }
 
 func TestRegisterServiceVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -648,7 +648,7 @@ func TestRegisterServiceVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 }
 
 func TestRegisterServiceResendRegisterOTPRejectsWhitespaceTicketID(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -662,7 +662,7 @@ func TestRegisterServiceResendRegisterOTPRejectsWhitespaceTicketID(t *testing.T)
 }
 
 func TestRegisterServiceVerifyRegisterRejectsWhitespaceOTPCode(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
@@ -677,9 +677,9 @@ func TestRegisterServiceVerifyRegisterRejectsWhitespaceOTPCode(t *testing.T) {
 }
 
 func TestRegisterServiceVerifyRegisterRejectsPendingRegistrationWithoutPasswordHash(t *testing.T) {
-	repo := &fakeAccountRepository{}
+	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:     "reg_fixed123",
 				Username:     stringPtr("user_fixed123"),
@@ -707,13 +707,13 @@ func TestRegisterServiceVerifyRegisterRejectsPendingRegistrationWithoutPasswordH
 
 func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t *testing.T) {
 	takenUsername := "user_taken"
-	repo := &fakeAccountRepository{
-		accountsByUser: map[string]*account.AccountModel{
+	repo := &fakeUserRepository{
+		usersByUser: map[string]*user.UserModel{
 			takenUsername: {Username: &takenUsername},
 		},
 	}
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:     "reg_fixed123",
 				Username:     &takenUsername,
@@ -728,7 +728,7 @@ func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t 
 	service := NewService(repo, store, sender)
 	service.usernameGenerator = func() (string, error) { return "user_fresh123", nil }
 
-	accountModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
+	userModel, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 		TicketID: "reg_fixed123",
 		OTPCode:  "123456",
 	})
@@ -736,8 +736,8 @@ func TestRegisterServiceVerifyRegisterRegeneratesUsernameWhenStoredOneIsTaken(t 
 		t.Fatalf("VerifyRegister returned error: %v", err)
 	}
 
-	if accountModel.Username == nil || *accountModel.Username != "user_fresh123" {
-		t.Fatalf("expected username to be regenerated, got %#v", accountModel.Username)
+	if userModel.Username == nil || *userModel.Username != "user_fresh123" {
+		t.Fatalf("expected username to be regenerated, got %#v", userModel.Username)
 	}
 }
 

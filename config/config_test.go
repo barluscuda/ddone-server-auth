@@ -70,7 +70,7 @@ func TestEffectiveSessionCookieMaxAgeDefaultsToLoginSessionTTL(t *testing.T) {
 
 func TestValidateRejectsNegativeCacheTTL(t *testing.T) {
 	cfg := validConfig()
-	cfg.Cache.AccountTTL = -1
+	cfg.Cache.UserTTL = -1
 
 	err := cfg.validate()
 	if err == nil {

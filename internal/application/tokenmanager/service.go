@@ -14,7 +14,7 @@ const (
 	reasonAllTokensRevoked = "all_tokens_revoked"
 )
 
-var ErrAuthenticatedAccountRequired = errors.New("authenticated account is required")
+var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrTokenIDRequired = errors.New("token id is required")
 
 type Service struct {
@@ -30,12 +30,12 @@ func NewService(store Store) *Service {
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) ([]View, error) {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return nil, ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return nil, ErrAuthenticatedUserRequired
 	}
 
-	tokens, err := s.store.ListByAccountID(ctx, accountID)
+	tokens, err := s.store.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +49,9 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]View, error) {
 }
 
 func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return ErrAuthenticatedUserRequired
 	}
 
 	tokenID := strings.TrimSpace(input.TokenID)
@@ -63,7 +63,7 @@ func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
 	if err != nil {
 		return err
 	}
-	if token.AccountID != accountID {
+	if token.UserID != userID {
 		return auth.ErrTokenNotFound
 	}
 	if token.IsRevoked() {
@@ -74,12 +74,12 @@ func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
 }
 
 func (s *Service) RevokeAll(ctx context.Context, input RevokeAllInput) error {
-	accountID := strings.TrimSpace(input.AccountID)
-	if accountID == "" {
-		return ErrAuthenticatedAccountRequired
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return ErrAuthenticatedUserRequired
 	}
 
-	return s.store.RevokeByAccountID(ctx, accountID, reasonAllTokensRevoked, s.now())
+	return s.store.RevokeByUserID(ctx, userID, reasonAllTokensRevoked, s.now())
 }
 
 func toView(token auth.TokenRecord) View {

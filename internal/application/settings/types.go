@@ -3,11 +3,11 @@ package settings
 import "time"
 
 type GetInput struct {
-	AccountID string
+	UserID string
 }
 
 type UpdateUsernameInput struct {
-	AccountID string
+	UserID string
 	Username  string
 }
 

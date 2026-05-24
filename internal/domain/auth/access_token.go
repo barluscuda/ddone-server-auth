@@ -12,7 +12,7 @@ type AccessToken struct {
 
 type AccessTokenClaims struct {
 	Issuer      string
-	AccountID   string
+	UserID   string
 	Subject     string
 	Audience    string
 	JWTID       string

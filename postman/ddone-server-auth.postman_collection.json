@@ -100,7 +100,7 @@
             "exec": [
               "if (pm.response.code === 201) {",
               "  const body = pm.response.json();",
-              "  pm.environment.set('accountId', body.data.id);",
+              "  pm.environment.set('userId', body.data.id);",
               "  pm.environment.set('username', body.data.username || '');",
               "}"
             ]
@@ -416,7 +416,7 @@
             "me"
           ]
         },
-        "description": "Returns the current authenticated account from the Bearer access token."
+        "description": "Returns the current authenticated user from the Bearer access token."
       }
     },
     {
@@ -438,7 +438,7 @@
             "tokens"
           ]
         },
-        "description": "Returns the raw refresh-token sessions for the current authenticated account."
+        "description": "Returns the raw refresh-token sessions for the current authenticated user."
       }
     },
     {
@@ -461,7 +461,7 @@
             "revoke-all"
           ]
         },
-        "description": "Revokes all raw refresh-token sessions for the current authenticated account."
+        "description": "Revokes all raw refresh-token sessions for the current authenticated user."
       }
     },
     {
@@ -483,7 +483,7 @@
             "sessions"
           ]
         },
-        "description": "Returns the server-managed login sessions for the current authenticated account."
+        "description": "Returns the server-managed login sessions for the current authenticated user."
       }
     },
     {
@@ -552,7 +552,7 @@
             "revoke-all"
           ]
         },
-        "description": "Revokes all server-managed login sessions for the current authenticated account."
+        "description": "Revokes all server-managed login sessions for the current authenticated user."
       }
     },
     {
@@ -597,7 +597,7 @@
             "password"
           ]
         },
-        "description": "Changes the current account password and updates the saved password variables on success."
+        "description": "Changes the current user password and updates the saved password variables on success."
       }
     },
     {

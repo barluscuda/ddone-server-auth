@@ -31,7 +31,7 @@ type ResRegister struct {
 	Data    ResRegisterTicketData `json:"data"`
 }
 
-type ResRegisteredAccountData struct {
+type ResRegisteredUserData struct {
 	ID              string    `json:"id"`
 	Username        *string   `json:"username"`
 	PhoneNumber     string    `json:"phoneNumber"`
@@ -39,9 +39,9 @@ type ResRegisteredAccountData struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
-type ResRegisteredAccount struct {
-	Success bool                     `json:"success"`
-	Code    string                   `json:"code"`
-	Message string                   `json:"message"`
-	Data    ResRegisteredAccountData `json:"data"`
+type ResRegisteredUser struct {
+	Success bool                  `json:"success"`
+	Code    string                `json:"code"`
+	Message string                `json:"message"`
+	Data    ResRegisteredUserData `json:"data"`
 }

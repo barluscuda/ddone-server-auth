@@ -117,7 +117,7 @@ func TestPasswordHandlerChangePasswordReturnsSuccess(t *testing.T) {
 
 	router := gin.New()
 	router.POST("/settings/password", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.ChangePassword(c)
 	})
 	router.ServeHTTP(recorder, req)

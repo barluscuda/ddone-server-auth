@@ -30,7 +30,7 @@ type VerifyForgotPasswordInput struct {
 }
 
 type ChangePasswordInput struct {
-	AccountID       string
+	UserID       string
 	CurrentPassword string
 	NewPassword     string
 }
@@ -43,7 +43,7 @@ type ResetTicketResult struct {
 
 type ResetTicketState struct {
 	TicketID      string    `json:"ticket_id"`
-	AccountID     string    `json:"account_id"`
+	UserID     string    `json:"user_id"`
 	PhoneNumber   string    `json:"phone_number"`
 	OTPCodeHash   string    `json:"otp_code_hash"`
 	OTPExpiresAt  time.Time `json:"otp_expires_at"`

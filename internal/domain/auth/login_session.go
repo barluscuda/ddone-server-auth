@@ -6,7 +6,7 @@ import "time"
 // in place when the session needs a fresh JWT.
 type LoginSession struct {
 	ID                   string
-	AccountID            string
+	UserID            string
 	TokenHash            string
 	UserAgent            string
 	ClientIP             string

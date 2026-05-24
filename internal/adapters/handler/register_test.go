@@ -5,7 +5,7 @@ import (
 	"context"
 	"ddone-server-auth/internal/adapters/dto"
 	appregister "ddone-server-auth/internal/application/register"
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -16,50 +16,50 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type fakeAccountRepository struct{}
+type fakeUserRepository struct{}
 
-func (r *fakeAccountRepository) Create(_ context.Context, _ *account.AccountModel) error {
+func (r *fakeUserRepository) Create(_ context.Context, _ *user.UserModel) error {
 	return nil
 }
 
-func (r *fakeAccountRepository) GetByID(_ context.Context, _ string) (*account.AccountModel, error) {
-	return nil, account.ErrAccountNotFound
+func (r *fakeUserRepository) GetByID(_ context.Context, _ string) (*user.UserModel, error) {
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) GetByPhoneNumber(_ context.Context, _ string) (*account.AccountModel, error) {
-	return nil, account.ErrAccountNotFound
+func (r *fakeUserRepository) GetByPhoneNumber(_ context.Context, _ string) (*user.UserModel, error) {
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) GetByUsername(_ context.Context, _ string) (*account.AccountModel, error) {
-	return nil, account.ErrAccountNotFound
+func (r *fakeUserRepository) GetByUsername(_ context.Context, _ string) (*user.UserModel, error) {
+	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeAccountRepository) Update(_ context.Context, _ *account.AccountModel) error {
+func (r *fakeUserRepository) Update(_ context.Context, _ *user.UserModel) error {
 	return nil
 }
 
-func (r *fakeAccountRepository) Delete(_ context.Context, _ string) error {
+func (r *fakeUserRepository) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
 type fakeRegistrationStore struct {
-	values map[string]*account.RegisterModel
+	values map[string]*user.RegisterModel
 }
 
-func (s *fakeRegistrationStore) Save(_ context.Context, registration *account.RegisterModel, _ time.Duration) error {
+func (s *fakeRegistrationStore) Save(_ context.Context, registration *user.RegisterModel, _ time.Duration) error {
 	if s.values == nil {
-		s.values = map[string]*account.RegisterModel{}
+		s.values = map[string]*user.RegisterModel{}
 	}
 	s.values[registration.TicketID] = registration
 	return nil
 }
 
-func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*account.RegisterModel, error) {
+func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*user.RegisterModel, error) {
 	if registration, ok := s.values[ticketID]; ok {
 		return registration, nil
 	}
 
-	return nil, account.ErrPendingRegistrationNotFound
+	return nil, user.ErrPendingRegistrationNotFound
 }
 
 func (s *fakeRegistrationStore) Delete(_ context.Context, _ string) error {
@@ -84,7 +84,7 @@ func TestRegisterRejectsWhitespacePhoneNumber(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -120,7 +120,7 @@ func TestRegisterRejectsInvalidPhoneNumber(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -148,7 +148,7 @@ func TestRegisterRejectsInvalidRequestBodyWithSafeMessage(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/registrations", bytes.NewReader([]byte(`{`)))
@@ -179,7 +179,7 @@ func TestRegisterReturnsTicketID(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -225,7 +225,7 @@ func TestRegisterRejectsWhitespacePassword(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -253,7 +253,7 @@ func TestVerifyRegisterRejectsWhitespaceTicketID(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
-	service := appregister.NewService(&fakeAccountRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, &fakeRegistrationStore{}, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -282,7 +282,7 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -295,7 +295,7 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 			},
 		},
 	}
-	service := appregister.NewService(&fakeAccountRepository{}, store, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, store, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{
@@ -341,7 +341,7 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	store := &fakeRegistrationStore{
-		values: map[string]*account.RegisterModel{
+		values: map[string]*user.RegisterModel{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -354,7 +354,7 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 			},
 		},
 	}
-	service := appregister.NewService(&fakeAccountRepository{}, store, &fakeOTPSender{})
+	service := appregister.NewService(&fakeUserRepository{}, store, &fakeOTPSender{})
 	handler := NewRegisterHandler(service)
 
 	body, err := json.Marshal(map[string]string{

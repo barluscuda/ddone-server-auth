@@ -64,7 +64,7 @@ func TestSessionHandlerReturnsSessions(t *testing.T) {
 
 	router := gin.New()
 	router.GET("/sessions", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.List(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -91,7 +91,7 @@ func TestSessionHandlerReturnsCurrentSession(t *testing.T) {
 
 	router := gin.New()
 	router.GET("/sessions/current", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1", AccessToken: "access-token"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1", AccessToken: "access-token"})
 		handler.Current(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -112,7 +112,7 @@ func TestSessionHandlerRevokesSession(t *testing.T) {
 
 	router := gin.New()
 	router.DELETE("/sessions/:sessionId", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.Revoke(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -133,7 +133,7 @@ func TestSessionHandlerRevokesAllSessions(t *testing.T) {
 
 	router := gin.New()
 	router.POST("/sessions/revoke-all", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.RevokeAll(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -154,7 +154,7 @@ func TestSessionHandlerRevokesOtherSessions(t *testing.T) {
 
 	router := gin.New()
 	router.POST("/sessions/revoke-others", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1", AccessToken: "access-token"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1", AccessToken: "access-token"})
 		handler.RevokeOthers(c)
 	})
 	router.ServeHTTP(recorder, req)

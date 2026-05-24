@@ -60,7 +60,7 @@ func TestTokenManagerHandlerReturnsTokens(t *testing.T) {
 
 	router := gin.New()
 	router.GET("/tokens", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.List(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -81,7 +81,7 @@ func TestTokenManagerHandlerRevokesToken(t *testing.T) {
 
 	router := gin.New()
 	router.DELETE("/tokens/:tokenId", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.Revoke(c)
 	})
 	router.ServeHTTP(recorder, req)
@@ -102,7 +102,7 @@ func TestTokenManagerHandlerRevokesAllTokens(t *testing.T) {
 
 	router := gin.New()
 	router.POST("/tokens/revoke-all", func(c *gin.Context) {
-		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
+		c.Set("auth_context", middleware.AuthContext{UserID: "user-1"})
 		handler.RevokeAll(c)
 	})
 	router.ServeHTTP(recorder, req)

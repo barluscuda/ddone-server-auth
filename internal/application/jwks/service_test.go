@@ -187,7 +187,7 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	})
 	service.now = func() time.Time { return now }
 
-	token, err := service.IssueAccessToken(context.Background(), "account-1", "2012345678")
+	token, err := service.IssueAccessToken(context.Background(), "user-1", "2012345678")
 	if err != nil {
 		t.Fatalf("IssueAccessToken returned error: %v", err)
 	}
@@ -198,11 +198,11 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	if token.KeyID != "kid-1" {
 		t.Fatalf("expected access token to use existing key %q, got %q", "kid-1", token.KeyID)
 	}
-	if codec.issuedClaims.Subject != "account-1" {
-		t.Fatalf("expected subject %q, got %q", "account-1", codec.issuedClaims.Subject)
+	if codec.issuedClaims.Subject != "user-1" {
+		t.Fatalf("expected subject %q, got %q", "user-1", codec.issuedClaims.Subject)
 	}
-	if codec.issuedClaims.AccountID != "account-1" {
-		t.Fatalf("expected account id %q, got %q", "account-1", codec.issuedClaims.AccountID)
+	if codec.issuedClaims.UserID != "user-1" {
+		t.Fatalf("expected user id %q, got %q", "user-1", codec.issuedClaims.UserID)
 	}
 	if codec.issuedClaims.PhoneNumber != "2012345678" {
 		t.Fatalf("expected phone number %q, got %q", "2012345678", codec.issuedClaims.PhoneNumber)
@@ -225,7 +225,7 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 	})
 	service.now = func() time.Time { return now }
 
-	issued, err := service.IssueAccessToken(context.Background(), "account-1", "2012345678")
+	issued, err := service.IssueAccessToken(context.Background(), "user-1", "2012345678")
 	if err != nil {
 		t.Fatalf("IssueAccessToken returned error: %v", err)
 	}
@@ -260,8 +260,8 @@ func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	store := &fakeSigningKeyStore{}
 	codec := &fakeTokenCodec{
 		verifiedClaims: &auth.AccessTokenClaims{
-			AccountID: "account-1",
-			Subject:   "account-1",
+			UserID: "user-1",
+			Subject:   "user-1",
 			Audience:  "audience",
 			Issuer:    "issuer",
 			ExpiresAt: now.Add(time.Minute),
@@ -280,11 +280,11 @@ func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyAccessToken returned error: %v", err)
 	}
-	if claims.Subject != "account-1" {
-		t.Fatalf("expected subject %q, got %q", "account-1", claims.Subject)
+	if claims.Subject != "user-1" {
+		t.Fatalf("expected subject %q, got %q", "user-1", claims.Subject)
 	}
-	if claims.AccountID != "account-1" {
-		t.Fatalf("expected account id %q, got %q", "account-1", claims.AccountID)
+	if claims.UserID != "user-1" {
+		t.Fatalf("expected user id %q, got %q", "user-1", claims.UserID)
 	}
 }
 

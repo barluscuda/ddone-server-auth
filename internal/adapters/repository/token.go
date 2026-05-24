@@ -19,7 +19,7 @@ type TokenRepository struct {
 
 type tokenRow struct {
 	ID            string    `gorm:"type:uuid;primaryKey"`
-	AccountID     string    `gorm:"type:uuid;not null;index"`
+	UserID        string    `gorm:"column:account_id;type:uuid;not null;index"`
 	RootTokenID   string    `gorm:"column:root_session_id;type:uuid;not null;index"`
 	ParentTokenID *string   `gorm:"column:parent_session_id;type:uuid;index"`
 	TokenHash     string    `gorm:"size:64;not null;uniqueIndex"`
@@ -123,14 +123,14 @@ func (r *TokenRepository) RevokeLineage(
 		Error
 }
 
-func (r *TokenRepository) ListByAccountID(
+func (r *TokenRepository) ListByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 ) ([]auth.TokenRecord, error) {
 	var records []tokenRow
 
 	if err := r.baseQuery(ctx).
-		Where("account_id = ?", accountID).
+		Where("account_id = ?", userID).
 		Order("created_at DESC").
 		Find(&records).
 		Error; err != nil {
@@ -145,15 +145,15 @@ func (r *TokenRepository) ListByAccountID(
 	return tokens, nil
 }
 
-func (r *TokenRepository) RevokeByAccountID(
+func (r *TokenRepository) RevokeByUserID(
 	ctx context.Context,
-	accountID string,
+	userID string,
 	reason string,
 	revokedAt time.Time,
 ) error {
 	return r.baseQuery(ctx).
 		Model(&tokenRow{}).
-		Where("account_id = ? AND revoked_at IS NULL", accountID).
+		Where("account_id = ? AND revoked_at IS NULL", userID).
 		Updates(map[string]any{
 			"revoked_at":    revokedAt,
 			"revoke_reason": reason,
@@ -191,7 +191,7 @@ func (r *TokenRepository) baseQuery(ctx context.Context) *gorm.DB {
 func toTokenRow(tokenRecord *auth.TokenRecord) *tokenRow {
 	return &tokenRow{
 		ID:            tokenRecord.ID,
-		AccountID:     tokenRecord.AccountID,
+		UserID:        tokenRecord.UserID,
 		RootTokenID:   tokenRecord.RootTokenID,
 		ParentTokenID: tokenRecord.ParentTokenID,
 		TokenHash:     tokenRecord.TokenHash,
@@ -209,7 +209,7 @@ func toTokenRow(tokenRecord *auth.TokenRecord) *tokenRow {
 func toTokenRecord(record tokenRow) *auth.TokenRecord {
 	return &auth.TokenRecord{
 		ID:            record.ID,
-		AccountID:     record.AccountID,
+		UserID:        record.UserID,
 		RootTokenID:   record.RootTokenID,
 		ParentTokenID: record.ParentTokenID,
 		TokenHash:     record.TokenHash,

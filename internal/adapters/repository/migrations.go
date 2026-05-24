@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"ddone-server-auth/internal/domain/account"
+	"ddone-server-auth/internal/domain/user"
 
 	"gorm.io/gorm"
 )
@@ -12,7 +12,7 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	return db.AutoMigrate(
-		&account.AccountModel{},
+		&user.UserModel{},
 		&tokenRow{},
 		&loginSessionRecord{},
 		&signingKeyRecord{},

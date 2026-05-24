@@ -1,8 +1,8 @@
-package account
+package user
 
 import "errors"
 
-var ErrAccountNotFound = errors.New("account not found")
+var ErrUserNotFound = errors.New("user not found")
 var ErrPhoneNumberAlreadyRegistered = errors.New("phone number already registered")
 var ErrUsernameAlreadyRegistered = errors.New("username already registered")
 var ErrPendingRegistrationNotFound = errors.New("pending registration not found")
