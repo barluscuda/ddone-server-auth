@@ -5,13 +5,13 @@ import (
 	"context"
 	applogin "ddone-server-auth/internal/application/login"
 	"ddone-server-auth/internal/domain/auth"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 

@@ -2,11 +2,11 @@ package middleware
 
 import (
 	"ddone-server-auth/internal/adapters/dto"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	json "github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

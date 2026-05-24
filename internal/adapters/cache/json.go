@@ -2,9 +2,9 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -3,11 +3,11 @@ package cache
 import (
 	"context"
 	apppassword "ddone-server-auth/internal/application/password"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/redis/go-redis/v9"
 )
 

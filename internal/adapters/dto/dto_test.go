@@ -1,10 +1,11 @@
 package dto
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	json "github.com/bytedance/sonic"
 )
 
 func TestResLoginMarshalsCamelCaseFields(t *testing.T) {

@@ -6,11 +6,12 @@ import (
 	"crypto/sha256"
 	"ddone-server-auth/internal/domain/auth"
 	"encoding/base64"
-	"encoding/json"
 	"math/big"
 	"strings"
 	"testing"
 	"time"
+
+	json "github.com/bytedance/sonic"
 )
 
 func TestIssueAccessTokenUsesJOSESignatureFormat(t *testing.T) {

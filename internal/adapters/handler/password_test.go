@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"ddone-server-auth/internal/adapters/middleware"
 	apppassword "ddone-server-auth/internal/application/password"
 
+	json "github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 

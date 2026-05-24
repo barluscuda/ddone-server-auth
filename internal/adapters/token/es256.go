@@ -8,12 +8,13 @@ import (
 	"crypto/x509"
 	"ddone-server-auth/internal/domain/auth"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
+
+	json "github.com/bytedance/sonic"
 )
 
 type ES256Codec struct{}

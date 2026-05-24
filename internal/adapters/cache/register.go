@@ -4,11 +4,11 @@ import (
 	"context"
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/user"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/redis/go-redis/v9"
 )
 

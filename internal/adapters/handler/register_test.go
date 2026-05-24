@@ -6,13 +6,13 @@ import (
 	"ddone-server-auth/internal/adapters/dto"
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/user"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 
