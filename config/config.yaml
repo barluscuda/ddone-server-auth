@@ -55,7 +55,7 @@ cors:
 auth:
   issuer: ddone-server-auth
   audience: ddone-clients
-  access_token_ttl: 15m
+  access_token_ttl: 5m
   refresh_token_ttl: 720h
   login_session_ttl: 720h
   signing_key_rotation: 2160h

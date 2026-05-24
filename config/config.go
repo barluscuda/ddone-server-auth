@@ -125,7 +125,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("cors.max_age", "12h")
 	viper.SetDefault("auth.issuer", "ddone-server-auth")
 	viper.SetDefault("auth.audience", "ddone-clients")
-	viper.SetDefault("auth.access_token_ttl", "15m")
+	viper.SetDefault("auth.access_token_ttl", "5m")
 	viper.SetDefault("auth.refresh_token_ttl", "720h")
 	viper.SetDefault("auth.login_session_ttl", "720h")
 	viper.SetDefault("auth.signing_key_rotation", "2160h")

@@ -138,7 +138,7 @@ DDONE_CORS_MAX_AGE=12h
 
 DDONE_AUTH_ISSUER=ddone-server-auth
 DDONE_AUTH_AUDIENCE=ddone-clients
-DDONE_AUTH_ACCESS_TOKEN_TTL=15m
+DDONE_AUTH_ACCESS_TOKEN_TTL=5m
 DDONE_AUTH_REFRESH_TOKEN_TTL=720h
 DDONE_AUTH_LOGIN_SESSION_TTL=720h
 DDONE_AUTH_SIGNING_KEY_ROTATION=2160h
@@ -538,8 +538,8 @@ Success: `200 OK`
   "data": {
     "accessToken": "jwt",
     "tokenType": "Bearer",
-    "expiresAt": "2026-05-24T00:15:00Z",
-    "expiresIn": 900,
+    "expiresAt": "2026-05-24T00:05:00Z",
+    "expiresIn": 300,
     "refreshToken": "opaque-refresh-token",
     "refreshExpiresAt": "2026-06-23T00:00:00Z"
   }
@@ -673,8 +673,8 @@ Success: `200 OK`
   "data": {
     "accessToken": "jwt",
     "tokenType": "Bearer",
-    "expiresAt": "2026-05-24T00:15:00Z",
-    "expiresIn": 900
+    "expiresAt": "2026-05-24T00:05:00Z",
+    "expiresIn": 300
   }
 }
 ```
