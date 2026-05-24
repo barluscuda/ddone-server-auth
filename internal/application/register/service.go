@@ -212,12 +212,13 @@ func (s *Service) VerifyRegister(
 	}
 
 	accountModel := &account.AccountModel{
-		Username:        username,
-		PasswordHash:    pendingRegistration.PasswordHash,
-		PhoneNumber:     phoneNumber,
-		PhoneVerifiedAt: now,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Username:          username,
+		PasswordHash:      pendingRegistration.PasswordHash,
+		PhoneNumber:       phoneNumber,
+		PhoneVerifiedAt:   now,
+		PasswordChangedAt: &now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if err := s.accounts.Create(ctx, accountModel); err != nil {
 		return nil, err

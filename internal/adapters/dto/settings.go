@@ -17,11 +17,34 @@ type ResSettingsMeData struct {
 	CreatedAt       time.Time `json:"createdAt"`
 }
 
+type ReqUpdateUsername struct {
+	Username string `json:"username"`
+}
+
+type ResSettingsUsername struct {
+	Success bool                    `json:"success"`
+	Code    string                  `json:"code"`
+	Message string                  `json:"message"`
+	Data    ResSettingsUsernameData `json:"data"`
+}
+
+type ResSettingsUsernameData struct {
+	Username          string    `json:"username"`
+	UsernameChangedAt time.Time `json:"usernameChangedAt"`
+}
+
 type ResSettingsSessions struct {
 	Success bool                     `json:"success"`
 	Code    string                   `json:"code"`
 	Message string                   `json:"message"`
 	Data    []ResSettingsSessionData `json:"data"`
+}
+
+type ResSettingsSession struct {
+	Success bool                   `json:"success"`
+	Code    string                 `json:"code"`
+	Message string                 `json:"message"`
+	Data    ResSettingsSessionData `json:"data"`
 }
 
 type ResSettingsSessionData struct {

@@ -3,13 +3,15 @@ package account
 import "time"
 
 type AccountModel struct {
-	ID              string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Username        *string   `gorm:"size:50;uniqueIndex"`
-	PasswordHash    string    `gorm:"size:255;not null"`
-	PhoneNumber     string    `gorm:"size:20;not null;uniqueIndex"`
-	PhoneVerifiedAt time.Time `gorm:"not null"`
-	CreatedAt       time.Time `gorm:"not null"`
-	UpdatedAt       time.Time `gorm:"not null"`
+	ID                string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	Username          *string   `gorm:"size:50;uniqueIndex"`
+	PasswordHash      string    `gorm:"size:255;not null"`
+	PhoneNumber       string    `gorm:"size:20;not null;uniqueIndex"`
+	PhoneVerifiedAt   time.Time `gorm:"not null"`
+	UsernameChangedAt *time.Time
+	PasswordChangedAt *time.Time
+	CreatedAt         time.Time `gorm:"not null"`
+	UpdatedAt         time.Time `gorm:"not null"`
 }
 
 type RegisterModel struct {

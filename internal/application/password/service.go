@@ -262,6 +262,7 @@ func (s *Service) VerifyForgotPassword(
 	}
 
 	accountModel.PasswordHash = passwordHash
+	accountModel.PasswordChangedAt = &now
 	accountModel.UpdatedAt = now
 	if err := s.accounts.Update(ctx, accountModel); err != nil {
 		return err
@@ -309,6 +310,7 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 
 	now := s.now()
 	accountModel.PasswordHash = passwordHash
+	accountModel.PasswordChangedAt = &now
 	accountModel.UpdatedAt = now
 	if err := s.accounts.Update(ctx, accountModel); err != nil {
 		return err

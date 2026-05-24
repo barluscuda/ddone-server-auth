@@ -23,6 +23,7 @@ func newHTTPServer(
 	registerService appregister.UseCase,
 	loginHandler *handler.LoginHandler,
 	settingsHandler *handler.SettingsHandler,
+	sessionHandler *handler.SessionHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -54,7 +55,7 @@ func newHTTPServer(
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler, loginHandler, settingsHandler, passwordHandler, requireAccessToken, jwksHandler)
+	registerRoutes(app, registerHandler, loginHandler, settingsHandler, sessionHandler, passwordHandler, requireAccessToken, jwksHandler)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -97,6 +98,7 @@ func registerRoutes(
 	registerHandler *handler.RegisterHandler,
 	loginHandler *handler.LoginHandler,
 	settingsHandler *handler.SettingsHandler,
+	sessionHandler *handler.SessionHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -119,6 +121,11 @@ func registerRoutes(
 	settingsRoutes.Use(requireAccessToken)
 	settingsRoutes.GET("", settingsHandler.GetMe)
 	settingsRoutes.GET("/me", settingsHandler.GetMe)
-	settingsRoutes.GET("/sessions", settingsHandler.ListSessions)
+	settingsRoutes.PATCH("/username", settingsHandler.PatchUsername)
+	settingsRoutes.GET("/sessions", sessionHandler.List)
+	settingsRoutes.GET("/session/current", sessionHandler.Current)
+	settingsRoutes.POST("/sessions/revoke-others", sessionHandler.RevokeOthers)
+	settingsRoutes.POST("/sessions/revoke-all", sessionHandler.RevokeAll)
+	settingsRoutes.DELETE("/sessions/:sessionId", sessionHandler.Revoke)
 	settingsRoutes.POST("/password", passwordHandler.ChangePassword)
 }

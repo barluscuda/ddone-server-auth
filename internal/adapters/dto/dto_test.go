@@ -96,3 +96,30 @@ func TestResSettingsMeMarshalsCamelCaseFields(t *testing.T) {
 		}
 	}
 }
+
+func TestResSettingsUsernameMarshalsCamelCaseFields(t *testing.T) {
+	payload, err := json.Marshal(ResSettingsUsername{
+		Success: true,
+		Code:    "settings_username_updated",
+		Message: "username updated successfully",
+		Data: ResSettingsUsernameData{
+			Username:          "new_name",
+			UsernameChangedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal settings username dto: %v", err)
+	}
+
+	body := string(payload)
+	for _, expected := range []string{"username", "usernameChangedAt"} {
+		if !strings.Contains(body, `"`+expected+`"`) {
+			t.Fatalf("expected response body to contain %q, got %s", expected, body)
+		}
+	}
+	for _, rejected := range []string{"username_changed_at"} {
+		if strings.Contains(body, `"`+rejected+`"`) {
+			t.Fatalf("expected response body to avoid %q, got %s", rejected, body)
+		}
+	}
+}

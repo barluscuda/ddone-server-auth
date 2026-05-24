@@ -62,6 +62,9 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 		if authContext.AccountID != "account-1" {
 			t.Fatalf("expected account id %q, got %q", "account-1", authContext.AccountID)
 		}
+		if authContext.AccessToken != "access-token" {
+			t.Fatalf("expected access token %q, got %q", "access-token", authContext.AccessToken)
+		}
 		c.Status(http.StatusOK)
 	})
 

@@ -198,11 +198,62 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	if err := bcrypt.CompareHashAndPassword([]byte(accounts.updated.PasswordHash), []byte("new-password")); err != nil {
 		t.Fatal("expected password hash to be replaced")
 	}
+	if accounts.updated.PasswordChangedAt == nil {
+		t.Fatal("expected password changed at to be recorded")
+	}
 	if refreshRevoker.calls != 1 || loginRevoker.calls != 1 {
 		t.Fatal("expected both session stores to be revoked")
 	}
 	if _, ok := store.states["pwd_fixed123"]; ok {
 		t.Fatal("expected reset ticket to be deleted after success")
+	}
+}
+
+func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
+	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	accountModel := &account.AccountModel{
+		ID:           "account-1",
+		PhoneNumber:  "2012345678",
+		PasswordHash: string(currentHash),
+	}
+	accounts := &fakeAccountStore{
+		byID:    map[string]*account.AccountModel{"account-1": accountModel},
+		byPhone: map[string]*account.AccountModel{"2012345678": accountModel},
+	}
+	refreshRevoker := &fakeRevoker{}
+	loginRevoker := &fakeRevoker{}
+	service := NewService(
+		accounts,
+		&fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}},
+		&fakeSender{},
+		refreshRevoker,
+		loginRevoker,
+	)
+	service.now = func() time.Time { return time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC) }
+
+	err = service.ChangePassword(context.Background(), ChangePasswordInput{
+		AccountID:       "account-1",
+		CurrentPassword: "old-password",
+		NewPassword:     "new-password",
+	})
+	if err != nil {
+		t.Fatalf("ChangePassword returned error: %v", err)
+	}
+	if accounts.updated == nil {
+		t.Fatal("expected account to be updated")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(accounts.updated.PasswordHash), []byte("new-password")); err != nil {
+		t.Fatal("expected password hash to be replaced")
+	}
+	if accounts.updated.PasswordChangedAt == nil {
+		t.Fatal("expected password changed at to be recorded")
+	}
+	if refreshRevoker.calls != 1 || loginRevoker.calls != 1 {
+		t.Fatal("expected both session stores to be revoked")
 	}
 }
 

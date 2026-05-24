@@ -15,7 +15,12 @@
 - `POST /password-resets/verify`
 - `GET /settings`
 - `GET /settings/me`
+- `PATCH /settings/username`
 - `GET /settings/sessions`
+- `GET /settings/session/current`
+- `DELETE /settings/sessions/:sessionId`
+- `POST /settings/sessions/revoke-others`
+- `POST /settings/sessions/revoke-all`
 - `POST /settings/password`
 - `GET /.well-known/jwks.json`
 
@@ -46,7 +51,8 @@ config/                        Config loading and default values
 internal/application/register/ Registration use case
 internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
-internal/application/settings/ Settings and current-session listing use case
+internal/application/settings/ Current authenticated-account settings view and username update use case
+internal/application/session/  Login-session current/list/revocation use case
 internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/account/       Account and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
@@ -321,6 +327,64 @@ Authorization: Bearer <access-token>
 ### `GET /settings/sessions`
 
 Returns the current account's known login sessions.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `GET /settings/session/current`
+
+Returns the current login session associated with the authenticated access token.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `PATCH /settings/username`
+
+Updates the username for the current authenticated account.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+Example body:
+
+```json
+{
+  "username": "new_name"
+}
+```
+
+### `DELETE /settings/sessions/:sessionId`
+
+Revokes a specific login session owned by the current authenticated account.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `POST /settings/sessions/revoke-others`
+
+Revokes all other login sessions while keeping the current session active.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `POST /settings/sessions/revoke-all`
+
+Revokes all login sessions owned by the current authenticated account.
 
 Headers:
 

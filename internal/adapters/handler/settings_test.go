@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -14,18 +15,21 @@ import (
 )
 
 type fakeSettingsUseCase struct {
-	me       *appsettings.View
-	meErr    error
-	sessions []appsettings.SessionView
-	sessErr  error
+	me          *appsettings.View
+	meErr       error
+	username    *appsettings.UsernameView
+	usernameErr error
 }
 
 func (f *fakeSettingsUseCase) Get(_ context.Context, _ appsettings.GetInput) (*appsettings.View, error) {
 	return f.me, f.meErr
 }
 
-func (f *fakeSettingsUseCase) ListSessions(_ context.Context, _ appsettings.ListSessionsInput) ([]appsettings.SessionView, error) {
-	return f.sessions, f.sessErr
+func (f *fakeSettingsUseCase) UpdateUsername(
+	_ context.Context,
+	_ appsettings.UpdateUsernameInput,
+) (*appsettings.UsernameView, error) {
+	return f.username, f.usernameErr
 }
 
 func TestSettingsHandlerReturnsMe(t *testing.T) {
@@ -56,29 +60,25 @@ func TestSettingsHandlerReturnsMe(t *testing.T) {
 	}
 }
 
-func TestSettingsHandlerReturnsSessions(t *testing.T) {
+func TestSettingsHandlerUpdatesUsername(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)
 
 	handler := NewSettingsHandler(&fakeSettingsUseCase{
-		sessions: []appsettings.SessionView{
-			{
-				ID:                   "session-1",
-				ClientIP:             "127.0.0.1",
-				UserAgent:            "test-agent",
-				CurrentAccessExpires: time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC),
-				CreatedAt:            time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-			},
+		username: &appsettings.UsernameView{
+			Username:          "new_name",
+			UsernameChangedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/settings/sessions", nil)
+	req := httptest.NewRequest(http.MethodPatch, "/settings/username", bytes.NewBufferString(`{"username":"new_name"}`))
+	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.GET("/settings/sessions", func(c *gin.Context) {
+	router.PATCH("/settings/username", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
-		handler.ListSessions(c)
+		handler.PatchUsername(c)
 	})
 	router.ServeHTTP(recorder, req)
 

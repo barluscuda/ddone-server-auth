@@ -6,8 +6,9 @@ type GetInput struct {
 	AccountID string
 }
 
-type ListSessionsInput struct {
+type UpdateUsernameInput struct {
 	AccountID string
+	Username  string
 }
 
 type View struct {
@@ -18,11 +19,7 @@ type View struct {
 	CreatedAt       time.Time
 }
 
-type SessionView struct {
-	ID                   string
-	ClientIP             string
-	UserAgent            string
-	CurrentAccessExpires time.Time
-	CreatedAt            time.Time
-	RevokedAt            *time.Time
+type UsernameView struct {
+	Username          string
+	UsernameChangedAt time.Time
 }

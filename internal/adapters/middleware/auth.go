@@ -20,6 +20,7 @@ type AuthContext struct {
 	AccountID   string
 	PhoneNumber string
 	TokenID     string
+	AccessToken string
 }
 
 func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
@@ -53,6 +54,7 @@ func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
 			AccountID:   accountID,
 			PhoneNumber: claims.PhoneNumber,
 			TokenID:     claims.JWTID,
+			AccessToken: tokenValue,
 		})
 		c.Next()
 	}

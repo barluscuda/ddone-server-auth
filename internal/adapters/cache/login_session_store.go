@@ -4,7 +4,7 @@ import (
 	"context"
 	applogin "ddone-server-auth/internal/application/login"
 	apppassword "ddone-server-auth/internal/application/password"
-	appsettings "ddone-server-auth/internal/application/settings"
+	appsession "ddone-server-auth/internal/application/session"
 	"ddone-server-auth/internal/domain/auth"
 	"time"
 
@@ -13,7 +13,7 @@ import (
 
 type loginSessionStoreBackend interface {
 	applogin.LoginSessionStore
-	appsettings.SessionReader
+	appsession.Store
 	apppassword.LoginSessionRevoker
 }
 
@@ -25,7 +25,7 @@ type CachedLoginSessionStore struct {
 }
 
 var _ applogin.LoginSessionStore = (*CachedLoginSessionStore)(nil)
-var _ appsettings.SessionReader = (*CachedLoginSessionStore)(nil)
+var _ appsession.Store = (*CachedLoginSessionStore)(nil)
 var _ apppassword.LoginSessionRevoker = (*CachedLoginSessionStore)(nil)
 
 func NewCachedLoginSessionStore(
@@ -61,6 +61,34 @@ func (s *CachedLoginSessionStore) GetByTokenHash(
 	}
 
 	session, err := s.next.GetByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return nil, err
+	}
+
+	s.cacheSession(ctx, session)
+	return session, nil
+}
+
+func (s *CachedLoginSessionStore) GetByID(ctx context.Context, sessionID string) (*auth.LoginSession, error) {
+	var cached auth.LoginSession
+	if s.cache.get(ctx, loginSessionByIDKey(sessionID), &cached) {
+		return &cached, nil
+	}
+
+	session, err := s.next.GetByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.cacheSession(ctx, session)
+	return session, nil
+}
+
+func (s *CachedLoginSessionStore) GetByCurrentAccessToken(
+	ctx context.Context,
+	accessToken string,
+) (*auth.LoginSession, error) {
+	session, err := s.next.GetByCurrentAccessToken(ctx, accessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +159,50 @@ func (s *CachedLoginSessionStore) RevokeByAccountID(
 	}
 
 	for _, session := range sessions {
+		s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
+	}
+	s.invalidateAccountSessions(ctx, accountID)
+	return nil
+}
+
+func (s *CachedLoginSessionStore) RevokeByID(
+	ctx context.Context,
+	sessionID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	session, err := s.next.GetByID(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if err := s.next.RevokeByID(ctx, sessionID, reason, revokedAt); err != nil {
+		return err
+	}
+
+	s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
+	s.invalidateAccountSessions(ctx, session.AccountID)
+	return nil
+}
+
+func (s *CachedLoginSessionStore) RevokeByAccountIDExcept(
+	ctx context.Context,
+	accountID string,
+	excludedSessionID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	sessions, err := s.next.ListByAccountID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if err := s.next.RevokeByAccountIDExcept(ctx, accountID, excludedSessionID, reason, revokedAt); err != nil {
+		return err
+	}
+
+	for _, session := range sessions {
+		if session.ID == excludedSessionID {
+			continue
+		}
 		s.cache.delete(ctx, loginSessionByIDKey(session.ID), loginSessionByTokenHashKey(session.TokenHash))
 	}
 	s.invalidateAccountSessions(ctx, accountID)

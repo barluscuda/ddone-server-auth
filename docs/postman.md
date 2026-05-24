@@ -23,6 +23,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - `username`: saved automatically after `/registrations/verify`
 - `currentPassword`: current password used for `/settings/password`
 - `newPassword`: replacement password used for password reset and change-password flows
+- `newUsername`: replacement username used for `/settings/username`
 
 ## Recommended Flow
 
@@ -40,8 +41,13 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 12. `Login`
 13. `Change Password`
 14. `Settings`
-15. `Settings Sessions`
-16. `JWKS`
+15. `Update Username`
+16. `Settings Sessions`
+17. `Current Session`
+18. `Revoke Session`
+19. `Revoke Other Sessions`
+20. `Revoke All Sessions`
+21. `JWKS`
 
 ## Notes
 
@@ -51,6 +57,7 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - The `Verify Forgot Password` and `Change Password` requests update the `password` environment variable to match `newPassword` after a successful change.
 - The `Create Login Session` request relies on Postman's cookie jar receiving the `ddone_session` cookie; the JWT stays in server-side session state.
 - The `Session Access Token` request depends on that cookie jar entry and returns the currently active access token for the session, or a fresh one if the stored token has already expired.
-- The `Settings`, `Settings Sessions`, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
+- The `Settings`, `Update Username`, session-control requests, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
 - The `Settings` request uses `GET /settings/me`; `GET /settings` is also available.
+- Session control endpoints also live under `/settings/session` and `/settings/sessions`, including `GET /settings/session/current`, `DELETE /settings/sessions/:sessionId`, `POST /settings/sessions/revoke-others`, and `POST /settings/sessions/revoke-all`.
 - `JWKS` is public and does not require authentication.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"ddone-server-auth/internal/application/login"
 	apppassword "ddone-server-auth/internal/application/password"
-	appsettings "ddone-server-auth/internal/application/settings"
+	appsession "ddone-server-auth/internal/application/session"
 	"ddone-server-auth/internal/domain/auth"
 	"errors"
 	"time"
@@ -35,7 +35,7 @@ func (loginSessionRecord) TableName() string {
 }
 
 var _ login.LoginSessionStore = (*LoginSessionRepository)(nil)
-var _ appsettings.SessionReader = (*LoginSessionRepository)(nil)
+var _ appsession.Store = (*LoginSessionRepository)(nil)
 var _ apppassword.LoginSessionRevoker = (*LoginSessionRepository)(nil)
 
 func NewLoginSessionRepository(db *gorm.DB) *LoginSessionRepository {
@@ -53,6 +53,29 @@ func (r *LoginSessionRepository) GetByTokenHash(
 	var record loginSessionRecord
 
 	if err := r.baseQuery(ctx).First(&record, "token_hash = ?", tokenHash).Error; err != nil {
+		return nil, translateLoginSessionError(err)
+	}
+
+	return toLoginSession(record), nil
+}
+
+func (r *LoginSessionRepository) GetByID(ctx context.Context, sessionID string) (*auth.LoginSession, error) {
+	var record loginSessionRecord
+
+	if err := r.baseQuery(ctx).First(&record, "id = ?", sessionID).Error; err != nil {
+		return nil, translateLoginSessionError(err)
+	}
+
+	return toLoginSession(record), nil
+}
+
+func (r *LoginSessionRepository) GetByCurrentAccessToken(
+	ctx context.Context,
+	accessToken string,
+) (*auth.LoginSession, error) {
+	var record loginSessionRecord
+
+	if err := r.baseQuery(ctx).First(&record, "current_access_token = ?", accessToken).Error; err != nil {
 		return nil, translateLoginSessionError(err)
 	}
 
@@ -105,6 +128,46 @@ func (r *LoginSessionRepository) RevokeByAccountID(
 	return r.baseQuery(ctx).
 		Model(&loginSessionRecord{}).
 		Where("account_id = ? AND revoked_at IS NULL", accountID).
+		Updates(map[string]any{
+			"revoked_at":    revokedAt,
+			"revoke_reason": reason,
+		}).
+		Error
+}
+
+func (r *LoginSessionRepository) RevokeByID(
+	ctx context.Context,
+	sessionID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	result := r.baseQuery(ctx).
+		Model(&loginSessionRecord{}).
+		Where("id = ? AND revoked_at IS NULL", sessionID).
+		Updates(map[string]any{
+			"revoked_at":    revokedAt,
+			"revoke_reason": reason,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return auth.ErrLoginSessionNotFound
+	}
+
+	return nil
+}
+
+func (r *LoginSessionRepository) RevokeByAccountIDExcept(
+	ctx context.Context,
+	accountID string,
+	excludedSessionID string,
+	reason string,
+	revokedAt time.Time,
+) error {
+	return r.baseQuery(ctx).
+		Model(&loginSessionRecord{}).
+		Where("account_id = ? AND id <> ? AND revoked_at IS NULL", accountID, excludedSessionID).
 		Updates(map[string]any{
 			"revoked_at":    revokedAt,
 			"revoke_reason": reason,
