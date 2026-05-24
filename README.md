@@ -7,20 +7,23 @@
 - `POST /registrations/resend`
 - `POST /registrations/verify`
 - `POST /tokens`
+- `GET /tokens`
 - `POST /tokens/refresh`
+- `DELETE /tokens/:tokenId`
+- `POST /tokens/revoke-all`
 - `POST /sessions`
+- `GET /sessions`
 - `POST /sessions/token`
+- `GET /sessions/current`
+- `DELETE /sessions/:sessionId`
+- `POST /sessions/revoke-others`
+- `POST /sessions/revoke-all`
 - `POST /password-resets`
 - `POST /password-resets/resend`
 - `POST /password-resets/verify`
 - `GET /settings`
 - `GET /settings/me`
 - `PATCH /settings/username`
-- `GET /settings/sessions`
-- `GET /settings/session/current`
-- `DELETE /settings/sessions/:sessionId`
-- `POST /settings/sessions/revoke-others`
-- `POST /settings/sessions/revoke-all`
 - `POST /settings/password`
 - `GET /.well-known/jwks.json`
 
@@ -53,6 +56,7 @@ internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
 internal/application/settings/ Current authenticated-account settings view and username update use case
 internal/application/session/  Login-session current/list/revocation use case
+internal/application/tokenmanager/ Raw refresh-token listing and revocation use case
 internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/account/       Account and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
@@ -292,7 +296,7 @@ Example body:
 
 ### `POST /password-resets/verify`
 
-Verifies the password-reset OTP, updates the account password, and revokes existing login and refresh sessions.
+Verifies the password-reset OTP, updates the account password, and revokes existing login sessions and raw token records.
 
 Example body:
 
@@ -324,7 +328,37 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `GET /settings/sessions`
+### `GET /tokens`
+
+Returns the current account's raw refresh-token sessions.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `DELETE /tokens/:tokenId`
+
+Revokes a specific raw refresh-token session owned by the current authenticated account.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `POST /tokens/revoke-all`
+
+Revokes all raw refresh-token sessions owned by the current authenticated account.
+
+Headers:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+### `GET /sessions`
 
 Returns the current account's known login sessions.
 
@@ -334,7 +368,7 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `GET /settings/session/current`
+### `GET /sessions/current`
 
 Returns the current login session associated with the authenticated access token.
 
@@ -362,7 +396,7 @@ Example body:
 }
 ```
 
-### `DELETE /settings/sessions/:sessionId`
+### `DELETE /sessions/:sessionId`
 
 Revokes a specific login session owned by the current authenticated account.
 
@@ -372,7 +406,7 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `POST /settings/sessions/revoke-others`
+### `POST /sessions/revoke-others`
 
 Revokes all other login sessions while keeping the current session active.
 
@@ -382,7 +416,7 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
-### `POST /settings/sessions/revoke-all`
+### `POST /sessions/revoke-all`
 
 Revokes all login sessions owned by the current authenticated account.
 
@@ -394,7 +428,7 @@ Authorization: Bearer <access-token>
 
 ### `POST /settings/password`
 
-Changes the password for the current authenticated account after verifying the current password. A successful change revokes existing login and refresh sessions.
+Changes the password for the current authenticated account after verifying the current password. A successful change revokes existing login sessions and raw token records.
 
 Headers:
 

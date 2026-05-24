@@ -47,7 +47,7 @@ type Service struct {
 	accounts        AccountStore
 	store           ResetStore
 	sender          OTPSender
-	refreshSessions RefreshSessionRevoker
+	tokenRecords TokenRevoker
 	loginSessions   LoginSessionRevoker
 	now             func() time.Time
 	otpGenerator    func(int) (string, error)
@@ -59,14 +59,14 @@ func NewService(
 	accounts AccountStore,
 	store ResetStore,
 	sender OTPSender,
-	refreshSessions RefreshSessionRevoker,
+	tokenRecords TokenRevoker,
 	loginSessions LoginSessionRevoker,
 ) *Service {
 	return &Service{
 		accounts:        accounts,
 		store:           store,
 		sender:          sender,
-		refreshSessions: refreshSessions,
+		tokenRecords: tokenRecords,
 		loginSessions:   loginSessions,
 		now:             func() time.Time { return time.Now().UTC() },
 		otpGenerator:    GenerateOTP,
@@ -320,7 +320,7 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 }
 
 func (s *Service) revokeSessions(ctx context.Context, accountID string, reason string, revokedAt time.Time) error {
-	if err := s.refreshSessions.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
+	if err := s.tokenRecords.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {
 		return err
 	}
 	if err := s.loginSessions.RevokeByAccountID(ctx, accountID, reason, revokedAt); err != nil {

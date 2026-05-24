@@ -200,9 +200,9 @@ func handleLoginError(c *gin.Context, err error) {
 		errors.Is(err, auth.ErrLoginSessionNotFound),
 		errors.Is(err, auth.ErrLoginSessionExpired),
 		errors.Is(err, auth.ErrLoginSessionRevoked),
-		errors.Is(err, auth.ErrRefreshSessionNotFound),
-		errors.Is(err, auth.ErrRefreshSessionExpired),
-		errors.Is(err, auth.ErrRefreshSessionRevoked),
+		errors.Is(err, auth.ErrTokenNotFound),
+		errors.Is(err, auth.ErrTokenExpired),
+		errors.Is(err, auth.ErrTokenRevoked),
 		errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		respondError(c, http.StatusUnauthorized, loginErrorCode(err), loginErrorMessage(err))
 	default:
@@ -226,15 +226,15 @@ func loginErrorCode(err error) string {
 		return codeLoginSessionRevoked
 	case errors.Is(err, auth.ErrLoginSessionExpired):
 		return codeLoginSessionRevoked
-	case errors.Is(err, auth.ErrRefreshSessionExpired):
+	case errors.Is(err, auth.ErrTokenExpired):
 		return codeRefreshTokenExpired
-	case errors.Is(err, auth.ErrRefreshSessionRevoked):
+	case errors.Is(err, auth.ErrTokenRevoked):
 		return codeRefreshTokenRevoked
 	case errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		return codeRefreshTokenReplay
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrLoginSessionNotFound),
-		errors.Is(err, auth.ErrRefreshSessionNotFound):
+		errors.Is(err, auth.ErrTokenNotFound):
 		return codeInvalidCredentials
 	default:
 		return codeInternalServerError
@@ -257,15 +257,15 @@ func loginErrorMessage(err error) string {
 		return "login session is no longer valid"
 	case errors.Is(err, auth.ErrLoginSessionExpired):
 		return "login session is no longer valid"
-	case errors.Is(err, auth.ErrRefreshSessionExpired):
+	case errors.Is(err, auth.ErrTokenExpired):
 		return "refresh token has expired"
-	case errors.Is(err, auth.ErrRefreshSessionRevoked):
+	case errors.Is(err, auth.ErrTokenRevoked):
 		return "refresh token is no longer valid"
 	case errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		return "refresh token replay detected, please log in again"
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrLoginSessionNotFound),
-		errors.Is(err, auth.ErrRefreshSessionNotFound):
+		errors.Is(err, auth.ErrTokenNotFound):
 		return "invalid credentials"
 	default:
 		return "internal server error"

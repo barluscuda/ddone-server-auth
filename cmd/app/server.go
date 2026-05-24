@@ -24,6 +24,7 @@ func newHTTPServer(
 	loginHandler *handler.LoginHandler,
 	settingsHandler *handler.SettingsHandler,
 	sessionHandler *handler.SessionHandler,
+	tokenManagerHandler *handler.TokenManagerHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -55,7 +56,17 @@ func newHTTPServer(
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
 
-	registerRoutes(app, registerHandler, loginHandler, settingsHandler, sessionHandler, passwordHandler, requireAccessToken, jwksHandler)
+	registerRoutes(
+		app,
+		registerHandler,
+		loginHandler,
+		settingsHandler,
+		sessionHandler,
+		tokenManagerHandler,
+		passwordHandler,
+		requireAccessToken,
+		jwksHandler,
+	)
 
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
@@ -99,6 +110,7 @@ func registerRoutes(
 	loginHandler *handler.LoginHandler,
 	settingsHandler *handler.SettingsHandler,
 	sessionHandler *handler.SessionHandler,
+	tokenManagerHandler *handler.TokenManagerHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
@@ -122,10 +134,19 @@ func registerRoutes(
 	settingsRoutes.GET("", settingsHandler.GetMe)
 	settingsRoutes.GET("/me", settingsHandler.GetMe)
 	settingsRoutes.PATCH("/username", settingsHandler.PatchUsername)
-	settingsRoutes.GET("/sessions", sessionHandler.List)
-	settingsRoutes.GET("/session/current", sessionHandler.Current)
-	settingsRoutes.POST("/sessions/revoke-others", sessionHandler.RevokeOthers)
-	settingsRoutes.POST("/sessions/revoke-all", sessionHandler.RevokeAll)
-	settingsRoutes.DELETE("/sessions/:sessionId", sessionHandler.Revoke)
 	settingsRoutes.POST("/password", passwordHandler.ChangePassword)
+
+	tokenRoutes := router.Group("/tokens")
+	tokenRoutes.Use(requireAccessToken)
+	tokenRoutes.GET("", tokenManagerHandler.List)
+	tokenRoutes.POST("/revoke-all", tokenManagerHandler.RevokeAll)
+	tokenRoutes.DELETE("/:tokenId", tokenManagerHandler.Revoke)
+
+	sessionRoutes := router.Group("/sessions")
+	sessionRoutes.Use(requireAccessToken)
+	sessionRoutes.GET("", sessionHandler.List)
+	sessionRoutes.GET("/current", sessionHandler.Current)
+	sessionRoutes.POST("/revoke-others", sessionHandler.RevokeOthers)
+	sessionRoutes.POST("/revoke-all", sessionHandler.RevokeAll)
+	sessionRoutes.DELETE("/:sessionId", sessionHandler.Revoke)
 }

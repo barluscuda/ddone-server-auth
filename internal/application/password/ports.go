@@ -25,7 +25,7 @@ type OTPSender interface {
 	SendOTP(ctx context.Context, phoneNumber string, msg string) error
 }
 
-type RefreshSessionRevoker interface {
+type TokenRevoker interface {
 	RevokeByAccountID(ctx context.Context, accountID string, reason string, revokedAt time.Time) error
 }
 

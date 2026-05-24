@@ -420,7 +420,7 @@
       }
     },
     {
-      "name": "Settings Sessions",
+      "name": "Token Manager",
       "request": {
         "method": "GET",
         "header": [
@@ -430,16 +430,129 @@
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/settings/sessions",
+          "raw": "{{baseUrl}}/tokens",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
-            "settings",
+            "tokens"
+          ]
+        },
+        "description": "Returns the raw refresh-token sessions for the current authenticated account."
+      }
+    },
+    {
+      "name": "Revoke All Tokens",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/tokens/revoke-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tokens",
+            "revoke-all"
+          ]
+        },
+        "description": "Revokes all raw refresh-token sessions for the current authenticated account."
+      }
+    },
+    {
+      "name": "Sessions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
             "sessions"
           ]
         },
-        "description": "Returns the login sessions for the current authenticated account."
+        "description": "Returns the server-managed login sessions for the current authenticated account."
+      }
+    },
+    {
+      "name": "Current Session",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/sessions/current",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sessions",
+            "current"
+          ]
+        },
+        "description": "Returns the current server-managed login session for the authenticated access token."
+      }
+    },
+    {
+      "name": "Revoke Other Sessions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/sessions/revoke-others",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sessions",
+            "revoke-others"
+          ]
+        },
+        "description": "Revokes all other server-managed login sessions while keeping the current one active."
+      }
+    },
+    {
+      "name": "Revoke All Sessions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/sessions/revoke-all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sessions",
+            "revoke-all"
+          ]
+        },
+        "description": "Revokes all server-managed login sessions for the current authenticated account."
       }
     },
     {

@@ -52,16 +52,25 @@ cmd/app/                  Process entrypoint
 - `POST /register`
 - `POST /register/resend`
 - `POST /register/verify`
-- `POST /login`
-- `POST /login/refresh`
-- `POST /login/session`
-- `POST /login/session/token`
+- `POST /tokens`
+- `POST /tokens/refresh`
+- `GET /tokens`
+- `DELETE /tokens/:tokenId`
+- `POST /tokens/revoke-all`
+- `POST /sessions`
+- `POST /sessions/token`
+- `GET /sessions`
+- `GET /sessions/current`
+- `DELETE /sessions/:sessionId`
+- `POST /sessions/revoke-others`
+- `POST /sessions/revoke-all`
 - `POST /password/forgot`
 - `POST /password/forgot/resend`
 - `POST /password/forgot/verify`
-- `GET /account/me`
-- `GET /account/sessions`
-- `POST /account/password`
+- `GET /settings`
+- `GET /settings/me`
+- `PATCH /settings/username`
+- `POST /settings/password`
 - `GET /.well-known/jwks.json`
 
 Registration currently depends on:
@@ -78,7 +87,7 @@ Password reset currently depends on:
 
 Login currently depends on:
 
-- PostgreSQL for account lookup, refresh sessions, login sessions, and signing keys
+- PostgreSQL for account lookup, raw token records, login sessions, and signing keys
 - ES256 access-token signing with JWKS publication
 
 Session-login currently also depends on:

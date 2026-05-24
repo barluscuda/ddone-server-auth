@@ -2,6 +2,8 @@ package auth
 
 import "time"
 
+// LoginSession is a server-managed session. Its current access token is replaced
+// in place when the session needs a fresh JWT.
 type LoginSession struct {
 	ID                   string
 	AccountID            string

@@ -16,6 +16,7 @@ import (
 	appregister "ddone-server-auth/internal/application/register"
 	appsession "ddone-server-auth/internal/application/session"
 	appsettings "ddone-server-auth/internal/application/settings"
+	apptokenmanager "ddone-server-auth/internal/application/tokenmanager"
 	"ddone-server-auth/internal/bootstrap/logging"
 	"net/http"
 	"strings"
@@ -75,9 +76,9 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		repository.NewSigningKeyRepository(db),
 		cfg.Cache.SigningKeysTTL,
 	)
-	refreshSessionRepository := cache.NewCachedRefreshSessionStore(
+	tokenRepository := cache.NewCachedTokenStore(
 		redisClient,
-		repository.NewRefreshSessionRepository(db),
+		repository.NewTokenRepository(db),
 	)
 	loginSessionRepository := cache.NewCachedLoginSessionStore(
 		redisClient,
@@ -95,7 +96,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	if _, err := jwksService.EnsureActiveSigningKey(context.Background()); err != nil {
 		logger.Fatal("failed to ensure active signing key", zap.Error(err))
 	}
-	loginService := applogin.NewService(accountRepository, refreshSessionRepository, loginSessionRepository, jwksService, applogin.Settings{
+	loginService := applogin.NewService(accountRepository, tokenRepository, loginSessionRepository, jwksService, applogin.Settings{
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
 	})
@@ -103,11 +104,12 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		accountRepository,
 		passwordResetStore,
 		smsClient,
-		refreshSessionRepository,
+		tokenRepository,
 		loginSessionRepository,
 	)
 	settingsService := appsettings.NewService(accountRepository)
 	sessionService := appsession.NewService(loginSessionRepository)
+	tokenManagerService := apptokenmanager.NewService(tokenRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
 		Name:     cfg.Auth.SessionCookieName,
 		MaxAge:   cfg.Auth.EffectiveSessionCookieMaxAge(),
@@ -116,10 +118,24 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	})
 	settingsHandler := handler.NewSettingsHandler(settingsService)
 	sessionHandler := handler.NewSessionHandler(sessionService)
+	tokenManagerHandler := handler.NewTokenManagerHandler(tokenManagerService)
 	passwordHandler := handler.NewPasswordHandler(passwordService)
 	jwksHandler := handler.NewJWKSHandler(jwksService)
 
-	return newHTTPServer(cfg, logger, registerService, loginHandler, settingsHandler, sessionHandler, passwordHandler, middleware.RequireAccessToken(jwksService), jwksHandler), func() {
+	httpServer := newHTTPServer(
+		cfg,
+		logger,
+		registerService,
+		loginHandler,
+		settingsHandler,
+		sessionHandler,
+		tokenManagerHandler,
+		passwordHandler,
+		middleware.RequireAccessToken(jwksService),
+		jwksHandler,
+	)
+
+	return httpServer, func() {
 		if err := redisClient.Close(); err != nil {
 			logger.Warn("failed to close redis client", zap.Error(err))
 		}

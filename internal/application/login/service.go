@@ -17,7 +17,7 @@ import (
 
 const (
 	refreshTokenBytes = 32
-	sessionIDBytes    = 16
+	uuidBytes         = 16
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
@@ -32,28 +32,28 @@ type UseCase interface {
 }
 
 type Service struct {
-	accounts      AccountLookup
-	sessions      RefreshSessionStore
-	loginSessions LoginSessionStore
-	tokens        AccessTokenIssuer
-	settings      Settings
-	now           func() time.Time
+	accounts       AccountLookup
+	tokenRecords   TokenStore
+	serverSessions LoginSessionStore
+	accessTokens   AccessTokenIssuer
+	settings       Settings
+	now            func() time.Time
 }
 
 func NewService(
 	accounts AccountLookup,
-	sessions RefreshSessionStore,
+	tokenRecords TokenStore,
 	loginSessions LoginSessionStore,
 	tokens AccessTokenIssuer,
 	settings Settings,
 ) *Service {
 	return &Service{
-		accounts:      accounts,
-		sessions:      sessions,
-		loginSessions: loginSessions,
-		tokens:        tokens,
-		settings:      settings,
-		now:           func() time.Time { return time.Now().UTC() },
+		accounts:       accounts,
+		tokenRecords:   tokenRecords,
+		serverSessions: loginSessions,
+		accessTokens:   tokens,
+		settings:       settings,
+		now:            func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -63,12 +63,12 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) 
 		return nil, err
 	}
 
-	accessToken, err := s.tokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, session, err := s.newSession(
+	refreshToken, tokenRecord, err := s.newRefreshTokenRecord(
 		accountModel.ID,
 		"",
 		"",
@@ -78,16 +78,16 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) 
 	if err != nil {
 		return nil, err
 	}
-	session.RootSessionID = session.ID
+	tokenRecord.RootTokenID = tokenRecord.ID
 
-	if err := s.sessions.Create(ctx, session); err != nil {
+	if err := s.tokenRecords.Create(ctx, tokenRecord); err != nil {
 		return nil, err
 	}
 
 	return &Result{
 		AccessToken:      accessToken,
 		RefreshToken:     refreshToken,
-		RefreshExpiresAt: session.ExpiresAt,
+		RefreshExpiresAt: tokenRecord.ExpiresAt,
 	}, nil
 }
 
@@ -97,12 +97,12 @@ func (s *Service) LoginSession(ctx context.Context, input LoginInput) (*SessionR
 		return nil, err
 	}
 
-	accessToken, err := s.tokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	sessionToken, session, err := s.newLoginSession(
+	sessionToken, session, err := s.newServerSession(
 		accountModel.ID,
 		accessToken,
 		input.ClientIP,
@@ -112,7 +112,7 @@ func (s *Service) LoginSession(ctx context.Context, input LoginInput) (*SessionR
 		return nil, err
 	}
 
-	if err := s.loginSessions.Create(ctx, session); err != nil {
+	if err := s.serverSessions.Create(ctx, session); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +132,7 @@ func (s *Service) SessionToken(ctx context.Context, input SessionTokenInput) (*S
 		return nil, auth.ErrSessionTokenRequired
 	}
 
-	session, err := s.loginSessions.GetByTokenHash(ctx, hashSessionToken(tokenValue))
+	session, err := s.serverSessions.GetByTokenHash(ctx, hashSessionToken(tokenValue))
 	if err != nil {
 		return nil, err
 	}
@@ -159,12 +159,12 @@ func (s *Service) SessionToken(ctx context.Context, input SessionTokenInput) (*S
 		return nil, err
 	}
 
-	accessToken, err := s.tokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.loginSessions.UpdateAccessToken(ctx, session.ID, accessToken); err != nil {
+	if err := s.serverSessions.UpdateAccessToken(ctx, session.ID, accessToken); err != nil {
 		return nil, err
 	}
 
@@ -179,29 +179,29 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 		return nil, auth.ErrRefreshTokenRequired
 	}
 
-	session, err := s.sessions.GetByTokenHash(ctx, hashRefreshToken(tokenValue))
+	tokenRecord, err := s.tokenRecords.GetByTokenHash(ctx, hashRefreshToken(tokenValue))
 	if err != nil {
 		return nil, err
 	}
 
 	now := s.now()
-	rootSessionID := session.RootSessionID
-	if rootSessionID == "" {
-		rootSessionID = session.ID
+	rootTokenID := tokenRecord.RootTokenID
+	if rootTokenID == "" {
+		rootTokenID = tokenRecord.ID
 	}
 
-	if session.IsReplaced() {
-		_ = s.sessions.RevokeLineage(ctx, rootSessionID, "refresh_token_replay", now)
+	if tokenRecord.IsReplaced() {
+		_ = s.tokenRecords.RevokeLineage(ctx, rootTokenID, "refresh_token_replay", now)
 		return nil, auth.ErrRefreshTokenReplayDetected
 	}
-	if session.IsRevoked() {
-		return nil, auth.ErrRefreshSessionRevoked
+	if tokenRecord.IsRevoked() {
+		return nil, auth.ErrTokenRevoked
 	}
-	if session.IsExpired(now) {
-		return nil, auth.ErrRefreshSessionExpired
+	if tokenRecord.IsExpired(now) {
+		return nil, auth.ErrTokenExpired
 	}
 
-	accountModel, err := s.accounts.GetByID(ctx, session.AccountID)
+	accountModel, err := s.accounts.GetByID(ctx, tokenRecord.AccountID)
 	if err != nil {
 		if errors.Is(err, account.ErrAccountNotFound) {
 			return nil, auth.ErrInvalidCredentials
@@ -209,15 +209,15 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 		return nil, err
 	}
 
-	accessToken, err := s.tokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, accountModel.ID, accountModel.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, replacement, err := s.newSession(
+	refreshToken, replacement, err := s.newRefreshTokenRecord(
 		accountModel.ID,
-		rootSessionID,
-		session.ID,
+		rootTokenID,
+		tokenRecord.ID,
 		input.ClientIP,
 		input.UserAgent,
 	)
@@ -225,9 +225,9 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 		return nil, err
 	}
 
-	if err := s.sessions.Rotate(ctx, session.ID, replacement, now); err != nil {
-		if errors.Is(err, auth.ErrRefreshTokenReplayDetected) || errors.Is(err, auth.ErrRefreshSessionRevoked) {
-			_ = s.sessions.RevokeLineage(ctx, rootSessionID, "refresh_token_replay", now)
+	if err := s.tokenRecords.Rotate(ctx, tokenRecord.ID, replacement, now); err != nil {
+		if errors.Is(err, auth.ErrRefreshTokenReplayDetected) || errors.Is(err, auth.ErrTokenRevoked) {
+			_ = s.tokenRecords.RevokeLineage(ctx, rootTokenID, "refresh_token_replay", now)
 			return nil, auth.ErrRefreshTokenReplayDetected
 		}
 		return nil, err
@@ -240,41 +240,41 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 	}, nil
 }
 
-func (s *Service) newSession(
+func (s *Service) newRefreshTokenRecord(
 	accountID string,
-	rootSessionID string,
-	parentSessionID string,
+	rootTokenID string,
+	parentTokenID string,
 	clientIP string,
 	userAgent string,
-) (string, *auth.RefreshSession, error) {
+) (string, *auth.TokenRecord, error) {
 	tokenValue, err := randomOpaqueToken()
 	if err != nil {
 		return "", nil, err
 	}
-	sessionID, err := randomSessionID()
+	tokenID, err := randomUUID()
 	if err != nil {
 		return "", nil, err
 	}
 
 	now := s.now()
-	session := &auth.RefreshSession{
-		ID:            sessionID,
-		AccountID:     accountID,
-		RootSessionID: rootSessionID,
-		TokenHash:     hashRefreshToken(tokenValue),
-		UserAgent:     strings.TrimSpace(userAgent),
-		ClientIP:      strings.TrimSpace(clientIP),
-		ExpiresAt:     now.Add(s.settings.RefreshTokenTTL),
-		CreatedAt:     now,
+	tokenRecord := &auth.TokenRecord{
+		ID:          tokenID,
+		AccountID:   accountID,
+		RootTokenID: rootTokenID,
+		TokenHash:   hashRefreshToken(tokenValue),
+		UserAgent:   strings.TrimSpace(userAgent),
+		ClientIP:    strings.TrimSpace(clientIP),
+		ExpiresAt:   now.Add(s.settings.RefreshTokenTTL),
+		CreatedAt:   now,
 	}
-	if parentSessionID != "" {
-		session.ParentSessionID = &parentSessionID
+	if parentTokenID != "" {
+		tokenRecord.ParentTokenID = &parentTokenID
 	}
 
-	return tokenValue, session, nil
+	return tokenValue, tokenRecord, nil
 }
 
-func (s *Service) newLoginSession(
+func (s *Service) newServerSession(
 	accountID string,
 	accessToken *auth.AccessToken,
 	clientIP string,
@@ -284,7 +284,7 @@ func (s *Service) newLoginSession(
 	if err != nil {
 		return "", nil, err
 	}
-	sessionID, err := randomSessionID()
+	sessionID, err := randomUUID()
 	if err != nil {
 		return "", nil, err
 	}
@@ -358,8 +358,8 @@ func randomOpaqueToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
-func randomSessionID() (string, error) {
-	randomBytes := make([]byte, sessionIDBytes)
+func randomUUID() (string, error) {
+	randomBytes := make([]byte, uuidBytes)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}

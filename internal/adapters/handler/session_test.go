@@ -59,11 +59,11 @@ func TestSessionHandlerReturnsSessions(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/settings/sessions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sessions", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.GET("/settings/sessions", func(c *gin.Context) {
+	router.GET("/sessions", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.List(c)
 	})
@@ -86,11 +86,11 @@ func TestSessionHandlerReturnsCurrentSession(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/settings/session/current", nil)
+	req := httptest.NewRequest(http.MethodGet, "/sessions/current", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.GET("/settings/session/current", func(c *gin.Context) {
+	router.GET("/sessions/current", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1", AccessToken: "access-token"})
 		handler.Current(c)
 	})
@@ -107,11 +107,11 @@ func TestSessionHandlerRevokesSession(t *testing.T) {
 
 	handler := NewSessionHandler(&fakeSessionUseCase{})
 
-	req := httptest.NewRequest(http.MethodDelete, "/settings/sessions/session-1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/session-1", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.DELETE("/settings/sessions/:sessionId", func(c *gin.Context) {
+	router.DELETE("/sessions/:sessionId", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.Revoke(c)
 	})
@@ -128,11 +128,11 @@ func TestSessionHandlerRevokesAllSessions(t *testing.T) {
 
 	handler := NewSessionHandler(&fakeSessionUseCase{})
 
-	req := httptest.NewRequest(http.MethodPost, "/settings/sessions/revoke-all", nil)
+	req := httptest.NewRequest(http.MethodPost, "/sessions/revoke-all", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/settings/sessions/revoke-all", func(c *gin.Context) {
+	router.POST("/sessions/revoke-all", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1"})
 		handler.RevokeAll(c)
 	})
@@ -149,11 +149,11 @@ func TestSessionHandlerRevokesOtherSessions(t *testing.T) {
 
 	handler := NewSessionHandler(&fakeSessionUseCase{})
 
-	req := httptest.NewRequest(http.MethodPost, "/settings/sessions/revoke-others", nil)
+	req := httptest.NewRequest(http.MethodPost, "/sessions/revoke-others", nil)
 	recorder := httptest.NewRecorder()
 
 	router := gin.New()
-	router.POST("/settings/sessions/revoke-others", func(c *gin.Context) {
+	router.POST("/sessions/revoke-others", func(c *gin.Context) {
 		c.Set("auth_context", middleware.AuthContext{AccountID: "account-1", AccessToken: "access-token"})
 		handler.RevokeOthers(c)
 	})

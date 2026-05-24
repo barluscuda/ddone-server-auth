@@ -24,7 +24,7 @@ Use this skill for changes inside this repository.
 - Health check endpoint
 - JWKS publication for ES256 access tokens
 - PostgreSQL-backed account persistence
-- PostgreSQL-backed refresh sessions and signing keys
+- PostgreSQL-backed raw token records, login sessions, and signing keys
 - Redis-backed pending registration state
 - Redis-backed pending password-reset state
 - Wenova SMS delivery
@@ -70,26 +70,35 @@ Use this skill for changes inside this repository.
 - `POST /register`
 - `POST /register/resend`
 - `POST /register/verify`
-- `POST /login`
-- `POST /login/refresh`
-- `POST /login/session`
-- `POST /login/session/token`
+- `POST /tokens`
+- `POST /tokens/refresh`
+- `GET /tokens`
+- `DELETE /tokens/:tokenId`
+- `POST /tokens/revoke-all`
+- `POST /sessions`
+- `POST /sessions/token`
+- `GET /sessions`
+- `GET /sessions/current`
+- `DELETE /sessions/:sessionId`
+- `POST /sessions/revoke-others`
+- `POST /sessions/revoke-all`
 - `POST /password/forgot`
 - `POST /password/forgot/resend`
 - `POST /password/forgot/verify`
-- `GET /account/me`
-- `GET /account/sessions`
-- `POST /account/password`
+- `GET /settings`
+- `GET /settings/me`
+- `PATCH /settings/username`
+- `POST /settings/password`
 - `GET /.well-known/jwks.json`
 
 ## Login And CORS Notes
 
-- `POST /login` returns access and refresh tokens in JSON.
-- `POST /login/refresh` rotates the refresh token from the request body and returns a new access token plus refresh token in JSON.
-- `POST /login/session` stores a persistent server-side session in PostgreSQL and sets the session identifier in an `HttpOnly` cookie.
-- `POST /login/session/token` reads that session cookie and returns the current access token for the session, automatically issuing a new one only after the stored token has expired.
+- `POST /tokens` returns access and refresh tokens in JSON.
+- `POST /tokens/refresh` rotates the refresh token from the request body and returns a new access token plus refresh token in JSON.
+- `POST /sessions` stores a persistent server-side session in PostgreSQL and sets the session identifier in an `HttpOnly` cookie.
+- `POST /sessions/token` reads that session cookie and returns the current access token for the session, automatically issuing a new one only after the stored token has expired.
 - `POST /password/forgot`, `POST /password/forgot/resend`, and `POST /password/forgot/verify` implement the OTP-based password reset flow.
-- `GET /account/me`, `GET /account/sessions`, and `POST /account/password` are self-service routes protected by a Bearer access token in the `Authorization` header.
+- Settings, token-manager, and session-control routes are protected by a Bearer access token in the `Authorization` header.
 - If clients send credentials across origins for other reasons, CORS still requires `allow_credentials=true` and explicit origins instead of `*`.
 
 ## Commands

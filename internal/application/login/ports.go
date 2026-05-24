@@ -13,11 +13,11 @@ type AccountLookup interface {
 	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*account.AccountModel, error)
 }
 
-type RefreshSessionStore interface {
-	Create(ctx context.Context, session *auth.RefreshSession) error
-	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.RefreshSession, error)
-	Rotate(ctx context.Context, currentSessionID string, replacement *auth.RefreshSession, usedAt time.Time) error
-	RevokeLineage(ctx context.Context, rootSessionID string, reason string, revokedAt time.Time) error
+type TokenStore interface {
+	Create(ctx context.Context, tokenRecord *auth.TokenRecord) error
+	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.TokenRecord, error)
+	Rotate(ctx context.Context, currentTokenID string, replacement *auth.TokenRecord, usedAt time.Time) error
+	RevokeLineage(ctx context.Context, rootTokenID string, reason string, revokedAt time.Time) error
 }
 
 type LoginSessionStore interface {

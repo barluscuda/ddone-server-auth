@@ -42,12 +42,15 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 13. `Change Password`
 14. `Settings`
 15. `Update Username`
-16. `Settings Sessions`
-17. `Current Session`
-18. `Revoke Session`
-19. `Revoke Other Sessions`
-20. `Revoke All Sessions`
-21. `JWKS`
+16. `Token Manager`
+17. `Revoke Token`
+18. `Revoke All Tokens`
+19. `Sessions`
+20. `Current Session`
+21. `Revoke Session`
+22. `Revoke Other Sessions`
+23. `Revoke All Sessions`
+24. `JWKS`
 
 ## Notes
 
@@ -57,7 +60,8 @@ This repository includes Postman assets for the current auth API in [postman/ddo
 - The `Verify Forgot Password` and `Change Password` requests update the `password` environment variable to match `newPassword` after a successful change.
 - The `Create Login Session` request relies on Postman's cookie jar receiving the `ddone_session` cookie; the JWT stays in server-side session state.
 - The `Session Access Token` request depends on that cookie jar entry and returns the currently active access token for the session, or a fresh one if the stored token has already expired.
-- The `Settings`, `Update Username`, session-control requests, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
+- The `Settings`, `Update Username`, token-manager requests, session-control requests, and `Change Password` requests require `accessToken` and send it in the `Authorization` header.
 - The `Settings` request uses `GET /settings/me`; `GET /settings` is also available.
-- Session control endpoints also live under `/settings/session` and `/settings/sessions`, including `GET /settings/session/current`, `DELETE /settings/sessions/:sessionId`, `POST /settings/sessions/revoke-others`, and `POST /settings/sessions/revoke-all`.
+- Token manager endpoints live under `/tokens`, including `GET /tokens`, `DELETE /tokens/:tokenId`, and `POST /tokens/revoke-all`.
+- Session control endpoints live under `/sessions`, including `GET /sessions`, `GET /sessions/current`, `DELETE /sessions/:sessionId`, `POST /sessions/revoke-others`, and `POST /sessions/revoke-all`.
 - `JWKS` is public and does not require authentication.
