@@ -81,7 +81,7 @@ agents/                        Repo-local skills
 - Redis
 - Wenova API token for real SMS delivery
 
-Docker Compose enables `pgcrypto` through [db/init/001_pgcrypto.sql](/home/mrbarlus/coding/DDONE/ddone-server-auth/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is created. For an existing local volume, run the SQL manually or recreate the volume before starting the service. For external PostgreSQL instances, enable it once in the target database:
+Docker Compose enables `pgcrypto` through [db/init/001_pgcrypto.sql](https://github.com/barluscuda/ddone-server-auth/blob/main/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is created. For an existing local volume, run the SQL manually or recreate the volume before starting the service. For external PostgreSQL instances, enable it once in the target database:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -127,17 +127,17 @@ make infra-down
 
 Postman assets:
 
-- Collection: [postman/ddone-server-auth.postman_collection.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.postman_collection.json)
-- Environment template: [postman/ddone-server-auth.local.postman_environment.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.local.postman_environment.json)
-- Usage guide: [docs/postman.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/postman.md)
-- Full project handbook: [docs/project.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/project.md)
+- Collection: [postman/ddone-server-auth.postman_collection.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.postman_collection.json)
+- Environment template: [postman/ddone-server-auth.local.postman_environment.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.local.postman_environment.json)
+- Usage guide: [docs/postman.md](https://github.com/barluscuda/ddone-server-auth/blob/main/docs/postman.md)
+- Full project handbook: [docs/project.md](https://github.com/barluscuda/ddone-server-auth/blob/main/docs/project.md)
 
 ## systemd
 
 Repo-provided systemd assets:
 
-- Unit file: [deploy/systemd/ddone-server-auth.service](/home/mrbarlus/coding/DDONE/ddone-server-auth/deploy/systemd/ddone-server-auth.service)
-- Environment template: [deploy/systemd/ddone-server-auth.env.example](/home/mrbarlus/coding/DDONE/ddone-server-auth/deploy/systemd/ddone-server-auth.env.example)
+- Unit file: [deploy/systemd/ddone-server-auth.service](https://github.com/barluscuda/ddone-server-auth/blob/main/deploy/systemd/ddone-server-auth.service)
+- Environment template: [deploy/systemd/ddone-server-auth.env.example](https://github.com/barluscuda/ddone-server-auth/blob/main/deploy/systemd/ddone-server-auth.env.example)
 
 Expected install layout:
 

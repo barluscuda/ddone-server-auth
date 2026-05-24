@@ -1,5 +1,6 @@
 [Unit]
 Description=DDONE Auth Service
+Documentation=https://github.com/barluscuda/ddone-server-auth
 After=network-online.target
 Wants=network-online.target
 

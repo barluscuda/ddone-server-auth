@@ -1,6 +1,6 @@
 # Postman Guide
 
-This repository includes Postman assets for the current auth API in [postman/ddone-server-auth.postman_collection.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.postman_collection.json) and [postman/ddone-server-auth.local.postman_environment.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.local.postman_environment.json).
+This repository includes Postman assets for the current auth API in [postman/ddone-server-auth.postman_collection.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.postman_collection.json) and [postman/ddone-server-auth.local.postman_environment.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.local.postman_environment.json).
 
 ## Import
 

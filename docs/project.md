@@ -76,7 +76,7 @@ The database must support UUID generation through the `pgcrypto` extension:
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```
 
-Docker Compose installs this extension through [db/init/001_pgcrypto.sql](/home/mrbarlus/coding/DDONE/ddone-server-auth/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is first created.
+Docker Compose installs this extension through [db/init/001_pgcrypto.sql](https://github.com/barluscuda/ddone-server-auth/blob/main/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is first created.
 
 Important: PostgreSQL init scripts run only on first volume creation. If `postgres_data` already exists, either run the SQL manually in the database or recreate the volume.
 
@@ -1220,9 +1220,9 @@ When adding behavior:
 
 Postman assets live in:
 
-- [postman/ddone-server-auth.postman_collection.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.postman_collection.json)
-- [postman/ddone-server-auth.local.postman_environment.json](/home/mrbarlus/coding/DDONE/ddone-server-auth/postman/ddone-server-auth.local.postman_environment.json)
-- [docs/postman.md](/home/mrbarlus/coding/DDONE/ddone-server-auth/docs/postman.md)
+- [postman/ddone-server-auth.postman_collection.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.postman_collection.json)
+- [postman/ddone-server-auth.local.postman_environment.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.local.postman_environment.json)
+- [docs/postman.md](https://github.com/barluscuda/ddone-server-auth/blob/main/docs/postman.md)
 
 Recommended manual flow:
 
