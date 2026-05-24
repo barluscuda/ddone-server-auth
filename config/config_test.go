@@ -78,6 +78,16 @@ func TestValidateRejectsNegativeCacheTTL(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
+	cfg := validConfig()
+	cfg.OTP.Register.TTL = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive register otp ttl")
+	}
+}
+
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000
@@ -86,6 +96,20 @@ func validConfig() Config {
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:5173"}
 	cfg.CORS.AllowedMethods = []string{"GET", "POST"}
 	cfg.CORS.AllowedHeaders = []string{"Origin", "Content-Type"}
+	cfg.OTP.Register.TTL = time.Minute
+	cfg.OTP.Register.PhoneWindow = time.Minute
+	cfg.OTP.Register.ResendCooldown = time.Second
+	cfg.OTP.Register.VerifyAttemptWindow = time.Minute
+	cfg.OTP.Register.MaxPhoneRequests = 1
+	cfg.OTP.Register.MaxResends = 1
+	cfg.OTP.Register.MaxVerifyAttempts = 1
+	cfg.OTP.PasswordReset.TTL = time.Minute
+	cfg.OTP.PasswordReset.PhoneWindow = time.Minute
+	cfg.OTP.PasswordReset.ResendCooldown = time.Second
+	cfg.OTP.PasswordReset.VerifyAttemptWindow = time.Minute
+	cfg.OTP.PasswordReset.MaxPhoneRequests = 1
+	cfg.OTP.PasswordReset.MaxResends = 1
+	cfg.OTP.PasswordReset.MaxVerifyAttempts = 1
 	cfg.Auth.Issuer = "issuer"
 	cfg.Auth.Audience = "audience"
 	cfg.Auth.AccessTokenTTL = 1

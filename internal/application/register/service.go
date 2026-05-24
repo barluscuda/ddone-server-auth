@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"ddone-server-auth/internal/application/otp"
 	"ddone-server-auth/internal/domain/user"
 	"encoding/hex"
 	"errors"
@@ -17,13 +18,6 @@ import (
 
 const (
 	registerOTPLength    = 6
-	registerOTPTTL       = 5 * time.Minute
-	registerPhoneWindow  = 5 * time.Minute
-	resendOTPCooldown    = 60 * time.Second
-	verifyAttemptWindow  = registerOTPTTL
-	maxPhoneRequests     = 1
-	maxRegisterResends   = 3
-	maxVerifyAttempts    = 5
 	registerTicketPrefix = "reg_"
 	registerTicketBytes  = 12
 	usernamePrefix       = "user_"
@@ -39,13 +33,24 @@ var ErrPasswordRequired = errors.New("password is required")
 var ErrPendingRegistrationInvalid = errors.New("pending registration is invalid, request otp again")
 var ErrRegisterRateLimited = errors.New("too many registration requests, try again later")
 var ErrResendRateLimited = errors.New("too many otp resend requests, request a new registration")
-var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
+var ErrResendCooldownActive = errors.New("otp resend cooldown is active")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
+
+var defaultOTPPolicy = otp.Policy{
+	TTL:                 5 * time.Minute,
+	PhoneWindow:         5 * time.Minute,
+	ResendCooldown:      60 * time.Second,
+	VerifyAttemptWindow: 5 * time.Minute,
+	MaxPhoneRequests:    1,
+	MaxResends:          3,
+	MaxVerifyAttempts:   5,
+}
 
 type Service struct {
 	users             UserStore
 	store             RegistrationStore
 	sender            OTPSender
+	otpPolicy         otp.Policy
 	now               func() time.Time
 	otpGenerator      func(int) (string, error)
 	ticketGenerator   func() (string, error)
@@ -58,10 +63,20 @@ func NewService(
 	store RegistrationStore,
 	sender OTPSender,
 ) *Service {
+	return NewServiceWithSettings(users, store, sender, Settings{})
+}
+
+func NewServiceWithSettings(
+	users UserStore,
+	store RegistrationStore,
+	sender OTPSender,
+	settings Settings,
+) *Service {
 	return &Service{
 		users:             users,
 		store:             store,
 		sender:            sender,
+		otpPolicy:         settings.OTPPolicy.WithDefaults(defaultOTPPolicy),
 		now:               func() time.Time { return time.Now().UTC() },
 		otpGenerator:      GenerateOTP,
 		ticketGenerator:   generateRegisterTicket,
@@ -122,23 +137,24 @@ func (s *Service) Register(
 		PasswordHash:  passwordHash,
 		PhoneNumber:   globalPhoneNumber,
 		OTPCodeHash:   otpCodeHash,
-		OTPExpiresAt:  now.Add(registerOTPTTL),
+		OTPExpiresAt:  now.Add(s.otpPolicy.TTL),
 		ResendCount:   0,
 		LastOTPSentAt: now,
 		CreatedAt:     now,
 	}
-	message := RegisterOTPMessage(otpCode, registerOTPTTL)
+	message := RegisterOTPMessage(otpCode, s.otpPolicy.TTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
 		return nil, err
 	}
-	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
+	if err := s.store.Save(ctx, pendingRegistration, s.otpPolicy.TTL); err != nil {
 		return nil, err
 	}
 
 	return &RegisterResult{
 		TicketID:             ticketID,
 		ExpiresAt:            pendingRegistration.OTPExpiresAt,
-		RemainingResendCount: maxRegisterResends,
+		ResendCooldown:       s.otpPolicy.ResendCooldown,
+		RemainingResendCount: s.otpPolicy.MaxResends,
 	}, nil
 }
 
@@ -174,11 +190,11 @@ func (s *Service) VerifyRegister(
 	}
 
 	if !matchRegisterOTP(pendingRegistration.OTPCodeHash, ticketID, otpCode) {
-		attempts, err := s.store.IncrementCounter(ctx, verifyAttemptKey(ticketID), verifyAttemptWindow)
+		attempts, err := s.store.IncrementCounter(ctx, verifyAttemptKey(ticketID), s.otpPolicy.VerifyAttemptWindow)
 		if err != nil {
 			return nil, err
 		}
-		if attempts >= maxVerifyAttempts {
+		if attempts >= int64(s.otpPolicy.MaxVerifyAttempts) {
 			_ = s.store.Delete(ctx, ticketID)
 			_ = s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID))
 			return nil, ErrVerifyRateLimited
@@ -269,7 +285,7 @@ func (s *Service) ResendRegisterOTP(
 		return nil, err
 	}
 
-	if pendingRegistration.ResendCount >= maxRegisterResends {
+	if pendingRegistration.ResendCount >= s.otpPolicy.MaxResends {
 		return nil, ErrResendRateLimited
 	}
 
@@ -277,7 +293,7 @@ func (s *Service) ResendRegisterOTP(
 	if lastOTPSentAt.IsZero() {
 		lastOTPSentAt = pendingRegistration.CreatedAt
 	}
-	if !lastOTPSentAt.IsZero() && now.Sub(lastOTPSentAt) < resendOTPCooldown {
+	if !lastOTPSentAt.IsZero() && now.Sub(lastOTPSentAt) < s.otpPolicy.ResendCooldown {
 		return nil, ErrResendCooldownActive
 	}
 
@@ -290,15 +306,15 @@ func (s *Service) ResendRegisterOTP(
 	previousTTL := pendingRegistration.OTPExpiresAt.Sub(now)
 
 	pendingRegistration.OTPCodeHash = hashRegisterOTP(ticketID, otpCode)
-	pendingRegistration.OTPExpiresAt = now.Add(registerOTPTTL)
+	pendingRegistration.OTPExpiresAt = now.Add(s.otpPolicy.TTL)
 	pendingRegistration.ResendCount++
 	pendingRegistration.LastOTPSentAt = now
 
-	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
+	if err := s.store.Save(ctx, pendingRegistration, s.otpPolicy.TTL); err != nil {
 		return nil, err
 	}
 
-	message := RegisterOTPMessage(otpCode, registerOTPTTL)
+	message := RegisterOTPMessage(otpCode, s.otpPolicy.TTL)
 	parsedPhoneNumber, err := parsePhoneNumber(pendingRegistration.PhoneNumber)
 	if err != nil {
 		return nil, err
@@ -314,16 +330,17 @@ func (s *Service) ResendRegisterOTP(
 	return &RegisterResult{
 		TicketID:             ticketID,
 		ExpiresAt:            pendingRegistration.OTPExpiresAt,
-		RemainingResendCount: maxRegisterResends - pendingRegistration.ResendCount,
+		ResendCooldown:       s.otpPolicy.ResendCooldown,
+		RemainingResendCount: s.otpPolicy.MaxResends - pendingRegistration.ResendCount,
 	}, nil
 }
 
 func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
-	phoneCount, err := s.store.IncrementCounter(ctx, registerPhoneRateKey(phoneNumber), registerPhoneWindow)
+	phoneCount, err := s.store.IncrementCounter(ctx, registerPhoneRateKey(phoneNumber), s.otpPolicy.PhoneWindow)
 	if err != nil {
 		return err
 	}
-	if phoneCount > maxPhoneRequests {
+	if phoneCount > int64(s.otpPolicy.MaxPhoneRequests) {
 		return ErrRegisterRateLimited
 	}
 

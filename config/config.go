@@ -18,6 +18,7 @@ type Config struct {
 	Database  DatabaseConfig
 	Redis     RedisConfig
 	Cache     CacheConfig
+	OTP       OTPConfig
 	CORS      CORSConfig
 	Auth      AuthConfig
 	WenovaAPI WenovaAPIConfig
@@ -62,6 +63,21 @@ type CacheConfig struct {
 
 type WenovaAPIConfig struct {
 	Token string
+}
+
+type OTPConfig struct {
+	Register      OTPPolicyConfig `mapstructure:"register"`
+	PasswordReset OTPPolicyConfig `mapstructure:"password_reset"`
+}
+
+type OTPPolicyConfig struct {
+	TTL                 time.Duration `mapstructure:"ttl"`
+	PhoneWindow         time.Duration `mapstructure:"phone_window"`
+	ResendCooldown      time.Duration `mapstructure:"resend_cooldown"`
+	VerifyAttemptWindow time.Duration `mapstructure:"verify_attempt_window"`
+	MaxPhoneRequests    int           `mapstructure:"max_phone_requests"`
+	MaxResends          int           `mapstructure:"max_resends"`
+	MaxVerifyAttempts   int           `mapstructure:"max_verify_attempts"`
 }
 
 type CORSConfig struct {
@@ -117,6 +133,20 @@ func Load() (*Config, error) {
 	viper.SetDefault("cache.user_ttl", "5m")
 	viper.SetDefault("cache.user_session_list_ttl", "1m")
 	viper.SetDefault("cache.signing_keys_ttl", "1m")
+	viper.SetDefault("otp.register.ttl", "5m")
+	viper.SetDefault("otp.register.phone_window", "5m")
+	viper.SetDefault("otp.register.resend_cooldown", "60s")
+	viper.SetDefault("otp.register.verify_attempt_window", "5m")
+	viper.SetDefault("otp.register.max_phone_requests", 1)
+	viper.SetDefault("otp.register.max_resends", 3)
+	viper.SetDefault("otp.register.max_verify_attempts", 5)
+	viper.SetDefault("otp.password_reset.ttl", "5m")
+	viper.SetDefault("otp.password_reset.phone_window", "5m")
+	viper.SetDefault("otp.password_reset.resend_cooldown", "60s")
+	viper.SetDefault("otp.password_reset.verify_attempt_window", "5m")
+	viper.SetDefault("otp.password_reset.max_phone_requests", 1)
+	viper.SetDefault("otp.password_reset.max_resends", 3)
+	viper.SetDefault("otp.password_reset.max_verify_attempts", 5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
 	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
@@ -175,6 +205,20 @@ func Load() (*Config, error) {
 		"DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL",
 	)
 	viper.BindEnv("cache.signing_keys_ttl", "DDONE_CACHE_SIGNING_KEYS_TTL")
+	viper.BindEnv("otp.register.ttl", "DDONE_OTP_REGISTER_TTL")
+	viper.BindEnv("otp.register.phone_window", "DDONE_OTP_REGISTER_PHONE_WINDOW")
+	viper.BindEnv("otp.register.resend_cooldown", "DDONE_OTP_REGISTER_RESEND_COOLDOWN")
+	viper.BindEnv("otp.register.verify_attempt_window", "DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW")
+	viper.BindEnv("otp.register.max_phone_requests", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
+	viper.BindEnv("otp.register.max_resends", "DDONE_OTP_REGISTER_MAX_RESENDS")
+	viper.BindEnv("otp.register.max_verify_attempts", "DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS")
+	viper.BindEnv("otp.password_reset.ttl", "DDONE_OTP_PASSWORD_RESET_TTL")
+	viper.BindEnv("otp.password_reset.phone_window", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
+	viper.BindEnv("otp.password_reset.resend_cooldown", "DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN")
+	viper.BindEnv("otp.password_reset.verify_attempt_window", "DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW")
+	viper.BindEnv("otp.password_reset.max_phone_requests", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
+	viper.BindEnv("otp.password_reset.max_resends", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
+	viper.BindEnv("otp.password_reset.max_verify_attempts", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
 	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
@@ -263,6 +307,12 @@ func (c *Config) validate() error {
 	if c.Cache.SigningKeysTTL < 0 {
 		return fmt.Errorf("cache.signing_keys_ttl must be greater than or equal to 0")
 	}
+	if err := validateOTPPolicy("otp.register", c.OTP.Register); err != nil {
+		return err
+	}
+	if err := validateOTPPolicy("otp.password_reset", c.OTP.PasswordReset); err != nil {
+		return err
+	}
 
 	c.CORS.AllowedOrigins = cleanStringSlice(c.CORS.AllowedOrigins)
 	c.CORS.AllowedMethods = cleanStringSlice(c.CORS.AllowedMethods)
@@ -329,6 +379,32 @@ func (c *Config) validate() error {
 	}
 	if strings.EqualFold(c.Auth.SessionCookieSameSite, "none") && !c.Auth.SessionCookieSecure {
 		return fmt.Errorf("auth.session_cookie_secure must be true when auth.session_cookie_same_site is none")
+	}
+
+	return nil
+}
+
+func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
+	if cfg.TTL <= 0 {
+		return fmt.Errorf("%s.ttl must be greater than 0", path)
+	}
+	if cfg.PhoneWindow <= 0 {
+		return fmt.Errorf("%s.phone_window must be greater than 0", path)
+	}
+	if cfg.ResendCooldown <= 0 {
+		return fmt.Errorf("%s.resend_cooldown must be greater than 0", path)
+	}
+	if cfg.VerifyAttemptWindow <= 0 {
+		return fmt.Errorf("%s.verify_attempt_window must be greater than 0", path)
+	}
+	if cfg.MaxPhoneRequests <= 0 {
+		return fmt.Errorf("%s.max_phone_requests must be greater than 0", path)
+	}
+	if cfg.MaxResends <= 0 {
+		return fmt.Errorf("%s.max_resends must be greater than 0", path)
+	}
+	if cfg.MaxVerifyAttempts <= 0 {
+		return fmt.Errorf("%s.max_verify_attempts must be greater than 0", path)
 	}
 
 	return nil

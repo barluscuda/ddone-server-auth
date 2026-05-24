@@ -154,6 +154,21 @@ DDONE_CACHE_USER_TTL=5m
 DDONE_CACHE_USER_SESSION_LIST_TTL=1m
 DDONE_CACHE_SIGNING_KEYS_TTL=1m
 
+DDONE_OTP_REGISTER_TTL=5m
+DDONE_OTP_REGISTER_PHONE_WINDOW=5m
+DDONE_OTP_REGISTER_RESEND_COOLDOWN=60s
+DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW=5m
+DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS=1
+DDONE_OTP_REGISTER_MAX_RESENDS=3
+DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS=5
+DDONE_OTP_PASSWORD_RESET_TTL=5m
+DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW=5m
+DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN=60s
+DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
+DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
+DDONE_OTP_PASSWORD_RESET_MAX_RESENDS=3
+DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
+
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
 DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
@@ -186,6 +201,7 @@ Safe defaults:
 - `database.log_sql` defaults to `false`
 - `auth.session_cookie_secure` defaults to `true`
 - `auth.login_session_ttl` defaults to `720h`
+- OTP rate-limit and resend rules default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
 
 `DDONE_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.

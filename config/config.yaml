@@ -36,6 +36,24 @@ cache:
   user_session_list_ttl: 1m
   signing_keys_ttl: 1m
 
+otp:
+  register:
+    ttl: 5m
+    phone_window: 5m
+    resend_cooldown: 60s
+    verify_attempt_window: 5m
+    max_phone_requests: 1
+    max_resends: 3
+    max_verify_attempts: 5
+  password_reset:
+    ttl: 5m
+    phone_window: 5m
+    resend_cooldown: 60s
+    verify_attempt_window: 5m
+    max_phone_requests: 1
+    max_resends: 3
+    max_verify_attempts: 5
+
 cors:
   allowed_origins:
     - "*"

@@ -146,8 +146,8 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	if result.TicketID != "reg_fixed123" {
 		t.Fatalf("expected returned ticket id %q, got %q", "reg_fixed123", result.TicketID)
 	}
-	if result.RemainingResendCount != maxRegisterResends {
-		t.Fatalf("expected remaining resend count %d, got %d", maxRegisterResends, result.RemainingResendCount)
+	if result.RemainingResendCount != defaultOTPPolicy.MaxResends {
+		t.Fatalf("expected remaining resend count %d, got %d", defaultOTPPolicy.MaxResends, result.RemainingResendCount)
 	}
 
 	registration, err := store.Get(context.Background(), "reg_fixed123")
@@ -366,11 +366,11 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 	if result.TicketID != "reg_fixed123" {
 		t.Fatalf("expected ticket id %q, got %q", "reg_fixed123", result.TicketID)
 	}
-	if result.RemainingResendCount != maxRegisterResends-1 {
-		t.Fatalf("expected remaining resend count %d, got %d", maxRegisterResends-1, result.RemainingResendCount)
+	if result.RemainingResendCount != defaultOTPPolicy.MaxResends-1 {
+		t.Fatalf("expected remaining resend count %d, got %d", defaultOTPPolicy.MaxResends-1, result.RemainingResendCount)
 	}
 
-	if got, want := result.ExpiresAt, now.Add(registerOTPTTL); !got.Equal(want) {
+	if got, want := result.ExpiresAt, now.Add(defaultOTPPolicy.TTL); !got.Equal(want) {
 		t.Fatalf("expected expiry %v, got %v", want, got)
 	}
 
@@ -383,7 +383,7 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 		t.Fatalf("expected refreshed otp hash, got %q", registration.OTPCodeHash)
 	}
 
-	if !registration.OTPExpiresAt.Equal(now.Add(registerOTPTTL)) {
+	if !registration.OTPExpiresAt.Equal(now.Add(defaultOTPPolicy.TTL)) {
 		t.Fatalf("expected refreshed otp expiry, got %v", registration.OTPExpiresAt)
 	}
 	if registration.ResendCount != 1 {
@@ -617,7 +617,7 @@ func TestRegisterServiceVerifyRegisterRateLimitsInvalidOTPAttempts(t *testing.T)
 	sender := &fakeOTPSender{}
 	service := NewService(repo, store, sender)
 
-	for i := 0; i < maxVerifyAttempts-1; i++ {
+	for i := 0; i < defaultOTPPolicy.MaxVerifyAttempts-1; i++ {
 		_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
 			TicketID: "reg_fixed123",
 			OTPCode:  "654321",

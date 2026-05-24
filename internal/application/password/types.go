@@ -2,6 +2,7 @@ package password
 
 import (
 	"context"
+	"ddone-server-auth/internal/application/otp"
 	"time"
 )
 
@@ -30,7 +31,7 @@ type VerifyForgotPasswordInput struct {
 }
 
 type ChangePasswordInput struct {
-	UserID       string
+	UserID          string
 	CurrentPassword string
 	NewPassword     string
 }
@@ -38,12 +39,17 @@ type ChangePasswordInput struct {
 type ResetTicketResult struct {
 	TicketID             string
 	ExpiresAt            time.Time
+	ResendCooldown       time.Duration
 	RemainingResendCount int
+}
+
+type Settings struct {
+	OTPPolicy otp.Policy
 }
 
 type ResetTicketState struct {
 	TicketID      string    `json:"ticket_id"`
-	UserID     string    `json:"user_id"`
+	UserID        string    `json:"user_id"`
 	PhoneNumber   string    `json:"phone_number"`
 	OTPCodeHash   string    `json:"otp_code_hash"`
 	OTPExpiresAt  time.Time `json:"otp_expires_at"`

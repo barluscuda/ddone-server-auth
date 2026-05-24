@@ -6,13 +6,13 @@ import (
 	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
 	registerOTPLength               = 6
-	resendCooldownSeconds           = 60
 	codeInvalidRequestBody          = "invalid_request_body"
 	codeRegisterOTPSent             = "register_otp_sent"
 	codeRegisterOTPResent           = "register_otp_resent"
@@ -73,7 +73,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
 			OTPLength:             registerOTPLength,
-			ResendCooldownSeconds: resendCooldownSeconds,
+			ResendCooldownSeconds: int(result.ResendCooldown / time.Second),
 			RemainingResendCount:  result.RemainingResendCount,
 		},
 	})
@@ -134,7 +134,7 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
 			OTPLength:             registerOTPLength,
-			ResendCooldownSeconds: resendCooldownSeconds,
+			ResendCooldownSeconds: int(result.ResendCooldown / time.Second),
 			RemainingResendCount:  result.RemainingResendCount,
 		},
 	})

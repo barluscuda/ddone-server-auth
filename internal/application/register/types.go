@@ -2,6 +2,7 @@ package register
 
 import (
 	"context"
+	"ddone-server-auth/internal/application/otp"
 	"time"
 
 	"ddone-server-auth/internal/domain/user"
@@ -22,7 +23,12 @@ type RegisterInput struct {
 type RegisterResult struct {
 	TicketID             string
 	ExpiresAt            time.Time
+	ResendCooldown       time.Duration
 	RemainingResendCount int
+}
+
+type Settings struct {
+	OTPPolicy otp.Policy
 }
 
 type ResendRegisterOTPInput struct {

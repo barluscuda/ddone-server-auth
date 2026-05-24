@@ -12,6 +12,7 @@ import (
 	"ddone-server-auth/internal/adapters/token"
 	appjwks "ddone-server-auth/internal/application/jwks"
 	applogin "ddone-server-auth/internal/application/login"
+	appotp "ddone-server-auth/internal/application/otp"
 	apppassword "ddone-server-auth/internal/application/password"
 	appregister "ddone-server-auth/internal/application/register"
 	appsession "ddone-server-auth/internal/application/session"
@@ -69,7 +70,9 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		cfg.Cache.UserTTL,
 	)
 	registerStore := cache.NewRegisterStore(redisClient)
-	registerService := appregister.NewService(userRepository, registerStore, smsClient)
+	registerService := appregister.NewServiceWithSettings(userRepository, registerStore, smsClient, appregister.Settings{
+		OTPPolicy: otpPolicyFromConfig(cfg.OTP.Register),
+	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
 		redisClient,
@@ -100,12 +103,15 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
 	})
-	passwordService := apppassword.NewService(
+	passwordService := apppassword.NewServiceWithSettings(
 		userRepository,
 		passwordResetStore,
 		smsClient,
 		tokenRepository,
 		loginSessionRepository,
+		apppassword.Settings{
+			OTPPolicy: otpPolicyFromConfig(cfg.OTP.PasswordReset),
+		},
 	)
 	settingsService := appsettings.NewService(userRepository)
 	sessionService := appsession.NewService(loginSessionRepository, userRepository, jwksService, appsession.Settings{
@@ -163,5 +169,17 @@ func sameSiteMode(raw string) http.SameSite {
 		return http.SameSiteNoneMode
 	default:
 		return http.SameSiteLaxMode
+	}
+}
+
+func otpPolicyFromConfig(cfg config.OTPPolicyConfig) appotp.Policy {
+	return appotp.Policy{
+		TTL:                 cfg.TTL,
+		PhoneWindow:         cfg.PhoneWindow,
+		ResendCooldown:      cfg.ResendCooldown,
+		VerifyAttemptWindow: cfg.VerifyAttemptWindow,
+		MaxPhoneRequests:    cfg.MaxPhoneRequests,
+		MaxResends:          cfg.MaxResends,
+		MaxVerifyAttempts:   cfg.MaxVerifyAttempts,
 	}
 }

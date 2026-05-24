@@ -7,13 +7,13 @@ import (
 	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
 	passwordResetOTPLength             = 6
-	passwordResetResendCooldownSeconds = 60
 	codePasswordResetOTPSent           = "password_reset_otp_sent"
 	codePasswordResetOTPResent         = "password_reset_otp_resent"
 	codePasswordResetVerified          = "password_reset_completed"
@@ -67,7 +67,7 @@ func (h *PasswordHandler) ForgotPassword(c *gin.Context) {
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
 			OTPLength:             passwordResetOTPLength,
-			ResendCooldownSeconds: passwordResetResendCooldownSeconds,
+			ResendCooldownSeconds: int(result.ResendCooldown / time.Second),
 			RemainingResendCount:  result.RemainingResendCount,
 		},
 	})
@@ -97,7 +97,7 @@ func (h *PasswordHandler) ResendForgotPassword(c *gin.Context) {
 			TicketID:              result.TicketID,
 			ExpiresAt:             result.ExpiresAt,
 			OTPLength:             passwordResetOTPLength,
-			ResendCooldownSeconds: passwordResetResendCooldownSeconds,
+			ResendCooldownSeconds: int(result.ResendCooldown / time.Second),
 			RemainingResendCount:  result.RemainingResendCount,
 		},
 	})

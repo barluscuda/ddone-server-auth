@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"ddone-server-auth/internal/application/otp"
 	"ddone-server-auth/internal/domain/user"
 	"encoding/hex"
 	"errors"
@@ -16,17 +17,10 @@ import (
 )
 
 const (
-	resetOTPLength           = 6
-	resetOTPTTL              = 5 * time.Minute
-	resetPhoneWindow         = 5 * time.Minute
-	resetResendCooldown      = 60 * time.Second
-	resetVerifyAttemptWindow = resetOTPTTL
-	passwordCooldown         = 7 * 24 * time.Hour
-	maxResetPhoneRequests    = 1
-	maxResetResends          = 3
-	maxResetVerifyAttempts   = 5
-	resetTicketPrefix        = "pwd_"
-	resetTicketBytes         = 12
+	resetOTPLength    = 6
+	passwordCooldown  = 7 * 24 * time.Hour
+	resetTicketPrefix = "pwd_"
+	resetTicketBytes  = 12
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
@@ -39,11 +33,21 @@ var ErrCurrentPasswordRequired = errors.New("current password is required")
 var ErrPendingPasswordResetInvalid = errors.New("password reset ticket is invalid, request otp again")
 var ErrResetRateLimited = errors.New("too many password reset requests, try again later")
 var ErrResendRateLimited = errors.New("too many otp resend requests, request a new password reset")
-var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesting another otp")
+var ErrResendCooldownActive = errors.New("otp resend cooldown is active")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrInvalidCurrentPassword = errors.New("current password is incorrect")
 var ErrPasswordCooldownActive = errors.New("password can only be changed once every 7 days")
+
+var defaultOTPPolicy = otp.Policy{
+	TTL:                 5 * time.Minute,
+	PhoneWindow:         5 * time.Minute,
+	ResendCooldown:      60 * time.Second,
+	VerifyAttemptWindow: 5 * time.Minute,
+	MaxPhoneRequests:    1,
+	MaxResends:          3,
+	MaxVerifyAttempts:   5,
+}
 
 type Service struct {
 	users           UserStore
@@ -51,6 +55,7 @@ type Service struct {
 	sender          OTPSender
 	tokenRecords    TokenRevoker
 	loginSessions   LoginSessionRevoker
+	otpPolicy       otp.Policy
 	now             func() time.Time
 	otpGenerator    func(int) (string, error)
 	ticketGenerator func() (string, error)
@@ -64,12 +69,24 @@ func NewService(
 	tokenRecords TokenRevoker,
 	loginSessions LoginSessionRevoker,
 ) *Service {
+	return NewServiceWithSettings(users, store, sender, tokenRecords, loginSessions, Settings{})
+}
+
+func NewServiceWithSettings(
+	users UserStore,
+	store ResetStore,
+	sender OTPSender,
+	tokenRecords TokenRevoker,
+	loginSessions LoginSessionRevoker,
+	settings Settings,
+) *Service {
 	return &Service{
 		users:           users,
 		store:           store,
 		sender:          sender,
 		tokenRecords:    tokenRecords,
 		loginSessions:   loginSessions,
+		otpPolicy:       settings.OTPPolicy.WithDefaults(defaultOTPPolicy),
 		now:             func() time.Time { return time.Now().UTC() },
 		otpGenerator:    GenerateOTP,
 		ticketGenerator: generateResetTicket,
@@ -116,16 +133,16 @@ func (s *Service) ForgotPassword(
 		UserID:        userModel.ID,
 		PhoneNumber:   globalPhoneNumber,
 		OTPCodeHash:   hashResetOTP(ticketID, otpCode),
-		OTPExpiresAt:  now.Add(resetOTPTTL),
+		OTPExpiresAt:  now.Add(s.otpPolicy.TTL),
 		ResendCount:   0,
 		LastOTPSentAt: now,
 		CreatedAt:     now,
 	}
-	if err := s.store.Save(ctx, state, resetOTPTTL); err != nil {
+	if err := s.store.Save(ctx, state, s.otpPolicy.TTL); err != nil {
 		return nil, err
 	}
 
-	message := ForgotPasswordOTPMessage(otpCode, resetOTPTTL)
+	message := ForgotPasswordOTPMessage(otpCode, s.otpPolicy.TTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
 		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
@@ -134,7 +151,8 @@ func (s *Service) ForgotPassword(
 	return &ResetTicketResult{
 		TicketID:             ticketID,
 		ExpiresAt:            state.OTPExpiresAt,
-		RemainingResendCount: maxResetResends,
+		ResendCooldown:       s.otpPolicy.ResendCooldown,
+		RemainingResendCount: s.otpPolicy.MaxResends,
 	}, nil
 }
 
@@ -163,7 +181,7 @@ func (s *Service) ResendForgotPasswordOTP(
 		_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
 		return nil, ErrPendingPasswordResetInvalid
 	}
-	if state.ResendCount >= maxResetResends {
+	if state.ResendCount >= s.otpPolicy.MaxResends {
 		return nil, ErrResendRateLimited
 	}
 
@@ -171,7 +189,7 @@ func (s *Service) ResendForgotPasswordOTP(
 	if lastOTPSentAt.IsZero() {
 		lastOTPSentAt = state.CreatedAt
 	}
-	if !lastOTPSentAt.IsZero() && now.Sub(lastOTPSentAt) < resetResendCooldown {
+	if !lastOTPSentAt.IsZero() && now.Sub(lastOTPSentAt) < s.otpPolicy.ResendCooldown {
 		return nil, ErrResendCooldownActive
 	}
 
@@ -184,15 +202,15 @@ func (s *Service) ResendForgotPasswordOTP(
 	previousTTL := state.OTPExpiresAt.Sub(now)
 
 	state.OTPCodeHash = hashResetOTP(ticketID, otpCode)
-	state.OTPExpiresAt = now.Add(resetOTPTTL)
+	state.OTPExpiresAt = now.Add(s.otpPolicy.TTL)
 	state.ResendCount++
 	state.LastOTPSentAt = now
 
-	if err := s.store.Save(ctx, state, resetOTPTTL); err != nil {
+	if err := s.store.Save(ctx, state, s.otpPolicy.TTL); err != nil {
 		return nil, err
 	}
 
-	message := ForgotPasswordOTPMessage(otpCode, resetOTPTTL)
+	message := ForgotPasswordOTPMessage(otpCode, s.otpPolicy.TTL)
 	phoneNumber, err := user.ParsePhoneNumber(state.PhoneNumber)
 	if err != nil {
 		return nil, err
@@ -208,7 +226,8 @@ func (s *Service) ResendForgotPasswordOTP(
 	return &ResetTicketResult{
 		TicketID:             ticketID,
 		ExpiresAt:            state.OTPExpiresAt,
-		RemainingResendCount: maxResetResends - state.ResendCount,
+		ResendCooldown:       s.otpPolicy.ResendCooldown,
+		RemainingResendCount: s.otpPolicy.MaxResends - state.ResendCount,
 	}, nil
 }
 
@@ -248,11 +267,11 @@ func (s *Service) VerifyForgotPassword(
 	}
 
 	if !matchResetOTP(state.OTPCodeHash, ticketID, otpCode) {
-		attempts, err := s.store.IncrementCounter(ctx, resetVerifyAttemptKey(ticketID), resetVerifyAttemptWindow)
+		attempts, err := s.store.IncrementCounter(ctx, resetVerifyAttemptKey(ticketID), s.otpPolicy.VerifyAttemptWindow)
 		if err != nil {
 			return err
 		}
-		if attempts >= maxResetVerifyAttempts {
+		if attempts >= int64(s.otpPolicy.MaxVerifyAttempts) {
 			_ = s.store.Delete(ctx, ticketID)
 			_ = s.store.DeleteCounter(ctx, resetVerifyAttemptKey(ticketID))
 			return ErrVerifyRateLimited
@@ -347,11 +366,11 @@ func (s *Service) revokeSessions(ctx context.Context, userID string, reason stri
 }
 
 func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string) error {
-	count, err := s.store.IncrementCounter(ctx, resetPhoneRateKey(phoneNumber), resetPhoneWindow)
+	count, err := s.store.IncrementCounter(ctx, resetPhoneRateKey(phoneNumber), s.otpPolicy.PhoneWindow)
 	if err != nil {
 		return err
 	}
-	if count > maxResetPhoneRequests {
+	if count > int64(s.otpPolicy.MaxPhoneRequests) {
 		return ErrResetRateLimited
 	}
 
