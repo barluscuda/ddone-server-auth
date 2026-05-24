@@ -24,13 +24,13 @@ type UseCase interface {
 
 type Service struct {
 	users UserReader
-	now      func() time.Time
+	now   func() time.Time
 }
 
 func NewService(users UserReader) *Service {
 	return &Service{
 		users: users,
-		now:      func() time.Time { return time.Now().UTC() },
+		now:   func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -45,12 +45,26 @@ func (s *Service) Get(ctx context.Context, input GetInput) (*View, error) {
 		return nil, err
 	}
 
+	now := s.now()
+	var usernameCanChangeAt *time.Time
+	canChangeUsername := true
+	if userModel.UsernameChangedAt != nil {
+		canAt := userModel.UsernameChangedAt.Add(usernameCooldown)
+		usernameCanChangeAt = &canAt
+		canChangeUsername = !now.Before(canAt)
+	}
+
 	return &View{
-		ID:              userModel.ID,
-		Username:        userModel.Username,
-		PhoneNumber:     userModel.PhoneNumber,
-		PhoneVerifiedAt: userModel.PhoneVerifiedAt,
-		CreatedAt:       userModel.CreatedAt,
+		ID:                  userModel.ID,
+		Username:            userModel.Username,
+		PhoneNumber:         userModel.PhoneNumber,
+		PhoneVerifiedAt:     userModel.PhoneVerifiedAt,
+		UsernameChangedAt:   userModel.UsernameChangedAt,
+		UsernameCanChangeAt: usernameCanChangeAt,
+		CanChangeUsername:   canChangeUsername,
+		PasswordChangedAt:   userModel.PasswordChangedAt,
+		CreatedAt:           userModel.CreatedAt,
+		UpdatedAt:           userModel.UpdatedAt,
 	}, nil
 }
 

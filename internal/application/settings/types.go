@@ -7,16 +7,21 @@ type GetInput struct {
 }
 
 type UpdateUsernameInput struct {
-	UserID string
-	Username  string
+	UserID   string
+	Username string
 }
 
 type View struct {
-	ID              string
-	Username        *string
-	PhoneNumber     string
-	PhoneVerifiedAt time.Time
-	CreatedAt       time.Time
+	ID                  string
+	Username            *string
+	PhoneNumber         string
+	PhoneVerifiedAt     time.Time
+	UsernameChangedAt   *time.Time
+	UsernameCanChangeAt *time.Time
+	CanChangeUsername   bool
+	PasswordChangedAt   *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type UsernameView struct {

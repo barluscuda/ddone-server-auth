@@ -47,11 +47,16 @@ func (h *SettingsHandler) GetMe(c *gin.Context) {
 		Code:    codeSettingsFetched,
 		Message: messageSettingsFetched,
 		Data: dto.ResSettingsMeData{
-			ID:              result.ID,
-			Username:        result.Username,
-			PhoneNumber:     result.PhoneNumber,
-			PhoneVerifiedAt: result.PhoneVerifiedAt,
-			CreatedAt:       result.CreatedAt,
+			ID:                  result.ID,
+			Username:            result.Username,
+			PhoneNumber:         result.PhoneNumber,
+			PhoneVerifiedAt:     result.PhoneVerifiedAt,
+			UsernameChangedAt:   result.UsernameChangedAt,
+			UsernameCanChangeAt: result.UsernameCanChangeAt,
+			CanChangeUsername:   result.CanChangeUsername,
+			PasswordChangedAt:   result.PasswordChangedAt,
+			CreatedAt:           result.CreatedAt,
+			UpdatedAt:           result.UpdatedAt,
 		},
 	})
 }
@@ -70,8 +75,8 @@ func (h *SettingsHandler) PatchUsername(c *gin.Context) {
 	}
 
 	result, err := h.settings.UpdateUsername(c.Request.Context(), appsettings.UpdateUsernameInput{
-		UserID: authContext.UserID,
-		Username:  req.Username,
+		UserID:   authContext.UserID,
+		Username: req.Username,
 	})
 	if err != nil {
 		handleSettingsError(c, err)

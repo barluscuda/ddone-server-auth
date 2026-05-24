@@ -310,7 +310,7 @@ Example body:
 
 ### `GET /settings`
 
-Returns the user identity for the current authenticated user.
+Returns the current authenticated user profile plus change metadata, including username cooldown state.
 
 Headers:
 
@@ -318,9 +318,11 @@ Headers:
 Authorization: Bearer <access-token>
 ```
 
+Response data includes `id`, `username`, `phoneNumber`, `phoneVerifiedAt`, `canChangeUsername`, optional `usernameChangedAt`, optional `usernameCanChangeAt`, optional `passwordChangedAt`, `createdAt`, and `updatedAt`.
+
 ### `GET /settings/me`
 
-Returns the user identity for the current authenticated user.
+Returns the same response as `GET /settings`.
 
 Headers:
 

@@ -416,7 +416,7 @@
             "me"
           ]
         },
-        "description": "Returns the current authenticated user from the Bearer access token."
+        "description": "Returns the current authenticated user plus profile change metadata and username cooldown state."
       }
     },
     {

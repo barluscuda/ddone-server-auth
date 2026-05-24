@@ -10,9 +10,9 @@ import (
 )
 
 type fakeUserReader struct {
-	userByID map[string]*user.UserModel
-	byUsername  map[string]*user.UserModel
-	updated     *user.UserModel
+	userByID   map[string]*user.UserModel
+	byUsername map[string]*user.UserModel
+	updated    *user.UserModel
 }
 
 func (r *fakeUserReader) GetByID(_ context.Context, id string) (*user.UserModel, error) {
@@ -46,16 +46,24 @@ func (r *fakeUserReader) Update(_ context.Context, userModel *user.UserModel) er
 }
 
 func TestGetReturnsCurrentUser(t *testing.T) {
+	username := "current_user"
+	usernameChangedAt := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
+	passwordChangedAt := time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)
 	service := NewService(&fakeUserReader{
 		userByID: map[string]*user.UserModel{
 			"user-1": {
-				ID:              "user-1",
-				PhoneNumber:     "2012345678",
-				PhoneVerifiedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
-				CreatedAt:       time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+				ID:                "user-1",
+				Username:          &username,
+				PhoneNumber:       "2012345678",
+				PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
+				UsernameChangedAt: &usernameChangedAt,
+				PasswordChangedAt: &passwordChangedAt,
+				CreatedAt:         time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
+				UpdatedAt:         time.Date(2026, 5, 24, 1, 0, 0, 0, time.UTC),
 			},
 		},
 	})
+	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 
 	result, err := service.Get(context.Background(), GetInput{UserID: "user-1"})
 	if err != nil {
@@ -63,6 +71,24 @@ func TestGetReturnsCurrentUser(t *testing.T) {
 	}
 	if result.ID != "user-1" {
 		t.Fatalf("expected user id %q, got %q", "user-1", result.ID)
+	}
+	if result.Username == nil || *result.Username != username {
+		t.Fatalf("expected username %q, got %v", username, result.Username)
+	}
+	if result.UsernameChangedAt == nil || !result.UsernameChangedAt.Equal(usernameChangedAt) {
+		t.Fatalf("expected username changed at %v, got %v", usernameChangedAt, result.UsernameChangedAt)
+	}
+	if result.UsernameCanChangeAt == nil || !result.UsernameCanChangeAt.Equal(usernameChangedAt.Add(usernameCooldown)) {
+		t.Fatalf("expected username cooldown end %v, got %v", usernameChangedAt.Add(usernameCooldown), result.UsernameCanChangeAt)
+	}
+	if result.CanChangeUsername {
+		t.Fatal("expected username cooldown to be active")
+	}
+	if result.PasswordChangedAt == nil || !result.PasswordChangedAt.Equal(passwordChangedAt) {
+		t.Fatalf("expected password changed at %v, got %v", passwordChangedAt, result.PasswordChangedAt)
+	}
+	if result.UpdatedAt.IsZero() {
+		t.Fatal("expected updated at to be returned")
 	}
 }
 
@@ -89,8 +115,8 @@ func TestUpdateUsernamePersistsNormalizedValue(t *testing.T) {
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 
 	result, err := service.UpdateUsername(context.Background(), UpdateUsernameInput{
-		UserID: "user-1",
-		Username:  " New_Name ",
+		UserID:   "user-1",
+		Username: " New_Name ",
 	})
 	if err != nil {
 		t.Fatalf("UpdateUsername returned error: %v", err)
@@ -121,8 +147,8 @@ func TestUpdateUsernameRejectsCooldown(t *testing.T) {
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
 
 	_, err := service.UpdateUsername(context.Background(), UpdateUsernameInput{
-		UserID: "user-1",
-		Username:  "new_name",
+		UserID:   "user-1",
+		Username: "new_name",
 	})
 	if !errors.Is(err, ErrUsernameCooldownActive) {
 		t.Fatalf("expected ErrUsernameCooldownActive, got %v", err)

@@ -10,11 +10,16 @@ type ResSettingsMe struct {
 }
 
 type ResSettingsMeData struct {
-	ID              string    `json:"id"`
-	Username        *string   `json:"username,omitempty"`
-	PhoneNumber     string    `json:"phoneNumber"`
-	PhoneVerifiedAt time.Time `json:"phoneVerifiedAt"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID                  string     `json:"id"`
+	Username            *string    `json:"username,omitempty"`
+	PhoneNumber         string     `json:"phoneNumber"`
+	PhoneVerifiedAt     time.Time  `json:"phoneVerifiedAt"`
+	UsernameChangedAt   *time.Time `json:"usernameChangedAt,omitempty"`
+	UsernameCanChangeAt *time.Time `json:"usernameCanChangeAt,omitempty"`
+	CanChangeUsername   bool       `json:"canChangeUsername"`
+	PasswordChangedAt   *time.Time `json:"passwordChangedAt,omitempty"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type ReqUpdateUsername struct {
