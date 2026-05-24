@@ -28,7 +28,7 @@ func TestIssueAccessTokenUsesJOSESignatureFormat(t *testing.T) {
 		Subject:     "user-1",
 		Audience:    "audience",
 		JWTID:       "token-1",
-		PhoneNumber: "2012345678",
+		PhoneNumber: "+8562012345678",
 		IssuedAt:    now,
 		NotBefore:   now,
 		ExpiresAt:   now.Add(15 * time.Minute),
@@ -118,7 +118,7 @@ func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
 		Subject:     "user-1",
 		Audience:    "audience",
 		JWTID:       "token-1",
-		PhoneNumber: "2012345678",
+		PhoneNumber: "+8562012345678",
 		IssuedAt:    now,
 		NotBefore:   now,
 		ExpiresAt:   now.Add(15 * time.Minute),
@@ -137,8 +137,8 @@ func TestVerifyAccessTokenRoundTripsIssuedToken(t *testing.T) {
 	if claims.UserID != "user-1" {
 		t.Fatalf("expected user id %q, got %q", "user-1", claims.UserID)
 	}
-	if claims.PhoneNumber != "2012345678" {
-		t.Fatalf("expected phone number %q, got %q", "2012345678", claims.PhoneNumber)
+	if claims.PhoneNumber != "+8562012345678" {
+		t.Fatalf("expected phone number %q, got %q", "+8562012345678", claims.PhoneNumber)
 	}
 }
 

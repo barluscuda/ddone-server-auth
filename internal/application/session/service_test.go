@@ -279,7 +279,7 @@ func TestIssueAccessTokenRefreshesExpiredAccessToken(t *testing.T) {
 		},
 	}
 	service := NewService(store, &fakeUserLookup{
-		byID: map[string]string{"user-1": "2012345678"},
+		byID: map[string]string{"user-1": "+8562012345678"},
 	}, &fakeAccessTokenIssuer{token: "fresh-access-token"}, Settings{LoginSessionTTL: 30 * 24 * time.Hour})
 	now := time.Date(2026, 5, 24, 2, 30, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }

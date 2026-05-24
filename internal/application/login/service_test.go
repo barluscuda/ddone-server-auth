@@ -128,11 +128,11 @@ func TestLoginCreatesTokenRecord(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 		byID:    map[string]*user.User{"user-1": userModel},
 	}
 	tokenRecords := &fakeTokenStore{}
@@ -173,7 +173,7 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
@@ -209,7 +209,7 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
@@ -265,11 +265,11 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 		byID:    map[string]*user.User{"user-1": userModel},
 	}
 	loginSessions := &fakeLoginSessionStore{}

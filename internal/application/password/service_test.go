@@ -82,13 +82,15 @@ func (f *fakeResetStore) DeleteCounter(_ context.Context, key string) error {
 }
 
 type fakeSender struct {
+	telCode     string
 	phoneNumber string
 	message     string
 	err         error
 }
 
-func (f *fakeSender) SendOTP(_ context.Context, phoneNumber string, message string) error {
-	f.phoneNumber = phoneNumber
+func (f *fakeSender) SendOTP(_ context.Context, telCode string, number string, message string) error {
+	f.telCode = telCode
+	f.phoneNumber = number
 	f.message = message
 	return f.err
 }
@@ -119,10 +121,10 @@ func TestForgotPasswordCreatesResetTicketAndSendsOTP(t *testing.T) {
 
 	users := &fakeUserStore{
 		byID: map[string]*user.User{
-			"user-1": {ID: "user-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
+			"user-1": {ID: "user-1", PhoneNumber: "+8562012345678", PasswordHash: string(hashed)},
 		},
 		byPhone: map[string]*user.User{
-			"2012345678": {ID: "user-1", PhoneNumber: "2012345678", PasswordHash: string(hashed)},
+			"+8562012345678": {ID: "user-1", PhoneNumber: "+8562012345678", PasswordHash: string(hashed)},
 		},
 	}
 	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
@@ -143,8 +145,11 @@ func TestForgotPasswordCreatesResetTicketAndSendsOTP(t *testing.T) {
 	if result.TicketID != "pwd_fixed123" {
 		t.Fatalf("expected ticket id to be persisted, got %q", result.TicketID)
 	}
+	if sender.telCode != "856" {
+		t.Fatalf("expected sms tel code %q, got %q", "856", sender.telCode)
+	}
 	if sender.phoneNumber != "2012345678" {
-		t.Fatalf("expected normalized phone number, got %q", sender.phoneNumber)
+		t.Fatalf("expected sms phone number %q, got %q", "2012345678", sender.phoneNumber)
 	}
 	if _, ok := store.states["pwd_fixed123"]; !ok {
 		t.Fatal("expected reset ticket to be stored")
@@ -160,13 +165,13 @@ func TestForgotPasswordRejectsPasswordCooldown(t *testing.T) {
 	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
 	userModel := &user.User{
 		ID:                "user-1",
-		PhoneNumber:       "2012345678",
+		PhoneNumber:       "+8562012345678",
 		PasswordHash:      string(hashed),
 		PasswordChangedAt: &changedAt,
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
 	service := NewService(users, store, &fakeSender{}, &fakeRevoker{}, &fakeRevoker{})
@@ -194,20 +199,20 @@ func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(currentHash),
 		UpdatedAt:    time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	store := &fakeResetStore{
 		states: map[string]*ResetTicketState{
 			"pwd_fixed123": {
 				TicketID:     "pwd_fixed123",
 				UserID:       "user-1",
-				PhoneNumber:  "2012345678",
+				PhoneNumber:  "+8562012345678",
 				OTPCodeHash:  hashResetOTP("pwd_fixed123", "123456"),
 				OTPExpiresAt: time.Date(2026, 5, 24, 0, 5, 0, 0, time.UTC),
 				CreatedAt:    time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
@@ -253,20 +258,20 @@ func TestVerifyForgotPasswordRejectsPasswordCooldown(t *testing.T) {
 	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
 	userModel := &user.User{
 		ID:                "user-1",
-		PhoneNumber:       "2012345678",
+		PhoneNumber:       "+8562012345678",
 		PasswordHash:      string(currentHash),
 		PasswordChangedAt: &changedAt,
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	store := &fakeResetStore{
 		states: map[string]*ResetTicketState{
 			"pwd_fixed123": {
 				TicketID:     "pwd_fixed123",
 				UserID:       "user-1",
-				PhoneNumber:  "2012345678",
+				PhoneNumber:  "+8562012345678",
 				OTPCodeHash:  hashResetOTP("pwd_fixed123", "123456"),
 				OTPExpiresAt: changedAt.Add(25 * time.Hour),
 				CreatedAt:    changedAt.Add(24 * time.Hour),
@@ -303,12 +308,12 @@ func TestChangePasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(currentHash),
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	refreshRevoker := &fakeRevoker{}
 	loginRevoker := &fakeRevoker{}
@@ -352,13 +357,13 @@ func TestChangePasswordRejectsPasswordCooldown(t *testing.T) {
 	changedAt := time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC)
 	userModel := &user.User{
 		ID:                "user-1",
-		PhoneNumber:       "2012345678",
+		PhoneNumber:       "+8562012345678",
 		PasswordHash:      string(currentHash),
 		PasswordChangedAt: &changedAt,
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	refreshRevoker := &fakeRevoker{}
 	loginRevoker := &fakeRevoker{}
@@ -395,12 +400,12 @@ func TestChangePasswordRejectsInvalidCurrentPassword(t *testing.T) {
 
 	userModel := &user.User{
 		ID:           "user-1",
-		PhoneNumber:  "2012345678",
+		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(currentHash),
 	}
 	users := &fakeUserStore{
 		byID:    map[string]*user.User{"user-1": userModel},
-		byPhone: map[string]*user.User{"2012345678": userModel},
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
 	}
 	service := NewService(
 		users,

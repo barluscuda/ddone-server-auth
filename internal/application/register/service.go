@@ -74,21 +74,22 @@ func (s *Service) Register(
 	ctx context.Context,
 	input RegisterInput,
 ) (*RegisterResult, error) {
-	phoneNumber, err := normalizePhoneNumber(input.PhoneNumber)
+	phoneNumber, err := parsePhoneNumber(input.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
-	if phoneNumber == "" {
+	globalPhoneNumber := phoneNumber.Global()
+	if globalPhoneNumber == "" {
 		return nil, ErrPhoneNumberRequired
 	}
 	if strings.TrimSpace(input.Password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.enforceRegisterRateLimits(ctx, phoneNumber); err != nil {
+	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber); err != nil {
 		return nil, err
 	}
 
-	if _, err := s.users.GetByPhoneNumber(ctx, phoneNumber); err == nil {
+	if _, err := s.users.GetByPhoneNumber(ctx, globalPhoneNumber); err == nil {
 		return nil, user.ErrPhoneNumberAlreadyRegistered
 	} else if !errors.Is(err, user.ErrUserNotFound) {
 		return nil, err
@@ -119,7 +120,7 @@ func (s *Service) Register(
 		TicketID:      ticketID,
 		Username:      username,
 		PasswordHash:  passwordHash,
-		PhoneNumber:   phoneNumber,
+		PhoneNumber:   globalPhoneNumber,
 		OTPCodeHash:   otpCodeHash,
 		OTPExpiresAt:  now.Add(registerOTPTTL),
 		ResendCount:   0,
@@ -127,7 +128,7 @@ func (s *Service) Register(
 		CreatedAt:     now,
 	}
 	message := RegisterOTPMessage(otpCode, registerOTPTTL)
-	if err := s.sender.SendOTP(ctx, phoneNumber, message); err != nil {
+	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
 		return nil, err
 	}
 	if err := s.store.Save(ctx, pendingRegistration, registerOTPTTL); err != nil {
@@ -298,7 +299,11 @@ func (s *Service) ResendRegisterOTP(
 	}
 
 	message := RegisterOTPMessage(otpCode, registerOTPTTL)
-	if err := s.sender.SendOTP(ctx, pendingRegistration.PhoneNumber, message); err != nil {
+	parsedPhoneNumber, err := parsePhoneNumber(pendingRegistration.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sender.SendOTP(ctx, parsedPhoneNumber.TelCode, parsedPhoneNumber.Number, message); err != nil {
 		if restoreErr := s.store.Save(ctx, &previousRegistration, previousTTL); restoreErr != nil {
 			return nil, restoreErr
 		}
@@ -371,6 +376,10 @@ func hashPassword(password string) (string, error) {
 
 func normalizePhoneNumber(raw string) (string, error) {
 	return user.NormalizePhoneNumber(raw)
+}
+
+func parsePhoneNumber(raw string) (user.PhoneNumber, error) {
+	return user.ParsePhoneNumber(raw)
 }
 
 func hashRegisterOTP(ticketID string, otpCode string) string {

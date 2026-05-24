@@ -81,18 +81,19 @@ func (s *Service) ForgotPassword(
 	ctx context.Context,
 	input ForgotPasswordInput,
 ) (*ResetTicketResult, error) {
-	phoneNumber, err := user.NormalizePhoneNumber(input.PhoneNumber)
+	phoneNumber, err := user.ParsePhoneNumber(input.PhoneNumber)
 	if err != nil {
 		return nil, err
 	}
-	if phoneNumber == "" {
+	globalPhoneNumber := phoneNumber.Global()
+	if globalPhoneNumber == "" {
 		return nil, ErrPhoneNumberRequired
 	}
-	if err := s.enforceResetRateLimits(ctx, phoneNumber); err != nil {
+	if err := s.enforceResetRateLimits(ctx, globalPhoneNumber); err != nil {
 		return nil, err
 	}
 
-	userModel, err := s.users.GetByPhoneNumber(ctx, phoneNumber)
+	userModel, err := s.users.GetByPhoneNumber(ctx, globalPhoneNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +114,7 @@ func (s *Service) ForgotPassword(
 	state := &ResetTicketState{
 		TicketID:      ticketID,
 		UserID:        userModel.ID,
-		PhoneNumber:   phoneNumber,
+		PhoneNumber:   globalPhoneNumber,
 		OTPCodeHash:   hashResetOTP(ticketID, otpCode),
 		OTPExpiresAt:  now.Add(resetOTPTTL),
 		ResendCount:   0,
@@ -125,7 +126,7 @@ func (s *Service) ForgotPassword(
 	}
 
 	message := ForgotPasswordOTPMessage(otpCode, resetOTPTTL)
-	if err := s.sender.SendOTP(ctx, phoneNumber, message); err != nil {
+	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
 		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
 	}
@@ -192,7 +193,11 @@ func (s *Service) ResendForgotPasswordOTP(
 	}
 
 	message := ForgotPasswordOTPMessage(otpCode, resetOTPTTL)
-	if err := s.sender.SendOTP(ctx, state.PhoneNumber, message); err != nil {
+	phoneNumber, err := user.ParsePhoneNumber(state.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
 		if restoreErr := s.store.Save(ctx, &previousState, previousTTL); restoreErr != nil {
 			return nil, restoreErr
 		}

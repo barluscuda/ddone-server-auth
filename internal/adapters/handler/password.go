@@ -169,7 +169,8 @@ func handlePasswordError(c *gin.Context, err error) {
 		respondError(c, http.StatusBadRequest, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrInvalidPhoneNumber),
 		errors.Is(err, apppassword.ErrAuthenticatedUserRequired),
-		errors.Is(err, apppassword.ErrInvalidCurrentPassword):
+		errors.Is(err, apppassword.ErrInvalidCurrentPassword),
+		errors.Is(err, user.ErrUnsupportedTelCode):
 		respondError(c, http.StatusBadRequest, passwordErrorCode(err), passwordErrorMessage(err))
 	case errors.Is(err, apppassword.ErrResetRateLimited),
 		errors.Is(err, apppassword.ErrResendRateLimited),
@@ -194,6 +195,8 @@ func passwordErrorCode(err error) string {
 		return codePhoneNumberRequired
 	case errors.Is(err, apppassword.ErrInvalidPhoneNumber):
 		return codeInvalidPhoneNumber
+	case errors.Is(err, user.ErrUnsupportedTelCode):
+		return codeUnsupportedTelCode
 	case errors.Is(err, apppassword.ErrPasswordResetTicketRequired):
 		return codePasswordResetTicketRequired
 	case errors.Is(err, apppassword.ErrPasswordResetTicketNotFound):
@@ -237,6 +240,8 @@ func passwordErrorMessage(err error) string {
 		return "phone number is required"
 	case errors.Is(err, apppassword.ErrInvalidPhoneNumber):
 		return "phone number format is invalid"
+	case errors.Is(err, user.ErrUnsupportedTelCode):
+		return "phone tel code is unsupported"
 	case errors.Is(err, apppassword.ErrPasswordResetTicketRequired):
 		return "ticket id is required"
 	case errors.Is(err, apppassword.ErrPasswordResetTicketNotFound):

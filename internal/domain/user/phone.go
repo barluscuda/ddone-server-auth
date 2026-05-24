@@ -10,10 +10,32 @@ func (e errInvalidPhoneNumber) Error() string {
 	return string(e)
 }
 
+type PhoneNumber struct {
+	TelCode string
+	Number  string
+}
+
+func (p PhoneNumber) Global() string {
+	if p.TelCode == "" || p.Number == "" {
+		return ""
+	}
+
+	return "+" + p.TelCode + p.Number
+}
+
 func NormalizePhoneNumber(raw string) (string, error) {
+	phoneNumber, err := ParsePhoneNumber(raw)
+	if err != nil {
+		return "", err
+	}
+
+	return phoneNumber.Global(), nil
+}
+
+func ParsePhoneNumber(raw string) (PhoneNumber, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", nil
+		return PhoneNumber{}, nil
 	}
 
 	var builder strings.Builder
@@ -28,13 +50,13 @@ func NormalizePhoneNumber(raw string) (string, error) {
 		case r == ' ' || r == '-' || r == '(' || r == ')':
 			continue
 		default:
-			return "", ErrInvalidPhoneNumber
+			return PhoneNumber{}, ErrInvalidPhoneNumber
 		}
 	}
 
 	digits := builder.String()
 	if digits == "" {
-		return "", ErrInvalidPhoneNumber
+		return PhoneNumber{}, ErrInvalidPhoneNumber
 	}
 
 	switch {
@@ -49,8 +71,11 @@ func NormalizePhoneNumber(raw string) (string, error) {
 	}
 
 	if len(digits) != 10 || !strings.HasPrefix(digits, "20") {
-		return "", ErrInvalidPhoneNumber
+		return PhoneNumber{}, ErrInvalidPhoneNumber
 	}
 
-	return digits, nil
+	return PhoneNumber{
+		TelCode: "856",
+		Number:  digits,
+	}, nil
 }

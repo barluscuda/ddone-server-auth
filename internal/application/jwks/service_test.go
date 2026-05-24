@@ -202,7 +202,7 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	})
 	service.now = func() time.Time { return now }
 
-	token, err := service.IssueAccessToken(context.Background(), "user-1", "2012345678")
+	token, err := service.IssueAccessToken(context.Background(), "user-1", "+8562012345678")
 	if err != nil {
 		t.Fatalf("IssueAccessToken returned error: %v", err)
 	}
@@ -219,8 +219,8 @@ func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
 	if codec.issuedClaims.UserID != "user-1" {
 		t.Fatalf("expected user id %q, got %q", "user-1", codec.issuedClaims.UserID)
 	}
-	if codec.issuedClaims.PhoneNumber != "2012345678" {
-		t.Fatalf("expected phone number %q, got %q", "2012345678", codec.issuedClaims.PhoneNumber)
+	if codec.issuedClaims.PhoneNumber != "+8562012345678" {
+		t.Fatalf("expected phone number %q, got %q", "+8562012345678", codec.issuedClaims.PhoneNumber)
 	}
 	if len(store.keys) != 2 {
 		t.Fatalf("expected successor key to be created, got %d keys", len(store.keys))
@@ -240,7 +240,7 @@ func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
 	})
 	service.now = func() time.Time { return now }
 
-	issued, err := service.IssueAccessToken(context.Background(), "user-1", "2012345678")
+	issued, err := service.IssueAccessToken(context.Background(), "user-1", "+8562012345678")
 	if err != nil {
 		t.Fatalf("IssueAccessToken returned error: %v", err)
 	}

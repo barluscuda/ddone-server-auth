@@ -19,6 +19,7 @@ const (
 	codeRegisterVerified            = "register_verified"
 	codePhoneNumberRequired         = "phone_number_required"
 	codeInvalidPhoneNumber          = "invalid_phone_number"
+	codeUnsupportedTelCode          = "unsupported_tel_code"
 	codeRegisterTicketRequired      = "ticket_id_required"
 	codeOTPCodeRequired             = "otp_code_required"
 	codePasswordRequired            = "password_required"
@@ -147,7 +148,8 @@ func handleRegisterError(c *gin.Context, err error) {
 		errors.Is(err, appregister.ErrPendingRegistrationInvalid):
 		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, appregister.ErrInvalidPhoneNumber),
-		errors.Is(err, appregister.ErrOTPCodeRequired):
+		errors.Is(err, appregister.ErrOTPCodeRequired),
+		errors.Is(err, user.ErrUnsupportedTelCode):
 		respondError(c, http.StatusBadRequest, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, appregister.ErrRegisterRateLimited),
 		errors.Is(err, appregister.ErrResendRateLimited),
@@ -180,6 +182,8 @@ func registerErrorCode(err error) string {
 		return codePhoneNumberRequired
 	case errors.Is(err, appregister.ErrInvalidPhoneNumber):
 		return codeInvalidPhoneNumber
+	case errors.Is(err, user.ErrUnsupportedTelCode):
+		return codeUnsupportedTelCode
 	case errors.Is(err, appregister.ErrRegisterTicketRequired):
 		return codeRegisterTicketRequired
 	case errors.Is(err, appregister.ErrOTPCodeRequired):
@@ -217,6 +221,8 @@ func registerErrorMessage(err error) string {
 		return "phone number is required"
 	case errors.Is(err, appregister.ErrInvalidPhoneNumber):
 		return "phone number format is invalid"
+	case errors.Is(err, user.ErrUnsupportedTelCode):
+		return "phone tel code is unsupported"
 	case errors.Is(err, appregister.ErrRegisterTicketRequired):
 		return "ticket id is required"
 	case errors.Is(err, appregister.ErrOTPCodeRequired):

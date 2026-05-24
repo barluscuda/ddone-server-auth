@@ -76,7 +76,7 @@ func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, _ string) error
 
 type fakeOTPSender struct{}
 
-func (s *fakeOTPSender) SendOTP(_ context.Context, _ string, _ string) error {
+func (s *fakeOTPSender) SendOTP(_ context.Context, _ string, _ string, _ string) error {
 	return nil
 }
 

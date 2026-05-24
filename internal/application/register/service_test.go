@@ -109,13 +109,15 @@ func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, key string) err
 }
 
 type fakeOTPSender struct {
+	telCode     string
 	phoneNumber string
 	message     string
 	err         error
 }
 
-func (s *fakeOTPSender) SendOTP(_ context.Context, phoneNumber string, msg string) error {
-	s.phoneNumber = phoneNumber
+func (s *fakeOTPSender) SendOTP(_ context.Context, telCode string, number string, msg string) error {
+	s.telCode = telCode
+	s.phoneNumber = number
 	s.message = msg
 	return s.err
 }
@@ -178,8 +180,11 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 		t.Fatalf("expected password hash to match original password: %v", err)
 	}
 
+	if sender.telCode != "856" {
+		t.Fatalf("expected sms tel code %q, got %q", "856", sender.telCode)
+	}
 	if sender.phoneNumber != "2012345678" {
-		t.Fatalf("expected sms phone number to be normalized, got %s", sender.phoneNumber)
+		t.Fatalf("expected sms phone number %q, got %q", "2012345678", sender.phoneNumber)
 	}
 
 	if !strings.Contains(sender.message, "123456") {
@@ -193,13 +198,13 @@ func TestNormalizePhoneNumber(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "local with leading zero", input: "02012345678", want: "2012345678"},
-		{name: "local with spaces", input: "020 1234 5678", want: "2012345678"},
-		{name: "country code with plus", input: "+8562012345678", want: "2012345678"},
-		{name: "country code without plus", input: "8562012345678", want: "2012345678"},
-		{name: "country code with international prefix", input: "008562012345678", want: "2012345678"},
-		{name: "country code with extra zero", input: "+85602012345678", want: "2012345678"},
-		{name: "already normalized", input: "2012345678", want: "2012345678"},
+		{name: "local with leading zero", input: "02012345678", want: "+8562012345678"},
+		{name: "local with spaces", input: "020 1234 5678", want: "+8562012345678"},
+		{name: "country code with plus", input: "+8562012345678", want: "+8562012345678"},
+		{name: "country code without plus", input: "8562012345678", want: "+8562012345678"},
+		{name: "country code with international prefix", input: "008562012345678", want: "+8562012345678"},
+		{name: "country code with extra zero", input: "+85602012345678", want: "+8562012345678"},
+		{name: "already normalized", input: "+8562012345678", want: "+8562012345678"},
 	}
 
 	for _, tc := range testCases {
@@ -336,7 +341,7 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
 				PasswordHash:  "hashed-password",
-				PhoneNumber:   "2012345678",
+				PhoneNumber:   "+8562012345678",
 				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt:  time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC),
 				LastOTPSentAt: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
@@ -388,6 +393,9 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 		t.Fatalf("expected last otp sent at %v, got %v", now, registration.LastOTPSentAt)
 	}
 
+	if sender.telCode != "856" {
+		t.Fatalf("expected resend sms tel code %q, got %q", "856", sender.telCode)
+	}
 	if sender.phoneNumber != "2012345678" {
 		t.Fatalf("expected resend sms phone number %q, got %q", "2012345678", sender.phoneNumber)
 	}
@@ -405,7 +413,7 @@ func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *tes
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
 				PasswordHash:  "hashed-password",
-				PhoneNumber:   "2012345678",
+				PhoneNumber:   "+8562012345678",
 				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt:  time.Date(2026, 5, 21, 10, 5, 0, 0, time.UTC),
 				LastOTPSentAt: time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC),
@@ -456,7 +464,7 @@ func TestRegisterServiceResendRegisterOTPEnforcesCooldown(t *testing.T) {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
 				PasswordHash:  "hashed-password",
-				PhoneNumber:   "2012345678",
+				PhoneNumber:   "+8562012345678",
 				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt:  now.Add(4 * time.Minute),
 				LastOTPSentAt: now.Add(-30 * time.Second),
@@ -484,7 +492,7 @@ func TestRegisterServiceResendRegisterOTPRateLimitsAfterThreeResends(t *testing.
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
 				PasswordHash:  "hashed-password",
-				PhoneNumber:   "2012345678",
+				PhoneNumber:   "+8562012345678",
 				OTPCodeHash:   hashRegisterOTP("reg_fixed123", "123456"),
 				OTPExpiresAt:  now.Add(time.Minute),
 				ResendCount:   3,

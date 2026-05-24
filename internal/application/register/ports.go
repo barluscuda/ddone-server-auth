@@ -22,5 +22,5 @@ type RegistrationStore interface {
 }
 
 type OTPSender interface {
-	SendOTP(ctx context.Context, phoneNumber string, msg string) error
+	SendOTP(ctx context.Context, telCode string, number string, msg string) error
 }

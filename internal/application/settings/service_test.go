@@ -54,7 +54,7 @@ func TestGetReturnsCurrentUser(t *testing.T) {
 			"user-1": {
 				ID:                "user-1",
 				Username:          &username,
-				PhoneNumber:       "2012345678",
+				PhoneNumber:       "+8562012345678",
 				PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 				UsernameChangedAt: &usernameChangedAt,
 				PasswordChangedAt: &passwordChangedAt,
@@ -101,7 +101,7 @@ func TestGetAllowsPasswordChangeAfterCooldown(t *testing.T) {
 		userByID: map[string]*user.User{
 			"user-1": {
 				ID:                "user-1",
-				PhoneNumber:       "2012345678",
+				PhoneNumber:       "+8562012345678",
 				PhoneVerifiedAt:   time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 				PasswordChangedAt: &passwordChangedAt,
 				CreatedAt:         time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),

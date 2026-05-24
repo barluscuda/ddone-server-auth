@@ -49,7 +49,7 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 	router.Use(RequireAccessToken(&fakeAccessTokenVerifier{
 		claims: &auth.AccessTokenClaims{
 			Subject:     "user-1",
-			PhoneNumber: "2012345678",
+			PhoneNumber: "+8562012345678",
 			JWTID:       "token-1",
 			ExpiresAt:   time.Now().UTC().Add(time.Minute),
 		},
