@@ -3,7 +3,6 @@ package login
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"ddone-server-auth/internal/domain/auth"
 	"ddone-server-auth/internal/domain/user"
 	"encoding/base64"
@@ -28,7 +27,6 @@ type UseCase interface {
 	Login(ctx context.Context, input LoginInput) (*Result, error)
 	Refresh(ctx context.Context, input RefreshInput) (*Result, error)
 	LoginSession(ctx context.Context, input LoginInput) (*SessionResult, error)
-	SessionToken(ctx context.Context, input SessionTokenInput) (*SessionResult, error)
 }
 
 type Service struct {
@@ -124,53 +122,6 @@ func (s *Service) LoginSession(ctx context.Context, input LoginInput) (*SessionR
 
 func (s *Service) Refresh(ctx context.Context, input RefreshInput) (*Result, error) {
 	return s.refresh(ctx, input)
-}
-
-func (s *Service) SessionToken(ctx context.Context, input SessionTokenInput) (*SessionResult, error) {
-	tokenValue := strings.TrimSpace(input.SessionToken)
-	if tokenValue == "" {
-		return nil, auth.ErrSessionTokenRequired
-	}
-
-	session, err := s.serverSessions.GetByTokenHash(ctx, hashSessionToken(tokenValue))
-	if err != nil {
-		return nil, err
-	}
-
-	if session.IsRevoked() {
-		return nil, auth.ErrLoginSessionRevoked
-	}
-
-	now := s.now()
-	if session.IsExpired(now) {
-		return nil, auth.ErrLoginSessionExpired
-	}
-	if session.HasActiveAccessToken(now) {
-		return &SessionResult{
-			AccessToken: existingAccessToken(session, now),
-		}, nil
-	}
-
-	userModel, err := s.users.GetByID(ctx, session.UserID)
-	if err != nil {
-		if errors.Is(err, user.ErrUserNotFound) {
-			return nil, auth.ErrInvalidCredentials
-		}
-		return nil, err
-	}
-
-	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := s.serverSessions.UpdateAccessToken(ctx, session.ID, accessToken); err != nil {
-		return nil, err
-	}
-
-	return &SessionResult{
-		AccessToken: accessToken,
-	}, nil
 }
 
 func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, error) {
@@ -293,7 +244,7 @@ func (s *Service) newServerSession(
 	session := &auth.LoginSession{
 		ID:                   sessionID,
 		UserID:               userID,
-		TokenHash:            hashSessionToken(tokenValue),
+		TokenHash:            auth.HashSessionToken(tokenValue),
 		UserAgent:            strings.TrimSpace(userAgent),
 		ClientIP:             strings.TrimSpace(clientIP),
 		CurrentAccessToken:   accessToken.Token,
@@ -335,20 +286,6 @@ func (s *Service) authenticateUser(
 	return userModel, nil
 }
 
-func existingAccessToken(session *auth.LoginSession, now time.Time) *auth.AccessToken {
-	expiresIn := int64(session.CurrentAccessExpires.Sub(now).Seconds())
-	if expiresIn < 0 {
-		expiresIn = 0
-	}
-
-	return &auth.AccessToken{
-		Token:     session.CurrentAccessToken,
-		TokenType: "Bearer",
-		ExpiresAt: session.CurrentAccessExpires,
-		ExpiresIn: expiresIn,
-	}
-}
-
 func randomOpaqueToken() (string, error) {
 	randomBytes := make([]byte, refreshTokenBytes)
 	if _, err := rand.Read(randomBytes); err != nil {
@@ -372,14 +309,13 @@ func randomUUID() (string, error) {
 }
 
 func hashRefreshToken(tokenValue string) string {
-	return hashOpaqueToken(tokenValue)
+	return auth.HashOpaqueToken(tokenValue)
 }
 
 func hashSessionToken(tokenValue string) string {
-	return hashOpaqueToken(tokenValue)
+	return auth.HashSessionToken(tokenValue)
 }
 
 func hashOpaqueToken(tokenValue string) string {
-	sum := sha256.Sum256([]byte(tokenValue))
-	return hex.EncodeToString(sum[:])
+	return auth.HashOpaqueToken(tokenValue)
 }

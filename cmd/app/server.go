@@ -27,6 +27,7 @@ func newHTTPServer(
 	tokenManagerHandler *handler.TokenManagerHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
+	requireSession gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) *http.Server {
 	if cfg.App.Debug {
@@ -65,6 +66,7 @@ func newHTTPServer(
 		tokenManagerHandler,
 		passwordHandler,
 		requireAccessToken,
+		requireSession,
 		jwksHandler,
 	)
 
@@ -113,6 +115,7 @@ func registerRoutes(
 	tokenManagerHandler *handler.TokenManagerHandler,
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
+	requireSession gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
@@ -124,7 +127,6 @@ func registerRoutes(
 	router.POST("/tokens", loginHandler.Login)
 	router.POST("/tokens/refresh", loginHandler.Refresh)
 	router.POST("/sessions", loginHandler.LoginSession)
-	router.POST("/sessions/token", loginHandler.SessionToken)
 	router.POST("/password-resets", passwordHandler.ForgotPassword)
 	router.POST("/password-resets/resend", passwordHandler.ResendForgotPassword)
 	router.POST("/password-resets/verify", passwordHandler.VerifyForgotPassword)
@@ -143,7 +145,8 @@ func registerRoutes(
 	tokenRoutes.DELETE("/:tokenId", tokenManagerHandler.Revoke)
 
 	sessionRoutes := router.Group("/sessions")
-	sessionRoutes.Use(requireAccessToken)
+	sessionRoutes.Use(requireSession)
+	sessionRoutes.POST("/token", sessionHandler.Token)
 	sessionRoutes.GET("", sessionHandler.List)
 	sessionRoutes.GET("/current", sessionHandler.Current)
 	sessionRoutes.POST("/revoke-others", sessionHandler.RevokeOthers)

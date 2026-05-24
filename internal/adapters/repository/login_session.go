@@ -68,20 +68,6 @@ func (r *LoginSessionRepository) GetByID(ctx context.Context, sessionID string) 
 
 	return toLoginSession(record), nil
 }
-
-func (r *LoginSessionRepository) GetByCurrentAccessToken(
-	ctx context.Context,
-	accessToken string,
-) (*auth.LoginSession, error) {
-	var record loginSessionRecord
-
-	if err := r.baseQuery(ctx).First(&record, "current_access_token = ?", accessToken).Error; err != nil {
-		return nil, translateLoginSessionError(err)
-	}
-
-	return toLoginSession(record), nil
-}
-
 func (r *LoginSessionRepository) ListByUserID(
 	ctx context.Context,
 	userID string,
@@ -104,10 +90,11 @@ func (r *LoginSessionRepository) ListByUserID(
 	return sessions, nil
 }
 
-func (r *LoginSessionRepository) UpdateAccessToken(
+func (r *LoginSessionRepository) RefreshAccessToken(
 	ctx context.Context,
 	sessionID string,
 	accessToken *auth.AccessToken,
+	sessionExpiresAt time.Time,
 ) error {
 	return r.baseQuery(ctx).
 		Model(&loginSessionRecord{}).
@@ -115,6 +102,7 @@ func (r *LoginSessionRepository) UpdateAccessToken(
 		Updates(map[string]any{
 			"current_access_token":   accessToken.Token,
 			"current_access_expires": accessToken.ExpiresAt,
+			"expires_at":             sessionExpiresAt,
 		}).
 		Error
 }

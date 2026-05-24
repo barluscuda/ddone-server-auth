@@ -45,10 +45,6 @@ func (f *fakeLoginUseCase) LoginSession(_ context.Context, _ applogin.LoginInput
 	return f.sessionResult, f.sessionErr
 }
 
-func (f *fakeLoginUseCase) SessionToken(_ context.Context, _ applogin.SessionTokenInput) (*applogin.SessionResult, error) {
-	return f.sessionResult, f.sessionErr
-}
-
 type fakeJWKSUseCase struct {
 	set *auth.JWKSet
 	err error
@@ -190,40 +186,6 @@ func TestLoginSessionHandlerSetsSessionCookie(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "session-token") {
 		t.Fatal("expected session token to be omitted from session login response body")
-	}
-}
-
-func TestSessionTokenHandlerReturnsAccessTokenFromSessionCookie(t *testing.T) {
-	t.Setenv("GIN_MODE", gin.TestMode)
-	gin.SetMode(gin.TestMode)
-
-	handler := NewLoginHandler(&fakeLoginUseCase{
-		sessionResult: &applogin.SessionResult{
-			AccessToken: &auth.AccessToken{
-				Token:     "access-token",
-				TokenType: "Bearer",
-				ExpiresAt: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
-				ExpiresIn: 900,
-			},
-		},
-	}, testSessionCookieConfig())
-
-	req := httptest.NewRequest(http.MethodPost, "/sessions/token", nil)
-	req.AddCookie(&http.Cookie{Name: "ddone_session", Value: "session-token"})
-	recorder := httptest.NewRecorder()
-
-	router := gin.New()
-	router.POST("/sessions/token", handler.SessionToken)
-	router.ServeHTTP(recorder, req)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
-	}
-	if !strings.Contains(recorder.Body.String(), "access-token") {
-		t.Fatal("expected access token in response body")
-	}
-	if strings.Contains(recorder.Body.String(), "session-token") {
-		t.Fatal("expected session token to be omitted from token response body")
 	}
 }
 

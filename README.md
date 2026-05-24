@@ -268,7 +268,7 @@ Example body:
 
 ### `POST /sessions/token`
 
-Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while the login session itself is still within its configured TTL.
+Reads the `HttpOnly` session cookie and returns the access token for that session. If the currently stored access token is still valid, the service returns it as-is. If it has expired, the service automatically issues and stores a fresh access token while the login session itself is still within its configured TTL. Sessions are revoked by inactivity: if no fresh access token is issued within the configured session TTL, the session expires. Only when a fresh access token is issued does the endpoint extend the stored session expiry and re-send the same session cookie value so the browser cookie age is refreshed without changing the underlying session ID. It is authorized by the session cookie, not the `Authorization` header.
 
 ### `POST /password-resets`
 
@@ -367,17 +367,17 @@ Returns the current user's known login sessions.
 Headers:
 
 ```text
-Authorization: Bearer <access-token>
+Cookie: ddone_session=<session-token>
 ```
 
 ### `GET /sessions/current`
 
-Returns the current login session associated with the authenticated access token.
+Returns the current login session associated with the authenticated session cookie.
 
 Headers:
 
 ```text
-Authorization: Bearer <access-token>
+Cookie: ddone_session=<session-token>
 ```
 
 ### `PATCH /settings/username`
@@ -405,7 +405,7 @@ Revokes a specific login session owned by the current authenticated user.
 Headers:
 
 ```text
-Authorization: Bearer <access-token>
+Cookie: ddone_session=<session-token>
 ```
 
 ### `POST /sessions/revoke-others`
@@ -415,7 +415,7 @@ Revokes all other login sessions while keeping the current session active.
 Headers:
 
 ```text
-Authorization: Bearer <access-token>
+Cookie: ddone_session=<session-token>
 ```
 
 ### `POST /sessions/revoke-all`
@@ -425,7 +425,7 @@ Revokes all login sessions owned by the current authenticated user.
 Headers:
 
 ```text
-Authorization: Bearer <access-token>
+Cookie: ddone_session=<session-token>
 ```
 
 ### `POST /settings/password`

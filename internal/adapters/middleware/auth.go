@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"strings"
+	"time"
 
 	"ddone-server-auth/internal/adapters/dto"
 	"ddone-server-auth/internal/domain/auth"
@@ -17,11 +18,22 @@ type AccessTokenVerifier interface {
 }
 
 type AuthContext struct {
-	UserID   string
+	UserID      string
 	PhoneNumber string
 	TokenID     string
 	AccessToken string
 }
+
+type SessionLookup interface {
+	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error)
+}
+
+type SessionContext struct {
+	SessionID string
+	UserID    string
+}
+
+const sessionContextKey = "session_context"
 
 func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -51,7 +63,7 @@ func RequireAccessToken(verifier AccessTokenVerifier) gin.HandlerFunc {
 		}
 
 		c.Set(authContextKey, AuthContext{
-			UserID:   userID,
+			UserID:      userID,
 			PhoneNumber: claims.PhoneNumber,
 			TokenID:     claims.JWTID,
 			AccessToken: tokenValue,
@@ -68,6 +80,56 @@ func CurrentAuth(c *gin.Context) (AuthContext, bool) {
 
 	authContext, ok := value.(AuthContext)
 	return authContext, ok
+}
+
+func RequireSession(cookieName string, sessions SessionLookup) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenValue, err := c.Cookie(cookieName)
+		if err != nil || strings.TrimSpace(tokenValue) == "" {
+			c.AbortWithStatusJSON(401, dto.ResMessage{
+				Success: false,
+				Code:    "session_token_required",
+				Message: "session token is required",
+			})
+			return
+		}
+
+		session, err := sessions.GetByTokenHash(c.Request.Context(), auth.HashSessionToken(tokenValue))
+		if err != nil || session == nil {
+			c.AbortWithStatusJSON(401, dto.ResMessage{
+				Success: false,
+				Code:    "invalid_session",
+				Message: "login session is no longer valid",
+			})
+			return
+		}
+
+		now := time.Now().UTC()
+		if session.IsRevoked() || session.IsExpired(now) {
+			c.AbortWithStatusJSON(401, dto.ResMessage{
+				Success: false,
+				Code:    "invalid_session",
+				Message: "login session is no longer valid",
+			})
+			return
+		}
+
+		c.Set(sessionContextKey, SessionContext{
+			SessionID: session.ID,
+			UserID:    session.UserID,
+		})
+		c.Next()
+	}
+}
+
+func CurrentSession(c *gin.Context) (SessionContext, bool) {
+	value, ok := c.Get(sessionContextKey)
+	if !ok {
+		return SessionContext{}, false
+	}
+
+	sessionContext, ok := value.(SessionContext)
+	return sessionContext, ok
 }
 
 func bearerToken(headerValue string) (string, bool) {

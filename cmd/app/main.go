@@ -108,7 +108,9 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		loginSessionRepository,
 	)
 	settingsService := appsettings.NewService(userRepository)
-	sessionService := appsession.NewService(loginSessionRepository)
+	sessionService := appsession.NewService(loginSessionRepository, userRepository, jwksService, appsession.Settings{
+		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
+	})
 	tokenManagerService := apptokenmanager.NewService(tokenRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
 		Name:     cfg.Auth.SessionCookieName,
@@ -116,8 +118,14 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		Secure:   cfg.Auth.SessionCookieSecure,
 		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
 	})
+	sessionCookie := handler.SessionCookieConfig{
+		Name:     cfg.Auth.SessionCookieName,
+		MaxAge:   cfg.Auth.EffectiveSessionCookieMaxAge(),
+		Secure:   cfg.Auth.SessionCookieSecure,
+		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
+	}
 	settingsHandler := handler.NewSettingsHandler(settingsService)
-	sessionHandler := handler.NewSessionHandler(sessionService)
+	sessionHandler := handler.NewSessionHandler(sessionService, sessionCookie)
 	tokenManagerHandler := handler.NewTokenManagerHandler(tokenManagerService)
 	passwordHandler := handler.NewPasswordHandler(passwordService)
 	jwksHandler := handler.NewJWKSHandler(jwksService)
@@ -132,6 +140,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		tokenManagerHandler,
 		passwordHandler,
 		middleware.RequireAccessToken(jwksService),
+		middleware.RequireSession(cfg.Auth.SessionCookieName, loginSessionRepository),
 		jwksHandler,
 	)
 

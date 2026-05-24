@@ -24,10 +24,6 @@ type RefreshInput struct {
 	UserAgent    string
 }
 
-type SessionTokenInput struct {
-	SessionToken string
-}
-
 type Result struct {
 	AccessToken      *auth.AccessToken
 	RefreshToken     string

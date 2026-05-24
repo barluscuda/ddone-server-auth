@@ -1,12 +1,16 @@
 package auth
 
-import "time"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"time"
+)
 
 // LoginSession is a server-managed session. Its current access token is replaced
 // in place when the session needs a fresh JWT.
 type LoginSession struct {
 	ID                   string
-	UserID            string
+	UserID               string
 	TokenHash            string
 	UserAgent            string
 	ClientIP             string
@@ -28,4 +32,13 @@ func (s LoginSession) IsExpired(now time.Time) bool {
 
 func (s LoginSession) HasActiveAccessToken(now time.Time) bool {
 	return s.CurrentAccessToken != "" && now.Before(s.CurrentAccessExpires)
+}
+
+func HashOpaqueToken(tokenValue string) string {
+	sum := sha256.Sum256([]byte(tokenValue))
+	return hex.EncodeToString(sum[:])
+}
+
+func HashSessionToken(tokenValue string) string {
+	return HashOpaqueToken(tokenValue)
 }

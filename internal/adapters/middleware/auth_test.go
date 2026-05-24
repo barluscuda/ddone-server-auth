@@ -78,3 +78,69 @@ func TestRequireAccessTokenSetsAuthContext(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
 	}
 }
+
+type fakeSessionLookup struct {
+	session *auth.LoginSession
+	err     error
+}
+
+func (f *fakeSessionLookup) GetByTokenHash(_ context.Context, _ string) (*auth.LoginSession, error) {
+	return f.session, f.err
+}
+
+func TestRequireSessionRejectsMissingCookie(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(RequireSession("ddone_session", &fakeSessionLookup{}))
+	router.GET("/sessions/current", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/current", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, recorder.Code)
+	}
+}
+
+func TestRequireSessionSetsSessionContext(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(RequireSession("ddone_session", &fakeSessionLookup{
+		session: &auth.LoginSession{
+			ID:        "session-1",
+			UserID:    "user-1",
+			ExpiresAt: time.Now().UTC().Add(time.Minute),
+		},
+	}))
+	router.GET("/sessions/current", func(c *gin.Context) {
+		sessionContext, ok := CurrentSession(c)
+		if !ok {
+			t.Fatal("expected session context")
+		}
+		if sessionContext.SessionID != "session-1" {
+			t.Fatalf("expected session id %q, got %q", "session-1", sessionContext.SessionID)
+		}
+		if sessionContext.UserID != "user-1" {
+			t.Fatalf("expected user id %q, got %q", "user-1", sessionContext.UserID)
+		}
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/current", nil)
+	req.AddCookie(&http.Cookie{Name: "ddone_session", Value: "session-token"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+}

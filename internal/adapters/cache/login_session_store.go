@@ -84,25 +84,13 @@ func (s *CachedLoginSessionStore) GetByID(ctx context.Context, sessionID string)
 	return session, nil
 }
 
-func (s *CachedLoginSessionStore) GetByCurrentAccessToken(
-	ctx context.Context,
-	accessToken string,
-) (*auth.LoginSession, error) {
-	session, err := s.next.GetByCurrentAccessToken(ctx, accessToken)
-	if err != nil {
-		return nil, err
-	}
-
-	s.cacheSession(ctx, session)
-	return session, nil
-}
-
-func (s *CachedLoginSessionStore) UpdateAccessToken(
+func (s *CachedLoginSessionStore) RefreshAccessToken(
 	ctx context.Context,
 	sessionID string,
 	accessToken *auth.AccessToken,
+	sessionExpiresAt time.Time,
 ) error {
-	if err := s.next.UpdateAccessToken(ctx, sessionID, accessToken); err != nil {
+	if err := s.next.RefreshAccessToken(ctx, sessionID, accessToken, sessionExpiresAt); err != nil {
 		return err
 	}
 
@@ -110,6 +98,7 @@ func (s *CachedLoginSessionStore) UpdateAccessToken(
 	if s.cache.get(ctx, loginSessionByIDKey(sessionID), &cached) {
 		cached.CurrentAccessToken = accessToken.Token
 		cached.CurrentAccessExpires = accessToken.ExpiresAt
+		cached.ExpiresAt = sessionExpiresAt
 		s.cacheSession(ctx, &cached)
 		s.invalidateUserSessions(ctx, cached.UserID)
 	}

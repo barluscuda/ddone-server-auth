@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"strings"
 	"time"
@@ -17,17 +18,22 @@ const (
 
 var ErrAuthenticatedUserRequired = errors.New("authenticated user is required")
 var ErrSessionIDRequired = errors.New("session id is required")
-var ErrAccessTokenRequired = errors.New("access token is required")
 
 type Service struct {
-	store Store
-	now   func() time.Time
+	store        Store
+	users        UserLookup
+	accessTokens AccessTokenIssuer
+	settings     Settings
+	now          func() time.Time
 }
 
-func NewService(store Store) *Service {
+func NewService(store Store, users UserLookup, accessTokens AccessTokenIssuer, settings Settings) *Service {
 	return &Service{
-		store: store,
-		now:   func() time.Time { return time.Now().UTC() },
+		store:        store,
+		users:        users,
+		accessTokens: accessTokens,
+		settings:     settings,
+		now:          func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -51,13 +57,51 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]View, error) {
 }
 
 func (s *Service) Current(ctx context.Context, input CurrentInput) (*View, error) {
-	session, err := s.currentSession(ctx, input.UserID, input.AccessToken)
+	session, err := s.currentSession(ctx, input.UserID, input.SessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	view := toView(*session)
 	return &view, nil
+}
+
+func (s *Service) IssueAccessToken(ctx context.Context, input IssueAccessTokenInput) (*IssueAccessTokenResult, error) {
+	session, err := s.currentSession(ctx, input.UserID, input.SessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := s.now()
+	if session.HasActiveAccessToken(now) {
+		return &IssueAccessTokenResult{
+			AccessToken: existingAccessToken(session, now),
+			Refreshed:   false,
+		}, nil
+	}
+
+	userModel, err := s.users.GetByID(ctx, session.UserID)
+	if err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
+			return nil, auth.ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	accessToken, err := s.accessTokens.IssueAccessToken(ctx, userModel.ID, userModel.PhoneNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionExpiresAt := now.Add(s.settings.LoginSessionTTL)
+	if err := s.store.RefreshAccessToken(ctx, session.ID, accessToken, sessionExpiresAt); err != nil {
+		return nil, err
+	}
+
+	return &IssueAccessTokenResult{
+		AccessToken: accessToken,
+		Refreshed:   true,
+	}, nil
 }
 
 func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
@@ -86,7 +130,7 @@ func (s *Service) Revoke(ctx context.Context, input RevokeInput) error {
 }
 
 func (s *Service) RevokeOthers(ctx context.Context, input RevokeOthersInput) error {
-	session, err := s.currentSession(ctx, input.UserID, input.AccessToken)
+	session, err := s.currentSession(ctx, input.UserID, input.SessionID)
 	if err != nil {
 		return err
 	}
@@ -109,26 +153,46 @@ func (s *Service) RevokeAll(ctx context.Context, input RevokeAllInput) error {
 	return s.store.RevokeByUserID(ctx, userID, reasonAllSessionsRevoked, s.now())
 }
 
-func (s *Service) currentSession(ctx context.Context, rawUserID string, rawAccessToken string) (*auth.LoginSession, error) {
+func (s *Service) currentSession(ctx context.Context, rawUserID string, rawSessionID string) (*auth.LoginSession, error) {
 	userID := strings.TrimSpace(rawUserID)
 	if userID == "" {
 		return nil, ErrAuthenticatedUserRequired
 	}
 
-	accessToken := strings.TrimSpace(rawAccessToken)
-	if accessToken == "" {
-		return nil, ErrAccessTokenRequired
+	sessionID := strings.TrimSpace(rawSessionID)
+	if sessionID == "" {
+		return nil, ErrSessionIDRequired
 	}
 
-	session, err := s.store.GetByCurrentAccessToken(ctx, accessToken)
+	session, err := s.store.GetByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	if session.UserID != userID {
 		return nil, auth.ErrLoginSessionNotFound
 	}
+	if session.IsRevoked() {
+		return nil, auth.ErrLoginSessionRevoked
+	}
+	if session.IsExpired(s.now()) {
+		return nil, auth.ErrLoginSessionExpired
+	}
 
 	return session, nil
+}
+
+func existingAccessToken(session *auth.LoginSession, now time.Time) *auth.AccessToken {
+	expiresIn := int64(session.CurrentAccessExpires.Sub(now).Seconds())
+	if expiresIn < 0 {
+		expiresIn = 0
+	}
+
+	return &auth.AccessToken{
+		Token:     session.CurrentAccessToken,
+		TokenType: "Bearer",
+		ExpiresAt: session.CurrentAccessExpires,
+		ExpiresIn: expiresIn,
+	}
 }
 
 func toView(session auth.LoginSession) View {

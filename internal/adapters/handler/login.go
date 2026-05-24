@@ -18,18 +18,15 @@ import (
 const (
 	codeLoginSucceeded       = "login_succeeded"
 	codeLoginSessionCreated  = "login_session_created"
-	codeSessionTokenIssued   = "login_session_token_issued"
 	codeTokenRefreshed       = "token_refreshed"
 	codeInvalidCredentials   = "invalid_credentials"
 	codeRefreshTokenRequired = "refresh_token_required"
-	codeSessionTokenRequired = "session_token_required"
 	codeRefreshTokenExpired  = "refresh_token_expired"
 	codeRefreshTokenRevoked  = "refresh_token_revoked"
 	codeRefreshTokenReplay   = "refresh_token_replay_detected"
 	codeLoginSessionRevoked  = "login_session_revoked"
 	messageLoginSucceeded    = "login completed successfully"
 	messageLoginSessionMade  = "login session created successfully"
-	messageSessionTokenMade  = "login session token issued successfully"
 	messageTokenRefreshed    = "token refreshed successfully"
 )
 
@@ -147,34 +144,6 @@ func (h *LoginHandler) LoginSession(c *gin.Context) {
 	})
 }
 
-func (h *LoginHandler) SessionToken(c *gin.Context) {
-	tokenValue, err := c.Cookie(h.sessionCookie.Name)
-	if err != nil || strings.TrimSpace(tokenValue) == "" {
-		handleLoginError(c, auth.ErrSessionTokenRequired)
-		return
-	}
-
-	result, err := h.login.SessionToken(c.Request.Context(), applogin.SessionTokenInput{
-		SessionToken: tokenValue,
-	})
-	if err != nil {
-		handleLoginError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, dto.ResLogin{
-		Success: true,
-		Code:    codeSessionTokenIssued,
-		Message: messageSessionTokenMade,
-		Data: dto.ResLoginData{
-			AccessToken: result.AccessToken.Token,
-			TokenType:   result.AccessToken.TokenType,
-			ExpiresAt:   result.AccessToken.ExpiresAt,
-			ExpiresIn:   result.AccessToken.ExpiresIn,
-		},
-	})
-}
-
 func (h *LoginHandler) setSessionCookie(c *gin.Context, tokenValue string) {
 	c.SetSameSite(h.sessionCookie.SameSite)
 	c.SetCookie(
@@ -220,8 +189,6 @@ func loginErrorCode(err error) string {
 		return codePasswordRequired
 	case errors.Is(err, auth.ErrRefreshTokenRequired):
 		return codeRefreshTokenRequired
-	case errors.Is(err, auth.ErrSessionTokenRequired):
-		return codeSessionTokenRequired
 	case errors.Is(err, auth.ErrLoginSessionRevoked):
 		return codeLoginSessionRevoked
 	case errors.Is(err, auth.ErrLoginSessionExpired):
@@ -251,8 +218,6 @@ func loginErrorMessage(err error) string {
 		return "password is required"
 	case errors.Is(err, auth.ErrRefreshTokenRequired):
 		return "refresh token is required"
-	case errors.Is(err, auth.ErrSessionTokenRequired):
-		return "session token is required"
 	case errors.Is(err, auth.ErrLoginSessionRevoked):
 		return "login session is no longer valid"
 	case errors.Is(err, auth.ErrLoginSessionExpired):

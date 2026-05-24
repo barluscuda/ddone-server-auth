@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"ddone-server-auth/internal/domain/user"
 	"ddone-server-auth/internal/domain/auth"
+	"ddone-server-auth/internal/domain/user"
 )
 
 type UserLookup interface {
@@ -23,7 +23,6 @@ type TokenStore interface {
 type LoginSessionStore interface {
 	Create(ctx context.Context, session *auth.LoginSession) error
 	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error)
-	UpdateAccessToken(ctx context.Context, sessionID string, accessToken *auth.AccessToken) error
 }
 
 type AccessTokenIssuer interface {

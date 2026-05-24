@@ -2,8 +2,8 @@ package login
 
 import (
 	"context"
-	"ddone-server-auth/internal/domain/user"
 	"ddone-server-auth/internal/domain/auth"
+	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"testing"
 	"time"
@@ -183,7 +183,7 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 		tokensByHash: map[string]*auth.TokenRecord{
 			hashRefreshToken("refresh-token"): {
 				ID:          "token-1",
-				UserID:   "user-1",
+				UserID:      "user-1",
 				RootTokenID: "token-1",
 				ReplacedAt:  ptrTime(time.Date(2026, 5, 23, 9, 0, 0, 0, time.UTC)),
 				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
@@ -219,7 +219,7 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 		tokensByHash: map[string]*auth.TokenRecord{
 			hashRefreshToken("refresh-token"): {
 				ID:          "token-1",
-				UserID:   "user-1",
+				UserID:      "user-1",
 				RootTokenID: "root-token",
 				TokenHash:   hashRefreshToken("refresh-token"),
 				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
@@ -301,117 +301,6 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 	}
 	if got, want := loginSessions.created.ExpiresAt, now.Add(30*24*time.Hour); !got.Equal(want) {
 		t.Fatalf("expected login session expiry %v, got %v", want, got)
-	}
-}
-
-func TestSessionTokenReturnsStoredAccessTokenWhenStillValid(t *testing.T) {
-	loginSessions := &fakeLoginSessionStore{
-		sessionsByHash: map[string]*auth.LoginSession{
-			hashSessionToken("session-token"): {
-				ID:                   "session-1",
-				UserID:            "user-1",
-				TokenHash:            hashSessionToken("session-token"),
-				CurrentAccessToken:   "stored-access-token",
-				CurrentAccessExpires: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
-				ExpiresAt:            time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
-			},
-		},
-	}
-	service := NewService(&fakeUserLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
-		RefreshTokenTTL: 30 * 24 * time.Hour,
-		LoginSessionTTL: 30 * 24 * time.Hour,
-	})
-	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
-
-	result, err := service.SessionToken(context.Background(), SessionTokenInput{SessionToken: "session-token"})
-	if err != nil {
-		t.Fatalf("SessionToken returned error: %v", err)
-	}
-
-	if result.AccessToken.Token != "stored-access-token" {
-		t.Fatalf("expected stored access token, got %q", result.AccessToken.Token)
-	}
-	if loginSessions.updatedSessionID != "" {
-		t.Fatal("expected stored token to be returned without update")
-	}
-}
-
-func TestSessionTokenRefreshesExpiredAccessToken(t *testing.T) {
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("hash password: %v", err)
-	}
-
-	userModel := &user.UserModel{
-		ID:           "user-1",
-		PhoneNumber:  "2012345678",
-		PasswordHash: string(passwordHash),
-	}
-	users := &fakeUserLookup{
-		byID: map[string]*user.UserModel{"user-1": userModel},
-	}
-	loginSessions := &fakeLoginSessionStore{
-		sessionsByHash: map[string]*auth.LoginSession{
-			hashSessionToken("session-token"): {
-				ID:                   "session-1",
-				UserID:            "user-1",
-				TokenHash:            hashSessionToken("session-token"),
-				CurrentAccessToken:   "expired-access-token",
-				CurrentAccessExpires: time.Date(2026, 5, 23, 9, 59, 0, 0, time.UTC),
-				ExpiresAt:            time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC),
-			},
-		},
-	}
-	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
-		RefreshTokenTTL: 30 * 24 * time.Hour,
-		LoginSessionTTL: 30 * 24 * time.Hour,
-	})
-	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
-
-	result, err := service.SessionToken(context.Background(), SessionTokenInput{SessionToken: "session-token"})
-	if err != nil {
-		t.Fatalf("SessionToken returned error: %v", err)
-	}
-
-	if result.AccessToken.Token != "access-token" {
-		t.Fatalf("expected fresh access token, got %q", result.AccessToken.Token)
-	}
-	if loginSessions.updatedSessionID != "session-1" {
-		t.Fatalf("expected updated session id %q, got %q", "session-1", loginSessions.updatedSessionID)
-	}
-	if loginSessions.updatedAccessToken == nil {
-		t.Fatal("expected updated access token to be stored")
-	}
-	if loginSessions.created != nil {
-		t.Fatal("expected server session token refresh to replace token without creating a new session")
-	}
-}
-
-func TestSessionTokenRejectsExpiredLoginSession(t *testing.T) {
-	loginSessions := &fakeLoginSessionStore{
-		sessionsByHash: map[string]*auth.LoginSession{
-			hashSessionToken("session-token"): {
-				ID:                   "session-1",
-				UserID:            "user-1",
-				TokenHash:            hashSessionToken("session-token"),
-				CurrentAccessToken:   "stored-access-token",
-				CurrentAccessExpires: time.Date(2026, 5, 23, 10, 15, 0, 0, time.UTC),
-				ExpiresAt:            time.Date(2026, 5, 23, 9, 59, 0, 0, time.UTC),
-			},
-		},
-	}
-	service := NewService(&fakeUserLookup{}, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
-		RefreshTokenTTL: 30 * 24 * time.Hour,
-		LoginSessionTTL: 30 * 24 * time.Hour,
-	})
-	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
-
-	_, err := service.SessionToken(context.Background(), SessionTokenInput{SessionToken: "session-token"})
-	if !errors.Is(err, auth.ErrLoginSessionExpired) {
-		t.Fatalf("expected login session expired error, got %v", err)
-	}
-	if loginSessions.updatedSessionID != "" {
-		t.Fatal("expected expired login session to avoid access-token refresh")
 	}
 }
 
