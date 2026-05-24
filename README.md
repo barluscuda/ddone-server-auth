@@ -44,13 +44,14 @@ The project is being shaped toward a hexagonal architecture:
 - `internal/adapters` contains infrastructure and delivery code
 - `cmd/app` is the composition root and HTTP bootstrap
 
-Current note: some legacy persistence concerns still live under `internal/domain/user` through GORM tags on user models. Database migrations now live under `internal/adapters/repository`. New work should keep moving the codebase toward pure domain types and outward-facing adapters.
+Domain types are kept free of transport and persistence metadata. Database row shapes, GORM tags, Redis JSON payloads, and migration helpers live in adapters.
 
 ## Project Layout
 
 ```text
 cmd/app/                       Entry point and HTTP server wiring
 config/                        Config loading and default values
+db/init/                       Local PostgreSQL initialization scripts
 internal/application/register/ Registration use case
 internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
@@ -75,9 +76,15 @@ agents/                        Repo-local skills
 
 - Go `1.26.2`
 - Docker and Docker Compose
-- PostgreSQL
+- PostgreSQL with the `pgcrypto` extension enabled
 - Redis
 - Wenova API token for real SMS delivery
+
+Docker Compose enables `pgcrypto` through [db/init/001_pgcrypto.sql](/home/mrbarlus/coding/DDONE/ddone-server-auth/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is created. For an existing local volume, run the SQL manually or recreate the volume before starting the service. For external PostgreSQL instances, enable it once in the target database:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+```
 
 ## Local Development
 

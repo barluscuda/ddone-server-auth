@@ -12,18 +12,18 @@ import (
 )
 
 type fakeUserLookup struct {
-	byID    map[string]*user.UserModel
-	byPhone map[string]*user.UserModel
+	byID    map[string]*user.User
+	byPhone map[string]*user.User
 }
 
-func (r *fakeUserLookup) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+func (r *fakeUserLookup) GetByID(_ context.Context, id string) (*user.User, error) {
 	if userModel, ok := r.byID[id]; ok {
 		return userModel, nil
 	}
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserLookup) GetByPhoneNumber(_ context.Context, phoneNumber string) (*user.UserModel, error) {
+func (r *fakeUserLookup) GetByPhoneNumber(_ context.Context, phoneNumber string) (*user.User, error) {
 	if userModel, ok := r.byPhone[phoneNumber]; ok {
 		return userModel, nil
 	}
@@ -126,14 +126,14 @@ func TestLoginCreatesTokenRecord(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	userModel := &user.UserModel{
+	userModel := &user.User{
 		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byPhone: map[string]*user.UserModel{"2012345678": userModel},
-		byID:    map[string]*user.UserModel{"user-1": userModel},
+		byPhone: map[string]*user.User{"2012345678": userModel},
+		byID:    map[string]*user.User{"user-1": userModel},
 	}
 	tokenRecords := &fakeTokenStore{}
 	loginSessions := &fakeLoginSessionStore{}
@@ -171,13 +171,13 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	userModel := &user.UserModel{
+	userModel := &user.User{
 		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byID: map[string]*user.UserModel{"user-1": userModel},
+		byID: map[string]*user.User{"user-1": userModel},
 	}
 	service := NewService(users, &fakeTokenStore{
 		tokensByHash: map[string]*auth.TokenRecord{
@@ -207,13 +207,13 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	userModel := &user.UserModel{
+	userModel := &user.User{
 		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byID: map[string]*user.UserModel{"user-1": userModel},
+		byID: map[string]*user.User{"user-1": userModel},
 	}
 	tokenRecords := &fakeTokenStore{
 		tokensByHash: map[string]*auth.TokenRecord{
@@ -263,14 +263,14 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	userModel := &user.UserModel{
+	userModel := &user.User{
 		ID:           "user-1",
 		PhoneNumber:  "2012345678",
 		PasswordHash: string(passwordHash),
 	}
 	users := &fakeUserLookup{
-		byPhone: map[string]*user.UserModel{"2012345678": userModel},
-		byID:    map[string]*user.UserModel{"user-1": userModel},
+		byPhone: map[string]*user.User{"2012345678": userModel},
+		byID:    map[string]*user.User{"user-1": userModel},
 	}
 	loginSessions := &fakeLoginSessionStore{}
 	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{

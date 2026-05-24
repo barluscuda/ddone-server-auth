@@ -260,7 +260,7 @@ func (s *Service) authenticateUser(
 	ctx context.Context,
 	rawPhoneNumber string,
 	password string,
-) (*user.UserModel, error) {
+) (*user.User, error) {
 	phoneNumber, err := user.NormalizePhoneNumber(rawPhoneNumber)
 	if err != nil {
 		return nil, err

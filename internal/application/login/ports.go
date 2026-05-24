@@ -9,8 +9,8 @@ import (
 )
 
 type UserLookup interface {
-	GetByID(ctx context.Context, id string) (*user.UserModel, error)
-	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.UserModel, error)
+	GetByID(ctx context.Context, id string) (*user.User, error)
+	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.User, error)
 }
 
 type TokenStore interface {

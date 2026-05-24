@@ -2,30 +2,26 @@ package user
 
 import "time"
 
-type UserModel struct {
-	ID                string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Username          *string   `gorm:"size:50;uniqueIndex"`
-	PasswordHash      string    `gorm:"size:255;not null"`
-	PhoneNumber       string    `gorm:"size:20;not null;uniqueIndex"`
-	PhoneVerifiedAt   time.Time `gorm:"not null"`
+type User struct {
+	ID                string
+	Username          *string
+	PasswordHash      string
+	PhoneNumber       string
+	PhoneVerifiedAt   time.Time
 	UsernameChangedAt *time.Time
 	PasswordChangedAt *time.Time
-	CreatedAt         time.Time `gorm:"not null"`
-	UpdatedAt         time.Time `gorm:"not null"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
-type RegisterModel struct {
-	TicketID      string    `json:"ticket_id"`
-	Username      *string   `json:"username"`
-	PasswordHash  string    `json:"password_hash"`
-	PhoneNumber   string    `json:"phone_number"`
-	OTPCodeHash   string    `json:"otp_code_hash"`
-	OTPExpiresAt  time.Time `json:"otp_expires_at"`
-	ResendCount   int       `json:"resend_count"`
-	LastOTPSentAt time.Time `json:"last_otp_sent_at"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
-func (UserModel) TableName() string {
-	return "accounts"
+type PendingRegistration struct {
+	TicketID      string
+	Username      *string
+	PasswordHash  string
+	PhoneNumber   string
+	OTPCodeHash   string
+	OTPExpiresAt  time.Time
+	ResendCount   int
+	LastOTPSentAt time.Time
+	CreatedAt     time.Time
 }

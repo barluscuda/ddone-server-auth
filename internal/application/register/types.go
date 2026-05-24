@@ -9,7 +9,7 @@ import (
 
 type UseCase interface {
 	Register(ctx context.Context, input RegisterInput) (*RegisterResult, error)
-	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*user.UserModel, error)
+	VerifyRegister(ctx context.Context, input VerifyRegisterInput) (*user.User, error)
 	ResendRegisterOTP(ctx context.Context, input ResendRegisterOTPInput) (*RegisterResult, error)
 }
 

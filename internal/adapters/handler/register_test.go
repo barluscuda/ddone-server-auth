@@ -18,23 +18,23 @@ import (
 
 type fakeUserRepository struct{}
 
-func (r *fakeUserRepository) Create(_ context.Context, _ *user.UserModel) error {
+func (r *fakeUserRepository) Create(_ context.Context, _ *user.User) error {
 	return nil
 }
 
-func (r *fakeUserRepository) GetByID(_ context.Context, _ string) (*user.UserModel, error) {
+func (r *fakeUserRepository) GetByID(_ context.Context, _ string) (*user.User, error) {
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserRepository) GetByPhoneNumber(_ context.Context, _ string) (*user.UserModel, error) {
+func (r *fakeUserRepository) GetByPhoneNumber(_ context.Context, _ string) (*user.User, error) {
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserRepository) GetByUsername(_ context.Context, _ string) (*user.UserModel, error) {
+func (r *fakeUserRepository) GetByUsername(_ context.Context, _ string) (*user.User, error) {
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserRepository) Update(_ context.Context, _ *user.UserModel) error {
+func (r *fakeUserRepository) Update(_ context.Context, _ *user.User) error {
 	return nil
 }
 
@@ -43,18 +43,18 @@ func (r *fakeUserRepository) Delete(_ context.Context, _ string) error {
 }
 
 type fakeRegistrationStore struct {
-	values map[string]*user.RegisterModel
+	values map[string]*user.PendingRegistration
 }
 
-func (s *fakeRegistrationStore) Save(_ context.Context, registration *user.RegisterModel, _ time.Duration) error {
+func (s *fakeRegistrationStore) Save(_ context.Context, registration *user.PendingRegistration, _ time.Duration) error {
 	if s.values == nil {
-		s.values = map[string]*user.RegisterModel{}
+		s.values = map[string]*user.PendingRegistration{}
 	}
 	s.values[registration.TicketID] = registration
 	return nil
 }
 
-func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*user.RegisterModel, error) {
+func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*user.PendingRegistration, error) {
 	if registration, ok := s.values[ticketID]; ok {
 		return registration, nil
 	}
@@ -282,7 +282,7 @@ func TestResendOTPReturnsTicketID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	store := &fakeRegistrationStore{
-		values: map[string]*user.RegisterModel{
+		values: map[string]*user.PendingRegistration{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),
@@ -341,7 +341,7 @@ func TestResendOTPReturnsTooManyRequestsDuringCooldown(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	store := &fakeRegistrationStore{
-		values: map[string]*user.RegisterModel{
+		values: map[string]*user.PendingRegistration{
 			"reg_fixed123": {
 				TicketID:      "reg_fixed123",
 				Username:      stringPtr("user_fixed123"),

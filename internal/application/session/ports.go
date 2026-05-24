@@ -29,7 +29,7 @@ type Store interface {
 }
 
 type UserLookup interface {
-	GetByID(ctx context.Context, id string) (*user.UserModel, error)
+	GetByID(ctx context.Context, id string) (*user.User, error)
 }
 
 type AccessTokenIssuer interface {

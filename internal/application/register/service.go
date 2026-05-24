@@ -43,7 +43,7 @@ var ErrResendCooldownActive = errors.New("please wait 60 seconds before requesti
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 
 type Service struct {
-	users          UserStore
+	users             UserStore
 	store             RegistrationStore
 	sender            OTPSender
 	now               func() time.Time
@@ -59,7 +59,7 @@ func NewService(
 	sender OTPSender,
 ) *Service {
 	return &Service{
-		users:          users,
+		users:             users,
 		store:             store,
 		sender:            sender,
 		now:               func() time.Time { return time.Now().UTC() },
@@ -115,7 +115,7 @@ func (s *Service) Register(
 	otpCodeHash := hashRegisterOTP(ticketID, otpCode)
 
 	now := s.now()
-	pendingRegistration := &user.RegisterModel{
+	pendingRegistration := &user.PendingRegistration{
 		TicketID:      ticketID,
 		Username:      username,
 		PasswordHash:  passwordHash,
@@ -144,7 +144,7 @@ func (s *Service) Register(
 func (s *Service) VerifyRegister(
 	ctx context.Context,
 	input VerifyRegisterInput,
-) (*user.UserModel, error) {
+) (*user.User, error) {
 	ticketID := strings.TrimSpace(input.TicketID)
 	otpCode := strings.TrimSpace(input.OTPCode)
 	if ticketID == "" {
@@ -211,7 +211,7 @@ func (s *Service) VerifyRegister(
 		}
 	}
 
-	userModel := &user.UserModel{
+	userModel := &user.User{
 		Username:          username,
 		PasswordHash:      pendingRegistration.PasswordHash,
 		PhoneNumber:       phoneNumber,

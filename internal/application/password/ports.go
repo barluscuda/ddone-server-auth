@@ -8,9 +8,9 @@ import (
 )
 
 type UserStore interface {
-	GetByID(ctx context.Context, id string) (*user.UserModel, error)
-	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.UserModel, error)
-	Update(ctx context.Context, userModel *user.UserModel) error
+	GetByID(ctx context.Context, id string) (*user.User, error)
+	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*user.User, error)
+	Update(ctx context.Context, userModel *user.User) error
 }
 
 type ResetStore interface {

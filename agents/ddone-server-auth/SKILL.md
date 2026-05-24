@@ -46,7 +46,7 @@ Use this skill for changes inside this repository.
 - Handlers should depend on application contracts, not concrete repositories.
 - Avoid importing adapter packages into application or domain code.
 - Avoid adding new GORM tags, migration logic, or transport DTOs to domain packages.
-- If touching `internal/domain/user`, note that it still has legacy persistence leakage. Move it toward pure domain types instead of expanding that pattern.
+- Keep `internal/domain/user` persistence-free. Table names, GORM tags, Redis JSON shapes, and migration helpers belong in adapters.
 
 ## Current Runtime Shape
 

@@ -1,15 +1,15 @@
 package auth
 
 type JWK struct {
-	KeyType   string `json:"kty"`
-	Use       string `json:"use"`
-	Curve     string `json:"crv"`
-	Algorithm string `json:"alg"`
-	KeyID     string `json:"kid"`
-	X         string `json:"x"`
-	Y         string `json:"y"`
+	KeyType   string
+	Use       string
+	Curve     string
+	Algorithm string
+	KeyID     string
+	X         string
+	Y         string
 }
 
 type JWKSet struct {
-	Keys []JWK `json:"keys"`
+	Keys []JWK
 }

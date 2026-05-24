@@ -29,7 +29,7 @@ cmd/app/                  Process entrypoint
 - HTTP JSON request and response field names should use camelCase in DTOs and public examples.
 - Do not introduce new adapter imports into application or domain code.
 - Do not put migrations, GORM tags, Redis logic, or HTTP types into new domain packages.
-- `internal/domain/user` still contains legacy GORM tags and migration helpers. If touching that area, move it toward pure domain models instead of extending the leakage.
+- `internal/domain/user` should stay persistence-free. Keep table names, GORM tags, Redis JSON shapes, and migration helpers in adapters.
 - `internal/ports` exists today, but avoid turning it into a dumping ground. Prefer interfaces close to the owning use case or domain.
 
 ## Commands

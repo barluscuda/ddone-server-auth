@@ -16,7 +16,7 @@ type userStoreBackend interface {
 	appregister.UserStore
 	applogin.UserLookup
 	appsettings.UserReader
-	Update(ctx context.Context, userModel *user.UserModel) error
+	Update(ctx context.Context, userModel *user.User) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -43,7 +43,7 @@ func NewCachedUserStore(
 	}
 }
 
-func (s *CachedUserStore) Create(ctx context.Context, userModel *user.UserModel) error {
+func (s *CachedUserStore) Create(ctx context.Context, userModel *user.User) error {
 	if err := s.next.Create(ctx, userModel); err != nil {
 		return err
 	}
@@ -52,9 +52,9 @@ func (s *CachedUserStore) Create(ctx context.Context, userModel *user.UserModel)
 	return nil
 }
 
-func (s *CachedUserStore) GetByID(ctx context.Context, id string) (*user.UserModel, error) {
+func (s *CachedUserStore) GetByID(ctx context.Context, id string) (*user.User, error) {
 	if s.ttl > 0 {
-		var cached user.UserModel
+		var cached user.User
 		if s.cache.get(ctx, userByIDKey(id), &cached) {
 			return &cached, nil
 		}
@@ -72,9 +72,9 @@ func (s *CachedUserStore) GetByID(ctx context.Context, id string) (*user.UserMod
 func (s *CachedUserStore) GetByPhoneNumber(
 	ctx context.Context,
 	phoneNumber string,
-) (*user.UserModel, error) {
+) (*user.User, error) {
 	if s.ttl > 0 {
-		var cached user.UserModel
+		var cached user.User
 		if s.cache.get(ctx, userByPhoneKey(phoneNumber), &cached) {
 			return &cached, nil
 		}
@@ -89,9 +89,9 @@ func (s *CachedUserStore) GetByPhoneNumber(
 	return userModel, nil
 }
 
-func (s *CachedUserStore) GetByUsername(ctx context.Context, username string) (*user.UserModel, error) {
+func (s *CachedUserStore) GetByUsername(ctx context.Context, username string) (*user.User, error) {
 	if s.ttl > 0 {
-		var cached user.UserModel
+		var cached user.User
 		if s.cache.get(ctx, userByUsernameKey(username), &cached) {
 			return &cached, nil
 		}
@@ -106,7 +106,7 @@ func (s *CachedUserStore) GetByUsername(ctx context.Context, username string) (*
 	return userModel, nil
 }
 
-func (s *CachedUserStore) Update(ctx context.Context, userModel *user.UserModel) error {
+func (s *CachedUserStore) Update(ctx context.Context, userModel *user.User) error {
 	existing, _ := s.next.GetByID(ctx, userModel.ID)
 
 	if err := s.next.Update(ctx, userModel); err != nil {
@@ -130,7 +130,7 @@ func (s *CachedUserStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *CachedUserStore) cacheUser(ctx context.Context, userModel *user.UserModel) {
+func (s *CachedUserStore) cacheUser(ctx context.Context, userModel *user.User) {
 	if userModel == nil || s.ttl <= 0 {
 		return
 	}
@@ -142,7 +142,7 @@ func (s *CachedUserStore) cacheUser(ctx context.Context, userModel *user.UserMod
 	}
 }
 
-func (s *CachedUserStore) invalidateUser(ctx context.Context, userModel *user.UserModel) {
+func (s *CachedUserStore) invalidateUser(ctx context.Context, userModel *user.User) {
 	if userModel == nil {
 		return
 	}

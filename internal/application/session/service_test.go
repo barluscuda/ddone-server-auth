@@ -103,13 +103,13 @@ type fakeUserLookup struct {
 	byID map[string]string
 }
 
-func (f *fakeUserLookup) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+func (f *fakeUserLookup) GetByID(_ context.Context, id string) (*user.User, error) {
 	phoneNumber, ok := f.byID[id]
 	if !ok {
 		return nil, user.ErrUserNotFound
 	}
 
-	return &user.UserModel{ID: id, PhoneNumber: phoneNumber}, nil
+	return &user.User{ID: id, PhoneNumber: phoneNumber}, nil
 }
 
 type fakeAccessTokenIssuer struct {

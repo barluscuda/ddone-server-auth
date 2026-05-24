@@ -10,12 +10,12 @@ import (
 )
 
 type fakeUserReader struct {
-	userByID   map[string]*user.UserModel
-	byUsername map[string]*user.UserModel
-	updated    *user.UserModel
+	userByID   map[string]*user.User
+	byUsername map[string]*user.User
+	updated    *user.User
 }
 
-func (r *fakeUserReader) GetByID(_ context.Context, id string) (*user.UserModel, error) {
+func (r *fakeUserReader) GetByID(_ context.Context, id string) (*user.User, error) {
 	if value, ok := r.userByID[id]; ok {
 		return value, nil
 	}
@@ -23,7 +23,7 @@ func (r *fakeUserReader) GetByID(_ context.Context, id string) (*user.UserModel,
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserReader) GetByUsername(_ context.Context, username string) (*user.UserModel, error) {
+func (r *fakeUserReader) GetByUsername(_ context.Context, username string) (*user.User, error) {
 	if value, ok := r.byUsername[username]; ok {
 		copyValue := *value
 		return &copyValue, nil
@@ -32,12 +32,12 @@ func (r *fakeUserReader) GetByUsername(_ context.Context, username string) (*use
 	return nil, user.ErrUserNotFound
 }
 
-func (r *fakeUserReader) Update(_ context.Context, userModel *user.UserModel) error {
+func (r *fakeUserReader) Update(_ context.Context, userModel *user.User) error {
 	copyValue := *userModel
 	r.updated = &copyValue
 	r.userByID[userModel.ID] = &copyValue
 	if r.byUsername == nil {
-		r.byUsername = map[string]*user.UserModel{}
+		r.byUsername = map[string]*user.User{}
 	}
 	if userModel.Username != nil {
 		r.byUsername[*userModel.Username] = &copyValue
@@ -50,7 +50,7 @@ func TestGetReturnsCurrentUser(t *testing.T) {
 	usernameChangedAt := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
 	passwordChangedAt := time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)
 	service := NewService(&fakeUserReader{
-		userByID: map[string]*user.UserModel{
+		userByID: map[string]*user.User{
 			"user-1": {
 				ID:                "user-1",
 				Username:          &username,
@@ -103,13 +103,13 @@ func TestGetRequiresAuthenticatedUser(t *testing.T) {
 
 func TestUpdateUsernamePersistsNormalizedValue(t *testing.T) {
 	users := &fakeUserReader{
-		userByID: map[string]*user.UserModel{
+		userByID: map[string]*user.User{
 			"user-1": {
 				ID:        "user-1",
 				CreatedAt: time.Date(2026, 5, 23, 0, 0, 0, 0, time.UTC),
 			},
 		},
-		byUsername: map[string]*user.UserModel{},
+		byUsername: map[string]*user.User{},
 	}
 	service := NewService(users)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
@@ -135,13 +135,13 @@ func TestUpdateUsernamePersistsNormalizedValue(t *testing.T) {
 func TestUpdateUsernameRejectsCooldown(t *testing.T) {
 	lastChange := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
 	users := &fakeUserReader{
-		userByID: map[string]*user.UserModel{
+		userByID: map[string]*user.User{
 			"user-1": {
 				ID:                "user-1",
 				UsernameChangedAt: &lastChange,
 			},
 		},
-		byUsername: map[string]*user.UserModel{},
+		byUsername: map[string]*user.User{},
 	}
 	service := NewService(users)
 	service.now = func() time.Time { return time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC) }
