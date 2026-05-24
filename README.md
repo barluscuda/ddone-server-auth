@@ -95,6 +95,24 @@ Start infrastructure:
 make infra-up
 ```
 
+Run the full stack with Docker Compose:
+
+```bash
+make compose-up
+```
+
+Build the image explicitly when needed:
+
+```bash
+make compose-build
+make compose-up-build
+```
+
+`docker-compose.yml` runs the app, PostgreSQL, and Redis together. `docker-infra.yml` remains available for infra-only local development.
+`make compose-up` starts the stack from the existing image and does not rebuild on each boot.
+In the full-stack compose file, only `ddone-server-auth` is exposed to the host; Postgres and Redis stay on the internal `ddone-network`.
+The app service explicitly imports runtime variables from `.env` through `env_file`, and Docker Compose also reads `.env` for `${...}` interpolation.
+
 Run the service:
 
 ```bash
@@ -111,6 +129,12 @@ Build the production binary:
 
 ```bash
 make build
+```
+
+Build the Docker image:
+
+```bash
+docker build -t barluscuda/ddone-server-auth .
 ```
 
 Format code:

@@ -1,0 +1,72 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ddone-server-auth
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DDONE_APP_PORT: ${DDONE_APP_PORT:-3000}
+      DDONE_DATABASE_URL: ${DDONE_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/ddone_auth?sslmode=disable}
+      DDONE_REDIS_URL: ${DDONE_REDIS_URL:-redis://redis:6379/0}
+      DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE: ${DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE:-false}
+      DDONE_WENOVA_TOKEN: ${DDONE_WENOVA_TOKEN:-}
+    ports:
+      - "${DDONE_APP_PORT:-3000}:3000"
+    networks:
+      - ddone-network
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: ddone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DDONE_DATABASE_NAME:-ddone_auth}
+      POSTGRES_USER: ${DDONE_DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DDONE_DATABASE_PASSWORD:-postgres}
+      TZ: ${DDONE_DATABASE_TIMEZONE:-UTC}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DDONE_DATABASE_USERNAME:-postgres} -d ${DDONE_DATABASE_NAME:-ddone_auth}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ddone-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ddone-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - ddone-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ddone-network:
+    driver: bridge

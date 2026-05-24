@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+ddone-server-auth
+coverage.*
+*.coverprofile
+*.out
+*.test
+my-plans/

@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 .PHONY: \
 	help build run test fmt tidy clean \
+	compose-up compose-up-build compose-down compose-logs compose-ps compose-build \
 	infra-up infra-down infra-logs infra-ps \
 	install-user install-dirs install-bin install-config install-env install-unit \
 	systemd-install systemd-bootstrap \
@@ -14,6 +15,9 @@ INSTALL ?= install
 SUDO ?= sudo
 SYSTEMCTL ?= systemctl
 JOURNALCTL ?= journalctl
+DOCKER ?= docker
+COMPOSE_FILE ?= docker-compose.yml
+INFRA_COMPOSE_FILE ?= docker-infra.yml
 
 APP := ./cmd/app
 BIN := ddone-server-auth
@@ -48,6 +52,12 @@ help:
 	@echo "  make fmt               - Format Go files"
 	@echo "  make tidy              - Tidy Go modules"
 	@echo "  make clean             - Remove the built binary"
+	@echo "  make compose-build     - Build the full Docker Compose app image"
+	@echo "  make compose-up        - Start the full Docker Compose stack without rebuilding"
+	@echo "  make compose-up-build  - Build and start the full Docker Compose stack"
+	@echo "  make compose-down      - Stop the full Docker Compose stack"
+	@echo "  make compose-logs      - Show full Docker Compose stack logs"
+	@echo "  make compose-ps        - Show full Docker Compose stack status"
 	@echo "  make infra-up          - Start PostgreSQL and Redis"
 	@echo "  make infra-down        - Stop local infrastructure"
 	@echo "  make infra-logs        - Show infrastructure logs"
@@ -71,6 +81,8 @@ help:
 	@echo "  BIN_DIR=$(BIN_DIR)"
 	@echo "  ENV_DIR=$(ENV_DIR)"
 	@echo "  SYSTEMD_DIR=$(SYSTEMD_DIR)"
+	@echo "  COMPOSE_FILE=$(COMPOSE_FILE)"
+	@echo "  INFRA_COMPOSE_FILE=$(INFRA_COMPOSE_FILE)"
 
 build:
 	$(GO) build -o $(BIN_PATH) $(APP)
@@ -90,17 +102,35 @@ tidy:
 clean:
 	rm -f $(BIN_PATH)
 
+compose-build:
+	$(DOCKER) compose -f $(COMPOSE_FILE) build
+
+compose-up:
+	$(DOCKER) compose -f $(COMPOSE_FILE) up -d
+
+compose-up-build:
+	$(DOCKER) compose -f $(COMPOSE_FILE) up --build -d
+
+compose-down:
+	$(DOCKER) compose -f $(COMPOSE_FILE) down
+
+compose-logs:
+	$(DOCKER) compose -f $(COMPOSE_FILE) logs -f
+
+compose-ps:
+	$(DOCKER) compose -f $(COMPOSE_FILE) ps
+
 infra-up:
-	docker compose -f docker-infra.yml up -d
+	$(DOCKER) compose -f $(INFRA_COMPOSE_FILE) up -d
 
 infra-down:
-	docker compose -f docker-infra.yml down
+	$(DOCKER) compose -f $(INFRA_COMPOSE_FILE) down
 
 infra-logs:
-	docker compose -f docker-infra.yml logs -f
+	$(DOCKER) compose -f $(INFRA_COMPOSE_FILE) logs -f
 
 infra-ps:
-	docker compose -f docker-infra.yml ps
+	$(DOCKER) compose -f $(INFRA_COMPOSE_FILE) ps
 
 install-user:
 	@if id -u "$(SERVICE_USER)" >/dev/null 2>&1; then \
