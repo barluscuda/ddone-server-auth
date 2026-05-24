@@ -28,3 +28,11 @@ type LoginSessionStore interface {
 type AccessTokenIssuer interface {
 	IssueAccessToken(ctx context.Context, userID string, phoneNumber string) (*auth.AccessToken, error)
 }
+
+type LoginRateLimiter interface {
+	GetCounter(ctx context.Context, key string) (int64, error)
+	IncrementCounter(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	DeleteCounter(ctx context.Context, key string) error
+	IsLocked(ctx context.Context, key string) (bool, error)
+	Lock(ctx context.Context, key string, ttl time.Duration) error
+}

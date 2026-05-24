@@ -18,9 +18,8 @@ type Config struct {
 	Database  DatabaseConfig
 	Redis     RedisConfig
 	Cache     CacheConfig
-	OTP       OTPConfig
+	Security  SecurityConfig
 	CORS      CORSConfig
-	Auth      AuthConfig
 	WenovaAPI WenovaAPIConfig
 }
 
@@ -65,6 +64,12 @@ type WenovaAPIConfig struct {
 	Token string
 }
 
+type SecurityConfig struct {
+	Login LoginConfig `mapstructure:"login"`
+	OTP   OTPConfig   `mapstructure:"otp"`
+	Auth  AuthConfig  `mapstructure:"auth"`
+}
+
 type OTPConfig struct {
 	Register      OTPPolicyConfig `mapstructure:"register"`
 	PasswordReset OTPPolicyConfig `mapstructure:"password_reset"`
@@ -78,6 +83,12 @@ type OTPPolicyConfig struct {
 	MaxPhoneRequests    int           `mapstructure:"max_phone_requests"`
 	MaxResends          int           `mapstructure:"max_resends"`
 	MaxVerifyAttempts   int           `mapstructure:"max_verify_attempts"`
+}
+
+type LoginConfig struct {
+	FailedAttemptWindow time.Duration `mapstructure:"failed_attempt_window"`
+	MaxAttempts         int           `mapstructure:"max_attempts"`
+	LockoutDuration     time.Duration `mapstructure:"lockout_duration"`
 }
 
 type CORSConfig struct {
@@ -133,37 +144,40 @@ func Load() (*Config, error) {
 	viper.SetDefault("cache.user_ttl", "5m")
 	viper.SetDefault("cache.user_session_list_ttl", "1m")
 	viper.SetDefault("cache.signing_keys_ttl", "1m")
-	viper.SetDefault("otp.register.ttl", "5m")
-	viper.SetDefault("otp.register.phone_window", "5m")
-	viper.SetDefault("otp.register.resend_cooldown", "60s")
-	viper.SetDefault("otp.register.verify_attempt_window", "5m")
-	viper.SetDefault("otp.register.max_phone_requests", 1)
-	viper.SetDefault("otp.register.max_resends", 3)
-	viper.SetDefault("otp.register.max_verify_attempts", 5)
-	viper.SetDefault("otp.password_reset.ttl", "5m")
-	viper.SetDefault("otp.password_reset.phone_window", "5m")
-	viper.SetDefault("otp.password_reset.resend_cooldown", "60s")
-	viper.SetDefault("otp.password_reset.verify_attempt_window", "5m")
-	viper.SetDefault("otp.password_reset.max_phone_requests", 1)
-	viper.SetDefault("otp.password_reset.max_resends", 3)
-	viper.SetDefault("otp.password_reset.max_verify_attempts", 5)
+	viper.SetDefault("security.login.failed_attempt_window", "5m")
+	viper.SetDefault("security.login.max_attempts", 5)
+	viper.SetDefault("security.login.lockout_duration", "15m")
+	viper.SetDefault("security.otp.register.ttl", "5m")
+	viper.SetDefault("security.otp.register.phone_window", "5m")
+	viper.SetDefault("security.otp.register.resend_cooldown", "60s")
+	viper.SetDefault("security.otp.register.verify_attempt_window", "5m")
+	viper.SetDefault("security.otp.register.max_phone_requests", 1)
+	viper.SetDefault("security.otp.register.max_resends", 3)
+	viper.SetDefault("security.otp.register.max_verify_attempts", 5)
+	viper.SetDefault("security.otp.password_reset.ttl", "5m")
+	viper.SetDefault("security.otp.password_reset.phone_window", "5m")
+	viper.SetDefault("security.otp.password_reset.resend_cooldown", "60s")
+	viper.SetDefault("security.otp.password_reset.verify_attempt_window", "5m")
+	viper.SetDefault("security.otp.password_reset.max_phone_requests", 1)
+	viper.SetDefault("security.otp.password_reset.max_resends", 3)
+	viper.SetDefault("security.otp.password_reset.max_verify_attempts", 5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
 	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
 	viper.SetDefault("cors.exposed_headers", []string{})
 	viper.SetDefault("cors.allow_credentials", false)
 	viper.SetDefault("cors.max_age", "12h")
-	viper.SetDefault("auth.issuer", "ddone-server-auth")
-	viper.SetDefault("auth.audience", "ddone-clients")
-	viper.SetDefault("auth.access_token_ttl", "5m")
-	viper.SetDefault("auth.refresh_token_ttl", "720h")
-	viper.SetDefault("auth.login_session_ttl", "720h")
-	viper.SetDefault("auth.signing_key_rotation", "2160h")
-	viper.SetDefault("auth.signing_key_retention", "4320h")
-	viper.SetDefault("auth.session_cookie_name", "ddone_session")
-	viper.SetDefault("auth.session_cookie_secure", true)
-	viper.SetDefault("auth.session_cookie_same_site", "lax")
-	viper.SetDefault("auth.session_cookie_max_age", "0s")
+	viper.SetDefault("security.auth.issuer", "ddone-server-auth")
+	viper.SetDefault("security.auth.audience", "ddone-clients")
+	viper.SetDefault("security.auth.access_token_ttl", "5m")
+	viper.SetDefault("security.auth.refresh_token_ttl", "720h")
+	viper.SetDefault("security.auth.login_session_ttl", "720h")
+	viper.SetDefault("security.auth.signing_key_rotation", "2160h")
+	viper.SetDefault("security.auth.signing_key_retention", "4320h")
+	viper.SetDefault("security.auth.session_cookie_name", "ddone_session")
+	viper.SetDefault("security.auth.session_cookie_secure", true)
+	viper.SetDefault("security.auth.session_cookie_same_site", "lax")
+	viper.SetDefault("security.auth.session_cookie_max_age", "0s")
 
 	viper.SetEnvPrefix("DDONE")
 	viper.SetEnvKeyReplacer(
@@ -205,37 +219,40 @@ func Load() (*Config, error) {
 		"DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL",
 	)
 	viper.BindEnv("cache.signing_keys_ttl", "DDONE_CACHE_SIGNING_KEYS_TTL")
-	viper.BindEnv("otp.register.ttl", "DDONE_OTP_REGISTER_TTL")
-	viper.BindEnv("otp.register.phone_window", "DDONE_OTP_REGISTER_PHONE_WINDOW")
-	viper.BindEnv("otp.register.resend_cooldown", "DDONE_OTP_REGISTER_RESEND_COOLDOWN")
-	viper.BindEnv("otp.register.verify_attempt_window", "DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW")
-	viper.BindEnv("otp.register.max_phone_requests", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
-	viper.BindEnv("otp.register.max_resends", "DDONE_OTP_REGISTER_MAX_RESENDS")
-	viper.BindEnv("otp.register.max_verify_attempts", "DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS")
-	viper.BindEnv("otp.password_reset.ttl", "DDONE_OTP_PASSWORD_RESET_TTL")
-	viper.BindEnv("otp.password_reset.phone_window", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
-	viper.BindEnv("otp.password_reset.resend_cooldown", "DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN")
-	viper.BindEnv("otp.password_reset.verify_attempt_window", "DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW")
-	viper.BindEnv("otp.password_reset.max_phone_requests", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
-	viper.BindEnv("otp.password_reset.max_resends", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
-	viper.BindEnv("otp.password_reset.max_verify_attempts", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
+	viper.BindEnv("security.login.failed_attempt_window", "DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_RATE_LIMIT_WINDOW")
+	viper.BindEnv("security.login.max_attempts", "DDONE_SECURITY_LOGIN_MAX_ATTEMPTS", "DDONE_LOGIN_MAX_ATTEMPTS")
+	viper.BindEnv("security.login.lockout_duration", "DDONE_SECURITY_LOGIN_LOCKOUT_DURATION", "DDONE_LOGIN_LOCKOUT_DURATION")
+	viper.BindEnv("security.otp.register.ttl", "DDONE_SECURITY_OTP_REGISTER_TTL", "DDONE_OTP_REGISTER_TTL")
+	viper.BindEnv("security.otp.register.phone_window", "DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW", "DDONE_OTP_REGISTER_PHONE_WINDOW")
+	viper.BindEnv("security.otp.register.resend_cooldown", "DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN", "DDONE_OTP_REGISTER_RESEND_COOLDOWN")
+	viper.BindEnv("security.otp.register.verify_attempt_window", "DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW")
+	viper.BindEnv("security.otp.register.max_phone_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp.register.max_resends", "DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS", "DDONE_OTP_REGISTER_MAX_RESENDS")
+	viper.BindEnv("security.otp.register.max_verify_attempts", "DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS")
+	viper.BindEnv("security.otp.password_reset.ttl", "DDONE_SECURITY_OTP_PASSWORD_RESET_TTL", "DDONE_OTP_PASSWORD_RESET_TTL")
+	viper.BindEnv("security.otp.password_reset.phone_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
+	viper.BindEnv("security.otp.password_reset.resend_cooldown", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN", "DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN")
+	viper.BindEnv("security.otp.password_reset.verify_attempt_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW")
+	viper.BindEnv("security.otp.password_reset.max_phone_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp.password_reset.max_resends", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
+	viper.BindEnv("security.otp.password_reset.max_verify_attempts", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
 	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
 	viper.BindEnv("cors.exposed_headers", "DDONE_CORS_EXPOSED_HEADERS")
 	viper.BindEnv("cors.allow_credentials", "DDONE_CORS_ALLOW_CREDENTIALS")
 	viper.BindEnv("cors.max_age", "DDONE_CORS_MAX_AGE")
-	viper.BindEnv("auth.issuer", "DDONE_AUTH_ISSUER")
-	viper.BindEnv("auth.audience", "DDONE_AUTH_AUDIENCE")
-	viper.BindEnv("auth.access_token_ttl", "DDONE_AUTH_ACCESS_TOKEN_TTL")
-	viper.BindEnv("auth.refresh_token_ttl", "DDONE_AUTH_REFRESH_TOKEN_TTL")
-	viper.BindEnv("auth.login_session_ttl", "DDONE_AUTH_LOGIN_SESSION_TTL")
-	viper.BindEnv("auth.signing_key_rotation", "DDONE_AUTH_SIGNING_KEY_ROTATION")
-	viper.BindEnv("auth.signing_key_retention", "DDONE_AUTH_SIGNING_KEY_RETENTION")
-	viper.BindEnv("auth.session_cookie_name", "DDONE_AUTH_SESSION_COOKIE_NAME")
-	viper.BindEnv("auth.session_cookie_secure", "DDONE_AUTH_SESSION_COOKIE_SECURE")
-	viper.BindEnv("auth.session_cookie_same_site", "DDONE_AUTH_SESSION_COOKIE_SAME_SITE")
-	viper.BindEnv("auth.session_cookie_max_age", "DDONE_AUTH_SESSION_COOKIE_MAX_AGE")
+	viper.BindEnv("security.auth.issuer", "DDONE_SECURITY_AUTH_ISSUER", "DDONE_AUTH_ISSUER")
+	viper.BindEnv("security.auth.audience", "DDONE_SECURITY_AUTH_AUDIENCE", "DDONE_AUTH_AUDIENCE")
+	viper.BindEnv("security.auth.access_token_ttl", "DDONE_SECURITY_AUTH_ACCESS_TOKEN_TTL", "DDONE_AUTH_ACCESS_TOKEN_TTL")
+	viper.BindEnv("security.auth.refresh_token_ttl", "DDONE_SECURITY_AUTH_REFRESH_TOKEN_TTL", "DDONE_AUTH_REFRESH_TOKEN_TTL")
+	viper.BindEnv("security.auth.login_session_ttl", "DDONE_SECURITY_AUTH_LOGIN_SESSION_TTL", "DDONE_AUTH_LOGIN_SESSION_TTL")
+	viper.BindEnv("security.auth.signing_key_rotation", "DDONE_SECURITY_AUTH_SIGNING_KEY_ROTATION", "DDONE_AUTH_SIGNING_KEY_ROTATION")
+	viper.BindEnv("security.auth.signing_key_retention", "DDONE_SECURITY_AUTH_SIGNING_KEY_RETENTION", "DDONE_AUTH_SIGNING_KEY_RETENTION")
+	viper.BindEnv("security.auth.session_cookie_name", "DDONE_SECURITY_AUTH_SESSION_COOKIE_NAME", "DDONE_AUTH_SESSION_COOKIE_NAME")
+	viper.BindEnv("security.auth.session_cookie_secure", "DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE", "DDONE_AUTH_SESSION_COOKIE_SECURE")
+	viper.BindEnv("security.auth.session_cookie_same_site", "DDONE_SECURITY_AUTH_SESSION_COOKIE_SAME_SITE", "DDONE_AUTH_SESSION_COOKIE_SAME_SITE")
+	viper.BindEnv("security.auth.session_cookie_max_age", "DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE", "DDONE_AUTH_SESSION_COOKIE_MAX_AGE")
 	viper.BindEnv("wenovaapi.token", "DDONE_WENOVAAPI_TOKEN", "DDONE_WENOVA_TOKEN")
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -307,10 +324,19 @@ func (c *Config) validate() error {
 	if c.Cache.SigningKeysTTL < 0 {
 		return fmt.Errorf("cache.signing_keys_ttl must be greater than or equal to 0")
 	}
-	if err := validateOTPPolicy("otp.register", c.OTP.Register); err != nil {
+	if c.Security.Login.FailedAttemptWindow <= 0 {
+		return fmt.Errorf("security.login.failed_attempt_window must be greater than 0")
+	}
+	if c.Security.Login.MaxAttempts <= 0 {
+		return fmt.Errorf("security.login.max_attempts must be greater than 0")
+	}
+	if c.Security.Login.LockoutDuration <= 0 {
+		return fmt.Errorf("security.login.lockout_duration must be greater than 0")
+	}
+	if err := validateOTPPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
 		return err
 	}
-	if err := validateOTPPolicy("otp.password_reset", c.OTP.PasswordReset); err != nil {
+	if err := validateOTPPolicy("security.otp.password_reset", c.Security.OTP.PasswordReset); err != nil {
 		return err
 	}
 
@@ -339,46 +365,46 @@ func (c *Config) validate() error {
 		}
 	}
 
-	if c.Auth.Issuer == "" {
-		return fmt.Errorf("auth.issuer is required")
+	if c.Security.Auth.Issuer == "" {
+		return fmt.Errorf("security.auth.issuer is required")
 	}
-	if c.Auth.Audience == "" {
-		return fmt.Errorf("auth.audience is required")
+	if c.Security.Auth.Audience == "" {
+		return fmt.Errorf("security.auth.audience is required")
 	}
-	if c.Auth.AccessTokenTTL <= 0 {
-		return fmt.Errorf("auth.access_token_ttl must be greater than 0")
+	if c.Security.Auth.AccessTokenTTL <= 0 {
+		return fmt.Errorf("security.auth.access_token_ttl must be greater than 0")
 	}
-	if c.Auth.RefreshTokenTTL <= 0 {
-		return fmt.Errorf("auth.refresh_token_ttl must be greater than 0")
+	if c.Security.Auth.RefreshTokenTTL <= 0 {
+		return fmt.Errorf("security.auth.refresh_token_ttl must be greater than 0")
 	}
-	if c.Auth.LoginSessionTTL <= 0 {
-		return fmt.Errorf("auth.login_session_ttl must be greater than 0")
+	if c.Security.Auth.LoginSessionTTL <= 0 {
+		return fmt.Errorf("security.auth.login_session_ttl must be greater than 0")
 	}
-	if c.Auth.SigningKeyRotation <= 0 {
-		return fmt.Errorf("auth.signing_key_rotation must be greater than 0")
+	if c.Security.Auth.SigningKeyRotation <= 0 {
+		return fmt.Errorf("security.auth.signing_key_rotation must be greater than 0")
 	}
-	if c.Auth.SigningKeyRetention <= 0 {
-		return fmt.Errorf("auth.signing_key_retention must be greater than 0")
+	if c.Security.Auth.SigningKeyRetention <= 0 {
+		return fmt.Errorf("security.auth.signing_key_retention must be greater than 0")
 	}
-	if c.Auth.SigningKeyRetention < c.Auth.SigningKeyRotation {
-		return fmt.Errorf("auth.signing_key_retention must be greater than or equal to auth.signing_key_rotation")
+	if c.Security.Auth.SigningKeyRetention < c.Security.Auth.SigningKeyRotation {
+		return fmt.Errorf("security.auth.signing_key_retention must be greater than or equal to security.auth.signing_key_rotation")
 	}
-	if c.Auth.SessionCookieName == "" {
-		return fmt.Errorf("auth.session_cookie_name is required")
+	if c.Security.Auth.SessionCookieName == "" {
+		return fmt.Errorf("security.auth.session_cookie_name is required")
 	}
-	if c.Auth.SessionCookieMaxAge < 0 {
-		return fmt.Errorf("auth.session_cookie_max_age must be greater than or equal to 0")
+	if c.Security.Auth.SessionCookieMaxAge < 0 {
+		return fmt.Errorf("security.auth.session_cookie_max_age must be greater than or equal to 0")
 	}
-	if c.Auth.SessionCookieMaxAge > 0 && c.Auth.SessionCookieMaxAge > c.Auth.LoginSessionTTL {
-		return fmt.Errorf("auth.session_cookie_max_age must be less than or equal to auth.login_session_ttl")
+	if c.Security.Auth.SessionCookieMaxAge > 0 && c.Security.Auth.SessionCookieMaxAge > c.Security.Auth.LoginSessionTTL {
+		return fmt.Errorf("security.auth.session_cookie_max_age must be less than or equal to security.auth.login_session_ttl")
 	}
-	switch strings.ToLower(c.Auth.SessionCookieSameSite) {
+	switch strings.ToLower(c.Security.Auth.SessionCookieSameSite) {
 	case "lax", "strict", "none":
 	default:
-		return fmt.Errorf("auth.session_cookie_same_site must be one of lax, strict, none")
+		return fmt.Errorf("security.auth.session_cookie_same_site must be one of lax, strict, none")
 	}
-	if strings.EqualFold(c.Auth.SessionCookieSameSite, "none") && !c.Auth.SessionCookieSecure {
-		return fmt.Errorf("auth.session_cookie_secure must be true when auth.session_cookie_same_site is none")
+	if strings.EqualFold(c.Security.Auth.SessionCookieSameSite, "none") && !c.Security.Auth.SessionCookieSecure {
+		return fmt.Errorf("security.auth.session_cookie_secure must be true when security.auth.session_cookie_same_site is none")
 	}
 
 	return nil

@@ -36,23 +36,40 @@ cache:
   user_session_list_ttl: 1m
   signing_keys_ttl: 1m
 
-otp:
-  register:
-    ttl: 5m
-    phone_window: 5m
-    resend_cooldown: 60s
-    verify_attempt_window: 5m
-    max_phone_requests: 1
-    max_resends: 3
-    max_verify_attempts: 5
-  password_reset:
-    ttl: 5m
-    phone_window: 5m
-    resend_cooldown: 60s
-    verify_attempt_window: 5m
-    max_phone_requests: 1
-    max_resends: 3
-    max_verify_attempts: 5
+security:
+  login:
+    failed_attempt_window: 5m
+    max_attempts: 5
+    lockout_duration: 15m
+  otp:
+    register:
+      ttl: 5m
+      phone_window: 5m
+      resend_cooldown: 60s
+      verify_attempt_window: 5m
+      max_phone_requests: 1
+      max_resends: 3
+      max_verify_attempts: 5
+    password_reset:
+      ttl: 5m
+      phone_window: 5m
+      resend_cooldown: 60s
+      verify_attempt_window: 5m
+      max_phone_requests: 1
+      max_resends: 3
+      max_verify_attempts: 5
+  auth:
+    issuer: ddone-server-auth
+    audience: ddone-clients
+    access_token_ttl: 5m
+    refresh_token_ttl: 720h
+    login_session_ttl: 720h
+    signing_key_rotation: 2160h
+    signing_key_retention: 4320h
+    session_cookie_name: ddone_session
+    session_cookie_secure: false
+    session_cookie_same_site: lax
+    session_cookie_max_age: 720h
 
 cors:
   allowed_origins:
@@ -69,16 +86,3 @@ cors:
   exposed_headers: []
   allow_credentials: false
   max_age: 12h
-
-auth:
-  issuer: ddone-server-auth
-  audience: ddone-clients
-  access_token_ttl: 5m
-  refresh_token_ttl: 720h
-  login_session_ttl: 720h
-  signing_key_rotation: 2160h
-  signing_key_retention: 4320h
-  session_cookie_name: ddone_session
-  session_cookie_secure: false
-  session_cookie_same_site: lax
-  session_cookie_max_age: 720h

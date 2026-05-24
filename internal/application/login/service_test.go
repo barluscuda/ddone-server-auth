@@ -120,6 +120,48 @@ func (i *fakeAccessTokenIssuer) IssueAccessToken(_ context.Context, userID strin
 	}, nil
 }
 
+type fakeLoginRateLimiter struct {
+	counters map[string]int64
+	locks    map[string]bool
+}
+
+func (f *fakeLoginRateLimiter) GetCounter(_ context.Context, key string) (int64, error) {
+	if f.counters == nil {
+		return 0, nil
+	}
+	return f.counters[key], nil
+}
+
+func (f *fakeLoginRateLimiter) IncrementCounter(_ context.Context, key string, _ time.Duration) (int64, error) {
+	if f.counters == nil {
+		f.counters = map[string]int64{}
+	}
+	f.counters[key]++
+	return f.counters[key], nil
+}
+
+func (f *fakeLoginRateLimiter) DeleteCounter(_ context.Context, key string) error {
+	if f.counters != nil {
+		delete(f.counters, key)
+	}
+	return nil
+}
+
+func (f *fakeLoginRateLimiter) IsLocked(_ context.Context, key string) (bool, error) {
+	if f.locks == nil {
+		return false, nil
+	}
+	return f.locks[key], nil
+}
+
+func (f *fakeLoginRateLimiter) Lock(_ context.Context, key string, _ time.Duration) error {
+	if f.locks == nil {
+		f.locks = map[string]bool{}
+	}
+	f.locks[key] = true
+	return nil
+}
+
 func TestLoginCreatesTokenRecord(t *testing.T) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
 	if err != nil {
@@ -137,7 +179,7 @@ func TestLoginCreatesTokenRecord(t *testing.T) {
 	}
 	tokenRecords := &fakeTokenStore{}
 	loginSessions := &fakeLoginSessionStore{}
-	service := NewService(users, tokenRecords, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, tokenRecords, loginSessions, &fakeAccessTokenIssuer{}, &fakeLoginRateLimiter{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -189,7 +231,7 @@ func TestRefreshRevokesLineageOnReplay(t *testing.T) {
 				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
 			},
 		},
-	}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, Settings{
+	}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, &fakeLoginRateLimiter{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -226,7 +268,7 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 			},
 		},
 	}
-	service := NewService(users, tokenRecords, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, tokenRecords, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, &fakeLoginRateLimiter{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -273,7 +315,7 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 		byID:    map[string]*user.User{"user-1": userModel},
 	}
 	loginSessions := &fakeLoginSessionStore{}
-	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, Settings{
+	service := NewService(users, &fakeTokenStore{}, loginSessions, &fakeAccessTokenIssuer{}, &fakeLoginRateLimiter{}, Settings{
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 		LoginSessionTTL: 30 * 24 * time.Hour,
 	})
@@ -301,6 +343,45 @@ func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 	}
 	if got, want := loginSessions.created.ExpiresAt, now.Add(30*24*time.Hour); !got.Equal(want) {
 		t.Fatalf("expected login session expiry %v, got %v", want, got)
+	}
+}
+
+func TestLoginRateLimitsRepeatedInvalidCredentials(t *testing.T) {
+	users := &fakeUserLookup{}
+	limiter := &fakeLoginRateLimiter{}
+	service := NewService(users, &fakeTokenStore{}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, limiter, Settings{
+		RefreshTokenTTL:     30 * 24 * time.Hour,
+		LoginSessionTTL:     30 * 24 * time.Hour,
+		FailedAttemptWindow: 5 * time.Minute,
+		MaxAttempts:         2,
+		LockoutDuration:     15 * time.Minute,
+	})
+
+	_, err := service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("expected invalid credentials on first failure, got %v", err)
+	}
+
+	_, err = service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+	})
+	if !errors.Is(err, ErrLoginRateLimited) {
+		t.Fatalf("expected rate limit on second failure, got %v", err)
+	}
+
+	_, err = service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+	})
+	if !errors.Is(err, ErrLoginRateLimited) {
+		t.Fatalf("expected rate limit while counter is active, got %v", err)
+	}
+	if !limiter.locks[loginLockKey("+8562012345678")] {
+		t.Fatal("expected login failures to lock the account")
 	}
 }
 

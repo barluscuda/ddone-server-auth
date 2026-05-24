@@ -71,7 +71,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	)
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewServiceWithSettings(userRepository, registerStore, smsClient, appregister.Settings{
-		OTPPolicy: otpPolicyFromConfig(cfg.OTP.Register),
+		OTPPolicy: otpPolicyFromConfig(cfg.Security.OTP.Register),
 	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
@@ -88,20 +88,24 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		repository.NewLoginSessionRepository(db),
 		cfg.Cache.UserSessionListTTL,
 	)
+	loginRateLimiter := cache.NewLoginRateLimiter(redisClient)
 	tokenCodec := token.NewES256Codec()
 	jwksService := appjwks.NewService(signingKeyRepository, tokenCodec, appjwks.Settings{
-		Issuer:              cfg.Auth.Issuer,
-		Audience:            cfg.Auth.Audience,
-		AccessTokenTTL:      cfg.Auth.AccessTokenTTL,
-		SigningKeyRotation:  cfg.Auth.SigningKeyRotation,
-		SigningKeyRetention: cfg.Auth.SigningKeyRetention,
+		Issuer:              cfg.Security.Auth.Issuer,
+		Audience:            cfg.Security.Auth.Audience,
+		AccessTokenTTL:      cfg.Security.Auth.AccessTokenTTL,
+		SigningKeyRotation:  cfg.Security.Auth.SigningKeyRotation,
+		SigningKeyRetention: cfg.Security.Auth.SigningKeyRetention,
 	})
 	if _, err := jwksService.EnsureActiveSigningKey(context.Background()); err != nil {
 		logger.Fatal("failed to ensure active signing key", zap.Error(err))
 	}
-	loginService := applogin.NewService(userRepository, tokenRepository, loginSessionRepository, jwksService, applogin.Settings{
-		RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
-		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
+	loginService := applogin.NewService(userRepository, tokenRepository, loginSessionRepository, jwksService, loginRateLimiter, applogin.Settings{
+		RefreshTokenTTL:     cfg.Security.Auth.RefreshTokenTTL,
+		LoginSessionTTL:     cfg.Security.Auth.LoginSessionTTL,
+		FailedAttemptWindow: cfg.Security.Login.FailedAttemptWindow,
+		MaxAttempts:         cfg.Security.Login.MaxAttempts,
+		LockoutDuration:     cfg.Security.Login.LockoutDuration,
 	})
 	passwordService := apppassword.NewServiceWithSettings(
 		userRepository,
@@ -110,25 +114,25 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		tokenRepository,
 		loginSessionRepository,
 		apppassword.Settings{
-			OTPPolicy: otpPolicyFromConfig(cfg.OTP.PasswordReset),
+			OTPPolicy: otpPolicyFromConfig(cfg.Security.OTP.PasswordReset),
 		},
 	)
 	settingsService := appsettings.NewService(userRepository)
 	sessionService := appsession.NewService(loginSessionRepository, userRepository, jwksService, appsession.Settings{
-		LoginSessionTTL: cfg.Auth.LoginSessionTTL,
+		LoginSessionTTL: cfg.Security.Auth.LoginSessionTTL,
 	})
 	tokenManagerService := apptokenmanager.NewService(tokenRepository)
 	loginHandler := handler.NewLoginHandler(loginService, handler.SessionCookieConfig{
-		Name:     cfg.Auth.SessionCookieName,
-		MaxAge:   cfg.Auth.EffectiveSessionCookieMaxAge(),
-		Secure:   cfg.Auth.SessionCookieSecure,
-		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
+		Name:     cfg.Security.Auth.SessionCookieName,
+		MaxAge:   cfg.Security.Auth.EffectiveSessionCookieMaxAge(),
+		Secure:   cfg.Security.Auth.SessionCookieSecure,
+		SameSite: sameSiteMode(cfg.Security.Auth.SessionCookieSameSite),
 	})
 	sessionCookie := handler.SessionCookieConfig{
-		Name:     cfg.Auth.SessionCookieName,
-		MaxAge:   cfg.Auth.EffectiveSessionCookieMaxAge(),
-		Secure:   cfg.Auth.SessionCookieSecure,
-		SameSite: sameSiteMode(cfg.Auth.SessionCookieSameSite),
+		Name:     cfg.Security.Auth.SessionCookieName,
+		MaxAge:   cfg.Security.Auth.EffectiveSessionCookieMaxAge(),
+		Secure:   cfg.Security.Auth.SessionCookieSecure,
+		SameSite: sameSiteMode(cfg.Security.Auth.SessionCookieSameSite),
 	}
 	settingsHandler := handler.NewSettingsHandler(settingsService)
 	sessionHandler := handler.NewSessionHandler(sessionService, sessionCookie)
@@ -146,7 +150,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		tokenManagerHandler,
 		passwordHandler,
 		middleware.RequireAccessToken(jwksService),
-		middleware.RequireSession(cfg.Auth.SessionCookieName, loginSessionRepository),
+		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository),
 		jwksHandler,
 	)
 

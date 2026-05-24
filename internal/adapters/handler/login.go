@@ -19,6 +19,7 @@ const (
 	codeLoginSucceeded       = "login_succeeded"
 	codeLoginSessionCreated  = "login_session_created"
 	codeTokenRefreshed       = "token_refreshed"
+	codeLoginRateLimited     = "login_rate_limited"
 	codeInvalidCredentials   = "invalid_credentials"
 	codeRefreshTokenRequired = "refresh_token_required"
 	codeRefreshTokenExpired  = "refresh_token_expired"
@@ -174,6 +175,8 @@ func handleLoginError(c *gin.Context, err error) {
 		errors.Is(err, auth.ErrTokenRevoked),
 		errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		respondError(c, http.StatusUnauthorized, loginErrorCode(err), loginErrorMessage(err))
+	case errors.Is(err, applogin.ErrLoginRateLimited):
+		respondError(c, http.StatusTooManyRequests, loginErrorCode(err), loginErrorMessage(err))
 	default:
 		respondError(c, http.StatusInternalServerError, codeInternalServerError, "internal server error")
 	}
@@ -199,6 +202,8 @@ func loginErrorCode(err error) string {
 		return codeRefreshTokenRevoked
 	case errors.Is(err, auth.ErrRefreshTokenReplayDetected):
 		return codeRefreshTokenReplay
+	case errors.Is(err, applogin.ErrLoginRateLimited):
+		return codeLoginRateLimited
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrLoginSessionNotFound),
 		errors.Is(err, auth.ErrTokenNotFound):
@@ -218,6 +223,8 @@ func loginErrorMessage(err error) string {
 		return "password is required"
 	case errors.Is(err, auth.ErrRefreshTokenRequired):
 		return "refresh token is required"
+	case errors.Is(err, applogin.ErrLoginRateLimited):
+		return "too many login attempts, please try again later"
 	case errors.Is(err, auth.ErrLoginSessionRevoked):
 		return "login session is no longer valid"
 	case errors.Is(err, auth.ErrLoginSessionExpired):

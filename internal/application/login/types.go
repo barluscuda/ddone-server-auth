@@ -7,8 +7,11 @@ import (
 )
 
 type Settings struct {
-	RefreshTokenTTL time.Duration
-	LoginSessionTTL time.Duration
+	RefreshTokenTTL     time.Duration
+	LoginSessionTTL     time.Duration
+	FailedAttemptWindow time.Duration
+	MaxAttempts         int
+	LockoutDuration     time.Duration
 }
 
 type LoginInput struct {

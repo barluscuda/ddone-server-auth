@@ -189,6 +189,38 @@ func TestLoginSessionHandlerSetsSessionCookie(t *testing.T) {
 	}
 }
 
+func TestLoginHandlerReturnsTooManyRequestsWhenRateLimited(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	handler := NewLoginHandler(&fakeLoginUseCase{
+		loginErr: applogin.ErrLoginRateLimited,
+	}, testSessionCookieConfig())
+
+	body, err := json.Marshal(map[string]string{
+		"phoneNumber": "+8562012345678",
+		"password":    "secretpass",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/tokens", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router := gin.New()
+	router.POST("/tokens", handler.Login)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "login_rate_limited") {
+		t.Fatalf("expected login rate limit code, got %s", recorder.Body.String())
+	}
+}
+
 func TestJWKSHandlerReturnsKeys(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)

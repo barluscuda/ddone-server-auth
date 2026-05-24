@@ -15,13 +15,17 @@ import (
 )
 
 const (
-	refreshTokenBytes = 32
-	uuidBytes         = 16
+	refreshTokenBytes          = 32
+	uuidBytes                  = 16
+	defaultFailedAttemptWindow = 5 * time.Minute
+	defaultMaxAttempts         = 5
+	defaultLockoutDuration     = 15 * time.Minute
 )
 
 var ErrPhoneNumberRequired = errors.New("phone number is required")
 var ErrInvalidPhoneNumber = user.ErrInvalidPhoneNumber
 var ErrPasswordRequired = errors.New("password is required")
+var ErrLoginRateLimited = errors.New("too many login attempts, try again later")
 
 type UseCase interface {
 	Login(ctx context.Context, input LoginInput) (*Result, error)
@@ -34,6 +38,7 @@ type Service struct {
 	tokenRecords   TokenStore
 	serverSessions LoginSessionStore
 	accessTokens   AccessTokenIssuer
+	rateLimiter    LoginRateLimiter
 	settings       Settings
 	now            func() time.Time
 }
@@ -43,13 +48,25 @@ func NewService(
 	tokenRecords TokenStore,
 	loginSessions LoginSessionStore,
 	tokens AccessTokenIssuer,
+	rateLimiter LoginRateLimiter,
 	settings Settings,
 ) *Service {
+	if settings.FailedAttemptWindow <= 0 {
+		settings.FailedAttemptWindow = defaultFailedAttemptWindow
+	}
+	if settings.MaxAttempts <= 0 {
+		settings.MaxAttempts = defaultMaxAttempts
+	}
+	if settings.LockoutDuration <= 0 {
+		settings.LockoutDuration = defaultLockoutDuration
+	}
+
 	return &Service{
 		users:          users,
 		tokenRecords:   tokenRecords,
 		serverSessions: loginSessions,
 		accessTokens:   tokens,
+		rateLimiter:    rateLimiter,
 		settings:       settings,
 		now:            func() time.Time { return time.Now().UTC() },
 	}
@@ -271,19 +288,71 @@ func (s *Service) authenticateUser(
 	if strings.TrimSpace(password) == "" {
 		return nil, ErrPasswordRequired
 	}
+	if err := s.enforceLoginRateLimit(ctx, phoneNumber); err != nil {
+		return nil, err
+	}
 
 	userModel, err := s.users.GetByPhoneNumber(ctx, phoneNumber)
 	if err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
-			return nil, auth.ErrInvalidCredentials
+			return nil, s.recordFailedLogin(ctx, phoneNumber)
 		}
 		return nil, err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(password)); err != nil {
-		return nil, auth.ErrInvalidCredentials
+		return nil, s.recordFailedLogin(ctx, phoneNumber)
+	}
+	if err := s.clearFailedLogins(ctx, phoneNumber); err != nil {
+		return nil, err
 	}
 
 	return userModel, nil
+}
+
+func (s *Service) enforceLoginRateLimit(ctx context.Context, phoneNumber string) error {
+	if s.rateLimiter == nil {
+		return nil
+	}
+
+	locked, err := s.rateLimiter.IsLocked(ctx, loginLockKey(phoneNumber))
+	if err != nil {
+		return err
+	}
+	if locked {
+		return ErrLoginRateLimited
+	}
+
+	return nil
+}
+
+func (s *Service) recordFailedLogin(ctx context.Context, phoneNumber string) error {
+	if s.rateLimiter == nil {
+		return auth.ErrInvalidCredentials
+	}
+
+	attempts, err := s.rateLimiter.IncrementCounter(ctx, loginRateKey(phoneNumber), s.settings.FailedAttemptWindow)
+	if err != nil {
+		return err
+	}
+	if attempts >= int64(s.settings.MaxAttempts) {
+		if err := s.rateLimiter.Lock(ctx, loginLockKey(phoneNumber), s.settings.LockoutDuration); err != nil {
+			return err
+		}
+		if err := s.rateLimiter.DeleteCounter(ctx, loginRateKey(phoneNumber)); err != nil {
+			return err
+		}
+		return ErrLoginRateLimited
+	}
+
+	return auth.ErrInvalidCredentials
+}
+
+func (s *Service) clearFailedLogins(ctx context.Context, phoneNumber string) error {
+	if s.rateLimiter == nil {
+		return nil
+	}
+
+	return s.rateLimiter.DeleteCounter(ctx, loginRateKey(phoneNumber))
 }
 
 func randomOpaqueToken() (string, error) {
@@ -318,4 +387,12 @@ func hashSessionToken(tokenValue string) string {
 
 func hashOpaqueToken(tokenValue string) string {
 	return auth.HashOpaqueToken(tokenValue)
+}
+
+func loginRateKey(phoneNumber string) string {
+	return "login:attempts:" + phoneNumber
+}
+
+func loginLockKey(phoneNumber string) string {
+	return "login:lock:" + phoneNumber
 }
