@@ -119,6 +119,7 @@ func registerRoutes(
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
+	router.GET("/robots.txt", handler.RobotsTXT)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 
 	router.POST("/registrations", registerHandler.Register)

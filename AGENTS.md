@@ -49,6 +49,7 @@ cmd/app/                  Process entrypoint
 ## Current Functional Scope
 
 - `GET /healthz`
+- `GET /robots.txt`
 - `POST /register`
 - `POST /register/resend`
 - `POST /register/verify`

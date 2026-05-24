@@ -396,6 +396,7 @@ Public endpoints do not require authentication.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Health check |
+| `GET` | `/robots.txt` | Robots policy |
 | `GET` | `/.well-known/jwks.json` | Public ES256 JWK set |
 | `POST` | `/registrations` | Start phone registration |
 | `POST` | `/registrations/resend` | Resend registration OTP |
@@ -446,6 +447,17 @@ Example response:
   "active": true,
   "serverTime": "2026-05-24T00:00:00Z"
 }
+```
+
+### `GET /robots.txt`
+
+Returns a restrictive robots policy for this API service.
+
+Success: `200 OK`
+
+```text
+User-agent: *
+Disallow: /
 ```
 
 ### `POST /registrations`

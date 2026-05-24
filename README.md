@@ -3,6 +3,7 @@
 `ddone-server-auth` is a Go auth service for DDONE. It currently provides:
 
 - `GET /healthz`
+- `GET /robots.txt`
 - `POST /registrations`
 - `POST /registrations/resend`
 - `POST /registrations/verify`
@@ -220,6 +221,17 @@ For local HTTP development, set `DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=false
 ### `GET /healthz`
 
 Returns service health.
+
+### `GET /robots.txt`
+
+Returns a restrictive robots policy for this API service.
+
+Response:
+
+```text
+User-agent: *
+Disallow: /
+```
 
 ### `POST /registrations`
 
