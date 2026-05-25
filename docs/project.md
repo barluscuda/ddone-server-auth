@@ -125,6 +125,7 @@ DDONE_DATABASE_LOG_SQL=true
 
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
+DDONE_REDIS_DB=0
 
 DDONE_CACHE_USER_TTL=5m
 DDONE_CACHE_USER_SESSION_LIST_TTL=1m
@@ -170,20 +171,11 @@ DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE=720h
 DDONE_WENOVA_TOKEN=your-token
 ```
 
-### URL Overrides
-
-Use these when deployment platforms provide full connection URLs:
-
-```bash
-DDONE_DATABASE_URL=postgres://user:pass@host:5432/ddone_auth?sslmode=require
-DDONE_REDIS_URL=redis://localhost:6379/0
-```
-
 ### Validation Rules
 
 - `app.port` must be positive.
-- `database.host`, `database.name`, `database.username`, and `database.sslmode` are required when `database.url` is empty.
-- `redis.host` is required when `redis.url` is empty.
+- `database.host`, `database.name`, `database.username`, and `database.sslmode` are required.
+- `redis.host` is required.
 - Cache TTL values must be zero or positive. A zero TTL disables that read-through cache.
 - CORS origins, methods, and headers must not be empty.
 - `cors.allowed_origins` cannot include `*` when `cors.allow_credentials=true`.

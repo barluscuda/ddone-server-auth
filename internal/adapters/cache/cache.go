@@ -9,12 +9,7 @@ import (
 )
 
 func New(cfg config.RedisConfig, _ bool) (*redis.Client, error) {
-	opts, err := optionsFromConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	client := redis.NewClient(opts)
+	client := redis.NewClient(optionsFromConfig(cfg))
 
 	pingTimeout := cfg.DialTimeout
 	if pingTimeout <= 0 {
@@ -32,17 +27,7 @@ func New(cfg config.RedisConfig, _ bool) (*redis.Client, error) {
 	return client, nil
 }
 
-func optionsFromConfig(cfg config.RedisConfig) (*redis.Options, error) {
-	if cfg.URL != "" {
-		opts, err := redis.ParseURL(cfg.URL)
-		if err != nil {
-			return nil, err
-		}
-
-		applyConfig(opts, cfg)
-		return opts, nil
-	}
-
+func optionsFromConfig(cfg config.RedisConfig) *redis.Options {
 	opts := &redis.Options{
 		Addr:     cfg.Addr(),
 		Username: cfg.Username,
@@ -51,7 +36,7 @@ func optionsFromConfig(cfg config.RedisConfig) (*redis.Options, error) {
 	}
 	applyConfig(opts, cfg)
 
-	return opts, nil
+	return opts
 }
 
 func applyConfig(opts *redis.Options, cfg config.RedisConfig) {

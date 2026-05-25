@@ -24,7 +24,6 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	URL             string
 	Host            string
 	Port            int
 	Name            string
@@ -41,7 +40,6 @@ type DatabaseConfig struct {
 }
 
 type RedisConfig struct {
-	URL          string
 	Host         string
 	Port         int
 	Username     string
@@ -187,7 +185,6 @@ func Load() (*Config, error) {
 
 	viper.BindEnv("app.port", "DDONE_APP_PORT")
 	viper.BindEnv("app.debug", "DDONE_APP_DEBUG")
-	viper.BindEnv("database.url", "DDONE_DATABASE_URL")
 	viper.BindEnv("database.host", "DDONE_DATABASE_HOST")
 	viper.BindEnv("database.port", "DDONE_DATABASE_PORT")
 	viper.BindEnv("database.name", "DDONE_DATABASE_NAME")
@@ -201,7 +198,6 @@ func Load() (*Config, error) {
 	viper.BindEnv("database.conn_max_lifetime", "DDONE_DATABASE_CONN_MAX_LIFETIME")
 	viper.BindEnv("database.conn_max_idle_time", "DDONE_DATABASE_CONN_MAX_IDLE_TIME")
 	viper.BindEnv("database.log_sql", "DDONE_DATABASE_LOG_SQL")
-	viper.BindEnv("redis.url", "DDONE_REDIS_URL")
 	viper.BindEnv("redis.host", "DDONE_REDIS_HOST")
 	viper.BindEnv("redis.port", "DDONE_REDIS_PORT")
 	viper.BindEnv("redis.username", "DDONE_REDIS_USERNAME")
@@ -285,34 +281,30 @@ func (c *Config) validate() error {
 		return fmt.Errorf("app.port must be greater than 0")
 	}
 
-	if c.Database.URL == "" {
-		if c.Database.Host == "" {
-			return fmt.Errorf("database.host is required when database.url is empty")
-		}
-		if c.Database.Port <= 0 {
-			return fmt.Errorf("database.port must be greater than 0")
-		}
-		if c.Database.Name == "" {
-			return fmt.Errorf("database.name is required when database.url is empty")
-		}
-		if c.Database.Username == "" {
-			return fmt.Errorf("database.username is required when database.url is empty")
-		}
-		if c.Database.SSLMode == "" {
-			return fmt.Errorf("database.sslmode is required")
-		}
+	if c.Database.Host == "" {
+		return fmt.Errorf("database.host is required")
+	}
+	if c.Database.Port <= 0 {
+		return fmt.Errorf("database.port must be greater than 0")
+	}
+	if c.Database.Name == "" {
+		return fmt.Errorf("database.name is required")
+	}
+	if c.Database.Username == "" {
+		return fmt.Errorf("database.username is required")
+	}
+	if c.Database.SSLMode == "" {
+		return fmt.Errorf("database.sslmode is required")
 	}
 
-	if c.Redis.URL == "" {
-		if c.Redis.Host == "" {
-			return fmt.Errorf("redis.host is required when redis.url is empty")
-		}
-		if c.Redis.Port <= 0 {
-			return fmt.Errorf("redis.port must be greater than 0")
-		}
-		if c.Redis.DB < 0 {
-			return fmt.Errorf("redis.db must be greater than or equal to 0")
-		}
+	if c.Redis.Host == "" {
+		return fmt.Errorf("redis.host is required")
+	}
+	if c.Redis.Port <= 0 {
+		return fmt.Errorf("redis.port must be greater than 0")
+	}
+	if c.Redis.DB < 0 {
+		return fmt.Errorf("redis.db must be greater than or equal to 0")
 	}
 
 	if c.Cache.UserTTL < 0 {
@@ -441,10 +433,6 @@ func (c Config) DatabaseDSN() string {
 }
 
 func (c DatabaseConfig) DSN() string {
-	if c.URL != "" {
-		return c.URL
-	}
-
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s&timezone=%s&connect_timeout=%d",
 		url.QueryEscape(c.Username),

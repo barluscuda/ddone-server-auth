@@ -101,8 +101,14 @@ func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000
-	cfg.Database.URL = "postgres://localhost/ddone_auth"
-	cfg.Redis.URL = "redis://localhost:6379/0"
+	cfg.Database.Host = "localhost"
+	cfg.Database.Port = 5432
+	cfg.Database.Name = "ddone_auth"
+	cfg.Database.Username = "postgres"
+	cfg.Database.SSLMode = "disable"
+	cfg.Database.TimeZone = "UTC"
+	cfg.Redis.Host = "localhost"
+	cfg.Redis.Port = 6379
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:5173"}
 	cfg.CORS.AllowedMethods = []string{"GET", "POST"}
 	cfg.CORS.AllowedHeaders = []string{"Origin", "Content-Type"}
