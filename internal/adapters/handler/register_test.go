@@ -70,6 +70,10 @@ func (s *fakeRegistrationStore) IncrementCounter(_ context.Context, _ string, _ 
 	return 1, nil
 }
 
+func (s *fakeRegistrationStore) AdjustScore(_ context.Context, _ string, _ float64, _ time.Duration) (float64, error) {
+	return 1, nil
+}
+
 func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, _ string) error {
 	return nil
 }

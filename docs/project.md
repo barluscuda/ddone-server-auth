@@ -285,11 +285,18 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - OTP hashes include the ticket ID.
 - Registration and password reset use separate OTP policies.
 - Default OTP TTL is `5m`.
-- Default OTP IP rate limit is `20` start requests per `5m`.
+- Default system-wide registration start limit is `30` requests per `10m`.
+- Default registration IP score budget is `20` points per `10m`.
+- Pending registration and registration resend requests add `1` IP score point.
+- Successful registration verification subtracts `1.5` IP score points, clamped at `0`.
+- Invalid registration OTP verification adds `1` IP score point.
+- Registration IP scores over `20` are rate-limited until the score key expires.
+- System-wide registration start limits are configurable with `DDONE_SECURITY_OTP_REGISTER_SYSTEM_WINDOW` and `DDONE_SECURITY_OTP_REGISTER_MAX_SYSTEM_REQUESTS`.
+- Registration IP score deltas are configurable with `DDONE_SECURITY_OTP_REGISTER_PENDING_IP_SCORE`, `DDONE_SECURITY_OTP_REGISTER_RESEND_IP_SCORE`, `DDONE_SECURITY_OTP_REGISTER_INVALID_VERIFY_IP_SCORE`, and `DDONE_SECURITY_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE`.
 - Default resend cooldown is `60s`.
 - Default maximum resends is `3`.
 - Default maximum verification attempts is `5`.
-- Rate-limit counters live in Redis.
+- Rate-limit counters and score state live in Redis.
 
 ### Bot Protection
 
@@ -387,7 +394,9 @@ Known key families:
 
 - `register:ticket:<ticketId>`
 - `register:rate:phone:<phoneNumber>`
-- `register:rate:ip:<clientIp>`
+- `register:rate:system`
+- `register:score:ip:<clientIp>`
+- `register:verify:attempts:<ticketId>`
 - `password_reset:ticket:<ticketId>`
 - `password_reset:phone:<phoneNumber>`
 - `password_reset:ip:<clientIp>`
@@ -476,13 +485,19 @@ DDONE_SECURITY_BOT_BLOCK_DURATION=5m
 
 DDONE_SECURITY_OTP_REGISTER_TTL=5m
 DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW=5m
-DDONE_SECURITY_OTP_REGISTER_IP_WINDOW=5m
+DDONE_SECURITY_OTP_REGISTER_IP_WINDOW=10m
+DDONE_SECURITY_OTP_REGISTER_SYSTEM_WINDOW=10m
 DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN=60s
 DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS=20
+DDONE_SECURITY_OTP_REGISTER_MAX_SYSTEM_REQUESTS=30
 DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS=3
 DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS=5
+DDONE_SECURITY_OTP_REGISTER_PENDING_IP_SCORE=1
+DDONE_SECURITY_OTP_REGISTER_RESEND_IP_SCORE=1
+DDONE_SECURITY_OTP_REGISTER_INVALID_VERIFY_IP_SCORE=1
+DDONE_SECURITY_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE=-1.5
 
 DDONE_SECURITY_OTP_PASSWORD_RESET_TTL=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW=5m

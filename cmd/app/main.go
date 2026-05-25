@@ -72,7 +72,9 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	)
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewServiceWithSettings(userRepository, registerStore, smsClient, appregister.Settings{
-		OTPPolicy: otpPolicyFromConfig(cfg.Security.OTP.Register),
+		OTPPolicy:             otpPolicyFromConfig(cfg.Security.OTP.Register),
+		IPScorePolicy:         registerIPScorePolicyFromConfig(cfg.Security.OTP.Register),
+		SystemRateLimitPolicy: registerSystemRateLimitPolicyFromConfig(cfg.Security.OTP.Register),
 	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
@@ -190,5 +192,21 @@ func otpPolicyFromConfig(cfg config.OTPPolicyConfig) appotp.Policy {
 		MaxIPRequests:       cfg.MaxIPRequests,
 		MaxResends:          cfg.MaxResends,
 		MaxVerifyAttempts:   cfg.MaxVerifyAttempts,
+	}
+}
+
+func registerIPScorePolicyFromConfig(cfg config.OTPPolicyConfig) *appregister.IPScorePolicy {
+	return &appregister.IPScorePolicy{
+		PendingRegistration:    cfg.PendingIPScore,
+		ResendRegistration:     cfg.ResendIPScore,
+		InvalidVerification:    cfg.InvalidVerifyIPScore,
+		SuccessfulVerification: cfg.SuccessVerifyIPScore,
+	}
+}
+
+func registerSystemRateLimitPolicyFromConfig(cfg config.OTPPolicyConfig) *appregister.SystemRateLimitPolicy {
+	return &appregister.SystemRateLimitPolicy{
+		Window:      cfg.SystemWindow,
+		MaxRequests: cfg.MaxSystemRequests,
 	}
 }

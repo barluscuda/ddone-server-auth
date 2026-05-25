@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -150,6 +151,36 @@ func TestValidateRejectsNonPositiveOTPIPLimit(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNonPositiveOTPRegisterSystemWindow(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.OTP.Register.SystemWindow = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive register otp system window")
+	}
+}
+
+func TestValidateRejectsNonPositiveOTPRegisterSystemLimit(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.OTP.Register.MaxSystemRequests = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive register otp system request limit")
+	}
+}
+
+func TestValidateRejectsInfiniteOTPRegisterIPScore(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.OTP.Register.PendingIPScore = math.Inf(1)
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject infinite register otp ip score")
+	}
+}
+
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000
@@ -175,10 +206,12 @@ func validConfig() Config {
 	cfg.Security.OTP.Register.TTL = time.Minute
 	cfg.Security.OTP.Register.PhoneWindow = time.Minute
 	cfg.Security.OTP.Register.IPWindow = time.Minute
+	cfg.Security.OTP.Register.SystemWindow = time.Minute
 	cfg.Security.OTP.Register.ResendCooldown = time.Second
 	cfg.Security.OTP.Register.VerifyAttemptWindow = time.Minute
 	cfg.Security.OTP.Register.MaxPhoneRequests = 1
 	cfg.Security.OTP.Register.MaxIPRequests = 1
+	cfg.Security.OTP.Register.MaxSystemRequests = 1
 	cfg.Security.OTP.Register.MaxResends = 1
 	cfg.Security.OTP.Register.MaxVerifyAttempts = 1
 	cfg.Security.OTP.PasswordReset.TTL = time.Minute

@@ -52,13 +52,19 @@ security:
     register:
       ttl: 5m
       phone_window: 5m
-      ip_window: 5m
+      ip_window: 10m
+      system_window: 10m
       resend_cooldown: 60s
       verify_attempt_window: 5m
       max_phone_requests: 1
       max_ip_requests: 20
+      max_system_requests: 30
       max_resends: 3
       max_verify_attempts: 5
+      pending_ip_score: 1
+      resend_ip_score: 1
+      invalid_verify_ip_score: 1
+      success_verify_ip_score: -1.5
     password_reset:
       ttl: 5m
       phone_window: 5m

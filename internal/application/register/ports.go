@@ -18,6 +18,7 @@ type RegistrationStore interface {
 	Get(ctx context.Context, ticketID string) (*user.PendingRegistration, error)
 	Delete(ctx context.Context, ticketID string) error
 	IncrementCounter(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	AdjustScore(ctx context.Context, key string, delta float64, ttl time.Duration) (float64, error)
 	DeleteCounter(ctx context.Context, key string) error
 }
 

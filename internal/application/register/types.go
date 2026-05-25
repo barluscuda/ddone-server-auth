@@ -28,7 +28,21 @@ type RegisterResult struct {
 }
 
 type Settings struct {
-	OTPPolicy otp.Policy
+	OTPPolicy             otp.Policy
+	IPScorePolicy         *IPScorePolicy
+	SystemRateLimitPolicy *SystemRateLimitPolicy
+}
+
+type IPScorePolicy struct {
+	PendingRegistration    float64
+	ResendRegistration     float64
+	InvalidVerification    float64
+	SuccessfulVerification float64
+}
+
+type SystemRateLimitPolicy struct {
+	Window      time.Duration
+	MaxRequests int
 }
 
 type ResendRegisterOTPInput struct {
