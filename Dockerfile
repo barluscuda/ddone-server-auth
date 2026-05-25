@@ -1,4 +1,4 @@
-FROM golang:1.26.2-bookworm AS builder
+FROM golang:1.26.2-alpine AS builder
 
 WORKDIR /src
 
@@ -12,18 +12,16 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/ddone-server-auth ./cmd/app
 
-FROM debian:bookworm-slim
+FROM alpine:3.22
 
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates tzdata \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& groupadd --system ddone \
-	&& useradd --system --gid ddone --home-dir /app --create-home --shell /usr/sbin/nologin ddone
+RUN apk add --no-cache ca-certificates tzdata \
+	&& addgroup -S ddone \
+	&& adduser -S -D -H -s /sbin/nologin -G ddone ddone
 
 WORKDIR /app
 
 COPY --from=builder /out/ddone-server-auth /usr/local/bin/ddone-server-auth
-COPY config ./config
+COPY config/config.yaml ./config/config.yaml
 
 USER ddone:ddone
 

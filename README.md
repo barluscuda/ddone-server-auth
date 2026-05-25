@@ -148,6 +148,13 @@ Release artifacts are written to `dist/`:
 - `ddone-server-auth_<version>_linux-x86_64.zip`
 - `ddone-server-auth_<version>_linux-arm64.zip`
 
+Each release bundle includes:
+
+- `start.sh` to run the service directly from the extracted release directory
+- `systemctl.sh install` to install and start the systemd service
+- `systemctl.sh remove` to stop and remove the systemd service files
+- `REMOVE_DATA=1 ./systemctl.sh remove` to also remove app and environment directories
+
 Build the Docker image:
 
 ```bash

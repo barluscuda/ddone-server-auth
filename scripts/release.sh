@@ -83,12 +83,20 @@ Contents:
 - ${APP_NAME}
 - config/
 - deploy/systemd/
+- start.sh
+- systemctl.sh
 
 Run:
 1. Copy the files to the target host.
 2. Edit config/config.yaml or override with DDONE_* environment variables.
 3. Start the service with:
-   ./${APP_NAME}
+   ./start.sh
+
+Install systemd service:
+   ./systemctl.sh install
+
+Remove systemd service:
+   ./systemctl.sh remove
 
 systemd assets:
 - deploy/systemd/${APP_NAME}.service
@@ -114,6 +122,9 @@ build_binary_release() {
 	cp "${ROOT_DIR}/config/config.yaml" "${stage_dir}/config/config.yaml"
 	cp "${ROOT_DIR}/deploy/systemd/${APP_NAME}.service" "${stage_dir}/deploy/systemd/"
 	cp "${ROOT_DIR}/deploy/systemd/${APP_NAME}.env.example" "${stage_dir}/deploy/systemd/"
+	cp "${ROOT_DIR}/deploy/release/start.sh" "${stage_dir}/start.sh"
+	cp "${ROOT_DIR}/deploy/release/systemctl.sh" "${stage_dir}/systemctl.sh"
+	chmod 0755 "${stage_dir}/start.sh" "${stage_dir}/systemctl.sh"
 	cp "${ROOT_DIR}/README.md" "${stage_dir}/"
 	write_binary_notes "${stage_dir}/RUN.txt"
 
