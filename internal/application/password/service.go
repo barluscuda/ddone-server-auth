@@ -42,9 +42,11 @@ var ErrPasswordCooldownActive = errors.New("password can only be changed once ev
 var defaultOTPPolicy = otp.Policy{
 	TTL:                 5 * time.Minute,
 	PhoneWindow:         5 * time.Minute,
+	IPWindow:            5 * time.Minute,
 	ResendCooldown:      60 * time.Second,
 	VerifyAttemptWindow: 5 * time.Minute,
 	MaxPhoneRequests:    1,
+	MaxIPRequests:       20,
 	MaxResends:          3,
 	MaxVerifyAttempts:   5,
 }
@@ -106,7 +108,7 @@ func (s *Service) ForgotPassword(
 	if globalPhoneNumber == "" {
 		return nil, ErrPhoneNumberRequired
 	}
-	if err := s.enforceResetRateLimits(ctx, globalPhoneNumber); err != nil {
+	if err := s.enforceResetRateLimits(ctx, globalPhoneNumber, input.ClientIP); err != nil {
 		return nil, err
 	}
 
@@ -365,7 +367,18 @@ func (s *Service) revokeSessions(ctx context.Context, userID string, reason stri
 	return nil
 }
 
-func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string) error {
+func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string, clientIP string) error {
+	clientIP = strings.TrimSpace(clientIP)
+	if clientIP != "" {
+		ipCount, err := s.store.IncrementCounter(ctx, resetIPRateKey(clientIP), s.otpPolicy.IPWindow)
+		if err != nil {
+			return err
+		}
+		if ipCount > int64(s.otpPolicy.MaxIPRequests) {
+			return ErrResetRateLimited
+		}
+	}
+
 	count, err := s.store.IncrementCounter(ctx, resetPhoneRateKey(phoneNumber), s.otpPolicy.PhoneWindow)
 	if err != nil {
 		return err
@@ -415,6 +428,10 @@ func matchResetOTP(expectedHash string, ticketID string, otpCode string) bool {
 
 func resetPhoneRateKey(phoneNumber string) string {
 	return fmt.Sprintf("password_reset:phone:%s", phoneNumber)
+}
+
+func resetIPRateKey(clientIP string) string {
+	return fmt.Sprintf("password_reset:ip:%s", clientIP)
 }
 
 func resetVerifyAttemptKey(ticketID string) string {

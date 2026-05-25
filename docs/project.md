@@ -28,7 +28,7 @@ The service is moving toward hexagonal architecture:
 - Change authenticated-user passwords.
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
-- Run CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
+- Run request body limits, bot protection, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
 
 ## 3. Main Dependencies
 
@@ -69,7 +69,7 @@ internal/application/jwks/       Signing-key lifecycle and public JWKS orchestra
 internal/application/otp/        Shared OTP policy values
 
 internal/adapters/handler/       Gin HTTP handlers
-internal/adapters/middleware/    CORS, auth, session, logging, recovery, 404/405
+internal/adapters/middleware/    Body limits, bot protection, CORS, auth, session, logging, recovery, 404/405
 internal/adapters/dto/           HTTP request/response DTOs
 internal/adapters/repository/    GORM repositories and table row types
 internal/adapters/cache/         Redis stores and read-through cache decorators
@@ -101,7 +101,7 @@ Owns phone registration:
 - Reject already registered phone numbers.
 - Generate default usernames.
 - Hash passwords and OTP codes.
-- Enforce OTP phone-window, resend, cooldown, and verify-attempt limits.
+- Enforce OTP phone-window, IP-window, resend, cooldown, and verify-attempt limits.
 - Store pending registrations in Redis through a port.
 - Send OTP through an SMS port.
 - Create users after successful OTP verification.
@@ -285,10 +285,19 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - OTP hashes include the ticket ID.
 - Registration and password reset use separate OTP policies.
 - Default OTP TTL is `5m`.
+- Default OTP IP rate limit is `20` start requests per `5m`.
 - Default resend cooldown is `60s`.
 - Default maximum resends is `3`.
 - Default maximum verification attempts is `5`.
 - Rate-limit counters live in Redis.
+
+### Bot Protection
+
+- Public auth endpoints use an in-process per-IP fixed-window throttle before handlers run.
+- Default bot protection allows `60` public auth requests per IP per `1m`.
+- Exceeding the limit returns `429 bot_protection_rate_limited` with `Retry-After`.
+- The default temporary block duration is `5m`.
+- Bot protection is process-local. Multi-instance deployments should still keep edge or load-balancer rate limits.
 
 ### Phone Numbers
 
@@ -303,6 +312,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - `SameSite=None` requires `Secure=true`.
 - Cross-origin cookie clients need explicit allowed origins and `cors.allow_credentials=true`.
 - Config validation rejects `cors.allowed_origins=["*"]` when credentials are enabled.
+- Unsafe cookie-session requests with `Origin` or `Referer` are accepted only from the same host or configured explicit CORS origins; wildcard origins are not trusted for this check.
 
 ### Signing Keys
 
@@ -376,7 +386,11 @@ Redis is used for pending state, counters, and read-through caches.
 Known key families:
 
 - `register:ticket:<ticketId>`
+- `register:rate:phone:<phoneNumber>`
+- `register:rate:ip:<clientIp>`
 - `password_reset:ticket:<ticketId>`
+- `password_reset:phone:<phoneNumber>`
+- `password_reset:ip:<clientIp>`
 - `cache:user:id:<userId>`
 - `cache:user:phone:<phoneNumber>`
 - `cache:user:username:<username>`
@@ -402,11 +416,12 @@ The local `config/config.yaml` is for development. Deployed environments should 
 
 Important config groups:
 
-- `app`: debug mode and port
+- `app`: debug mode, port, trusted proxies, request body limit
 - `database`: PostgreSQL connection, pool, timeout, timezone, SQL logging
 - `redis`: Redis address, auth, DB, timeout, pool settings
 - `cache`: user cache, user-session-list cache, public signing-key cache TTLs
 - `security.login`: failed-attempt window, max attempts, lockout duration
+- `security.bot`: public auth endpoint bot-protection window, limit, and block duration
 - `security.otp.register`: registration OTP policy
 - `security.otp.password_reset`: password-reset OTP policy
 - `security.auth`: JWT issuer/audience, token TTLs, signing-key rotation/retention, session-cookie settings
@@ -418,6 +433,8 @@ Common environment variables:
 ```bash
 DDONE_APP_PORT=3000
 DDONE_APP_DEBUG=true
+DDONE_APP_TRUSTED_PROXIES=
+DDONE_APP_MAX_REQUEST_BODY_BYTES=1048576
 
 DDONE_DATABASE_HOST=localhost
 DDONE_DATABASE_PORT=5432
@@ -452,19 +469,28 @@ DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_LOGIN_MAX_ATTEMPTS=5
 DDONE_SECURITY_LOGIN_LOCKOUT_DURATION=15m
 
+DDONE_SECURITY_BOT_ENABLED=true
+DDONE_SECURITY_BOT_WINDOW=1m
+DDONE_SECURITY_BOT_MAX_REQUESTS=60
+DDONE_SECURITY_BOT_BLOCK_DURATION=5m
+
 DDONE_SECURITY_OTP_REGISTER_TTL=5m
 DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW=5m
+DDONE_SECURITY_OTP_REGISTER_IP_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN=60s
 DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS=1
+DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS=3
 DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS=5
 
 DDONE_SECURITY_OTP_PASSWORD_RESET_TTL=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW=5m
+DDONE_SECURITY_OTP_PASSWORD_RESET_IP_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN=60s
 DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
 
@@ -512,7 +538,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 14. Start the HTTP server.
 15. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server uses a 5-second read-header timeout and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits and bot protection before public auth handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 
@@ -647,7 +673,7 @@ Current coverage includes:
 - Config validation
 - DTO JSON field casing
 - HTTP handler behavior
-- Middleware auth, CORS, and recovery behavior
+- Middleware auth, session-origin checks, request body limits, bot protection, CORS, and recovery behavior
 - Redis signing-key cache behavior
 - ES256 signing, verification, and JWK behavior
 - JWT application orchestration

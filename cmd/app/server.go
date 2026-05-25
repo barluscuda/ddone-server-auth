@@ -37,8 +37,14 @@ func newHTTPServer(
 	}
 
 	app := gin.New()
+	if err := app.SetTrustedProxies(cfg.App.TrustedProxies); err != nil {
+		logger.Fatal("invalid trusted proxy configuration", zap.Error(err), zap.Strings("trusted_proxies", cfg.App.TrustedProxies))
+	}
 	app.HandleMethodNotAllowed = true
 	app.Use(
+		middleware.RequestBodyLimit(middleware.BodyLimitConfig{
+			MaxBytes: cfg.App.MaxRequestBodyBytes,
+		}),
 		middleware.CORS(middleware.CORSConfig{
 			AllowedOrigins:   cfg.CORS.AllowedOrigins,
 			AllowedMethods:   cfg.CORS.AllowedMethods,
@@ -56,6 +62,12 @@ func newHTTPServer(
 		c.Status(http.StatusNoContent)
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
+	botProtection := middleware.BotProtection(middleware.BotProtectionConfig{
+		Enabled:       cfg.Security.Bot.Enabled,
+		Window:        cfg.Security.Bot.Window,
+		MaxRequests:   cfg.Security.Bot.MaxRequests,
+		BlockDuration: cfg.Security.Bot.BlockDuration,
+	})
 
 	registerRoutes(
 		app,
@@ -67,6 +79,7 @@ func newHTTPServer(
 		passwordHandler,
 		requireAccessToken,
 		requireSession,
+		botProtection,
 		jwksHandler,
 	)
 
@@ -74,6 +87,10 @@ func newHTTPServer(
 		Addr:              fmt.Sprintf(":%d", cfg.App.Port),
 		Handler:           app,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    http.DefaultMaxHeaderBytes,
 	}
 }
 
@@ -116,21 +133,24 @@ func registerRoutes(
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	requireSession gin.HandlerFunc,
+	botProtection gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
 	router.GET("/robots.txt", handler.RobotsTXT)
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 
-	router.POST("/registrations", registerHandler.Register)
-	router.POST("/registrations/resend", registerHandler.ResendOTP)
-	router.POST("/registrations/verify", registerHandler.VerifyRegister)
-	router.POST("/tokens", loginHandler.Login)
-	router.POST("/tokens/refresh", loginHandler.Refresh)
-	router.POST("/sessions", loginHandler.LoginSession)
-	router.POST("/password-resets", passwordHandler.ForgotPassword)
-	router.POST("/password-resets/resend", passwordHandler.ResendForgotPassword)
-	router.POST("/password-resets/verify", passwordHandler.VerifyForgotPassword)
+	publicAuthRoutes := router.Group("")
+	publicAuthRoutes.Use(botProtection)
+	publicAuthRoutes.POST("/registrations", registerHandler.Register)
+	publicAuthRoutes.POST("/registrations/resend", registerHandler.ResendOTP)
+	publicAuthRoutes.POST("/registrations/verify", registerHandler.VerifyRegister)
+	publicAuthRoutes.POST("/tokens", loginHandler.Login)
+	publicAuthRoutes.POST("/tokens/refresh", loginHandler.Refresh)
+	publicAuthRoutes.POST("/sessions", loginHandler.LoginSession)
+	publicAuthRoutes.POST("/password-resets", passwordHandler.ForgotPassword)
+	publicAuthRoutes.POST("/password-resets/resend", passwordHandler.ResendForgotPassword)
+	publicAuthRoutes.POST("/password-resets/verify", passwordHandler.VerifyForgotPassword)
 
 	settingsRoutes := router.Group("/settings")
 	settingsRoutes.Use(requireAccessToken)

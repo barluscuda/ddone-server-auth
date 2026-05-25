@@ -12,6 +12,10 @@ Base URL examples use `http://localhost:3000`. All JSON field names are camelCas
 }
 ```
 
+Requests with a `Content-Length` above the configured request body limit return `413 request_body_too_large`.
+
+Public auth endpoints can return `429 bot_protection_rate_limited` when the same IP exceeds the configured bot-protection window. Those responses include `Retry-After`.
+
 ## Authentication
 
 Bearer-token routes require:
@@ -20,7 +24,7 @@ Bearer-token routes require:
 Authorization: Bearer <accessToken>
 ```
 
-Session routes require the `HttpOnly` session cookie set by `POST /sessions`. The default cookie name is `ddone_session`.
+Session routes require the `HttpOnly` session cookie set by `POST /sessions`. The default cookie name is `ddone_session`. Unsafe session-cookie requests reject untrusted `Origin` or `Referer` values with `403 session_origin_forbidden`.
 
 ## Health
 
@@ -324,7 +328,7 @@ Success `200 OK`:
 }
 ```
 
-Common errors: `401 session_token_required`, `401 invalid_session`.
+Common errors: `401 session_token_required`, `401 invalid_session`, `403 session_origin_forbidden`.
 
 ### `GET /sessions`
 
@@ -388,7 +392,7 @@ Success `200 OK`:
 }
 ```
 
-Common errors: `400 session_id_required`, `401 session_token_required`, `401 invalid_session`, `404 session_not_found`.
+Common errors: `400 session_id_required`, `401 session_token_required`, `401 invalid_session`, `403 session_origin_forbidden`, `404 session_not_found`.
 
 ### `POST /sessions/revoke-others`
 
@@ -404,7 +408,7 @@ Success `200 OK`:
 }
 ```
 
-Common errors: `401 session_token_required`, `401 invalid_session`.
+Common errors: `401 session_token_required`, `401 invalid_session`, `403 session_origin_forbidden`.
 
 ### `POST /sessions/revoke-all`
 
@@ -420,7 +424,7 @@ Success `200 OK`:
 }
 ```
 
-Common errors: `401 session_token_required`, `401 invalid_session`.
+Common errors: `401 session_token_required`, `401 invalid_session`, `403 session_origin_forbidden`.
 
 ## Password Reset And Password Change
 

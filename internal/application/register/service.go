@@ -39,9 +39,11 @@ var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a 
 var defaultOTPPolicy = otp.Policy{
 	TTL:                 5 * time.Minute,
 	PhoneWindow:         5 * time.Minute,
+	IPWindow:            5 * time.Minute,
 	ResendCooldown:      60 * time.Second,
 	VerifyAttemptWindow: 5 * time.Minute,
 	MaxPhoneRequests:    1,
+	MaxIPRequests:       20,
 	MaxResends:          3,
 	MaxVerifyAttempts:   5,
 }
@@ -100,7 +102,7 @@ func (s *Service) Register(
 	if strings.TrimSpace(input.Password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber); err != nil {
+	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber, input.ClientIP); err != nil {
 		return nil, err
 	}
 
@@ -335,7 +337,18 @@ func (s *Service) ResendRegisterOTP(
 	}, nil
 }
 
-func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
+func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string, clientIP string) error {
+	clientIP = strings.TrimSpace(clientIP)
+	if clientIP != "" {
+		ipCount, err := s.store.IncrementCounter(ctx, registerIPRateKey(clientIP), s.otpPolicy.IPWindow)
+		if err != nil {
+			return err
+		}
+		if ipCount > int64(s.otpPolicy.MaxIPRequests) {
+			return ErrRegisterRateLimited
+		}
+	}
+
 	phoneCount, err := s.store.IncrementCounter(ctx, registerPhoneRateKey(phoneNumber), s.otpPolicy.PhoneWindow)
 	if err != nil {
 		return err
@@ -411,6 +424,10 @@ func matchRegisterOTP(expectedHash string, ticketID string, otpCode string) bool
 
 func registerPhoneRateKey(phoneNumber string) string {
 	return fmt.Sprintf("register:rate:phone:%s", phoneNumber)
+}
+
+func registerIPRateKey(clientIP string) string {
+	return fmt.Sprintf("register:rate:ip:%s", clientIP)
 }
 
 func verifyAttemptKey(ticketID string) string {

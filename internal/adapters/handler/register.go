@@ -58,7 +58,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 	result, err := h.register.Register(c.Request.Context(), appregister.RegisterInput{
 		PhoneNumber: req.PhoneNumber,
 		Password:    req.Password,
-		ClientID:    c.ClientIP(),
+		ClientIP:    c.ClientIP(),
 	})
 	if err != nil {
 		handleRegisterError(c, err)
@@ -89,7 +89,7 @@ func (h *RegisterHandler) VerifyRegister(c *gin.Context) {
 	userModel, err := h.register.VerifyRegister(c.Request.Context(), appregister.VerifyRegisterInput{
 		TicketID: req.TicketID,
 		OTPCode:  req.OTPCode,
-		ClientID: c.ClientIP(),
+		ClientIP: c.ClientIP(),
 	})
 	if err != nil {
 		handleRegisterError(c, err)
@@ -119,7 +119,7 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 
 	result, err := h.register.ResendRegisterOTP(c.Request.Context(), appregister.ResendRegisterOTPInput{
 		TicketID: req.TicketID,
-		ClientID: c.ClientIP(),
+		ClientIP: c.ClientIP(),
 	})
 	if err != nil {
 		handleRegisterError(c, err)

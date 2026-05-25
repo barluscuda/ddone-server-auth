@@ -15,19 +15,19 @@ type UseCase interface {
 
 type ForgotPasswordInput struct {
 	PhoneNumber string
-	ClientID    string
+	ClientIP    string
 }
 
 type ResendForgotPasswordInput struct {
 	TicketID string
-	ClientID string
+	ClientIP string
 }
 
 type VerifyForgotPasswordInput struct {
 	TicketID    string
 	OTPCode     string
 	NewPassword string
-	ClientID    string
+	ClientIP    string
 }
 
 type ChangePasswordInput struct {

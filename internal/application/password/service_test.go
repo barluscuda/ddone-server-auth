@@ -191,6 +191,55 @@ func TestForgotPasswordRejectsPasswordCooldown(t *testing.T) {
 	}
 }
 
+func TestForgotPasswordRateLimitsByIP(t *testing.T) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	firstUser := &user.User{
+		ID:           "user-1",
+		PhoneNumber:  "+8562012345678",
+		PasswordHash: string(hashed),
+	}
+	secondUser := &user.User{
+		ID:           "user-2",
+		PhoneNumber:  "+8562098765432",
+		PasswordHash: string(hashed),
+	}
+	users := &fakeUserStore{
+		byID: map[string]*user.User{
+			firstUser.ID:  firstUser,
+			secondUser.ID: secondUser,
+		},
+		byPhone: map[string]*user.User{
+			firstUser.PhoneNumber:  firstUser,
+			secondUser.PhoneNumber: secondUser,
+		},
+	}
+	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
+	policy := defaultOTPPolicy
+	policy.MaxPhoneRequests = 10
+	policy.MaxIPRequests = 1
+	service := NewServiceWithSettings(users, store, &fakeSender{}, &fakeRevoker{}, &fakeRevoker{}, Settings{OTPPolicy: policy})
+
+	_, err = service.ForgotPassword(context.Background(), ForgotPasswordInput{
+		PhoneNumber: firstUser.PhoneNumber,
+		ClientIP:    "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected forgot password error on first attempt: %v", err)
+	}
+
+	_, err = service.ForgotPassword(context.Background(), ForgotPasswordInput{
+		PhoneNumber: secondUser.PhoneNumber,
+		ClientIP:    "127.0.0.1",
+	})
+	if !errors.Is(err, ErrResetRateLimited) {
+		t.Fatalf("expected ErrResetRateLimited, got %v", err)
+	}
+}
+
 func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
 	if err != nil {

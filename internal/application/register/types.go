@@ -17,7 +17,7 @@ type UseCase interface {
 type RegisterInput struct {
 	PhoneNumber string
 	Password    string
-	ClientID    string
+	ClientIP    string
 }
 
 type RegisterResult struct {
@@ -33,11 +33,11 @@ type Settings struct {
 
 type ResendRegisterOTPInput struct {
 	TicketID string
-	ClientID string
+	ClientIP string
 }
 
 type VerifyRegisterInput struct {
 	TicketID string
 	OTPCode  string
-	ClientID string
+	ClientIP string
 }

@@ -52,7 +52,7 @@ func (h *PasswordHandler) ForgotPassword(c *gin.Context) {
 
 	result, err := h.password.ForgotPassword(c.Request.Context(), apppassword.ForgotPasswordInput{
 		PhoneNumber: req.PhoneNumber,
-		ClientID:    c.ClientIP(),
+		ClientIP:    c.ClientIP(),
 	})
 	if err != nil {
 		handlePasswordError(c, err)
@@ -82,7 +82,7 @@ func (h *PasswordHandler) ResendForgotPassword(c *gin.Context) {
 
 	result, err := h.password.ResendForgotPasswordOTP(c.Request.Context(), apppassword.ResendForgotPasswordInput{
 		TicketID: req.TicketID,
-		ClientID: c.ClientIP(),
+		ClientIP: c.ClientIP(),
 	})
 	if err != nil {
 		handlePasswordError(c, err)
@@ -114,7 +114,7 @@ func (h *PasswordHandler) VerifyForgotPassword(c *gin.Context) {
 		TicketID:    req.TicketID,
 		OTPCode:     req.OTPCode,
 		NewPassword: req.NewPassword,
-		ClientID:    c.ClientIP(),
+		ClientIP:    c.ClientIP(),
 	})
 	if err != nil {
 		handlePasswordError(c, err)

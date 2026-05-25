@@ -153,7 +153,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		tokenManagerHandler,
 		passwordHandler,
 		middleware.RequireAccessToken(jwtService),
-		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository),
+		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository, cfg.CORS.AllowedOrigins),
 		jwksHandler,
 	)
 
@@ -183,9 +183,11 @@ func otpPolicyFromConfig(cfg config.OTPPolicyConfig) appotp.Policy {
 	return appotp.Policy{
 		TTL:                 cfg.TTL,
 		PhoneWindow:         cfg.PhoneWindow,
+		IPWindow:            cfg.IPWindow,
 		ResendCooldown:      cfg.ResendCooldown,
 		VerifyAttemptWindow: cfg.VerifyAttemptWindow,
 		MaxPhoneRequests:    cfg.MaxPhoneRequests,
+		MaxIPRequests:       cfg.MaxIPRequests,
 		MaxResends:          cfg.MaxResends,
 		MaxVerifyAttempts:   cfg.MaxVerifyAttempts,
 	}

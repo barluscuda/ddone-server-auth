@@ -78,6 +78,26 @@ func TestValidateRejectsNegativeCacheTTL(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNegativeMaxRequestBodyBytes(t *testing.T) {
+	cfg := validConfig()
+	cfg.App.MaxRequestBodyBytes = -1
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject negative max request body bytes")
+	}
+}
+
+func TestValidateRejectsTrustAllProxyCIDR(t *testing.T) {
+	cfg := validConfig()
+	cfg.App.TrustedProxies = []string{"0.0.0.0/0"}
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject trust-all proxy CIDR")
+	}
+}
+
 func TestValidateRejectsNonPositiveLoginRateLimitWindow(t *testing.T) {
 	cfg := validConfig()
 	cfg.Security.Login.FailedAttemptWindow = 0
@@ -85,6 +105,28 @@ func TestValidateRejectsNonPositiveLoginRateLimitWindow(t *testing.T) {
 	err := cfg.validate()
 	if err == nil {
 		t.Fatal("expected validate to reject non-positive login rate limit window")
+	}
+}
+
+func TestValidateRejectsNonPositiveBotProtectionLimitWhenEnabled(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.Bot.MaxRequests = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive bot protection limit")
+	}
+}
+
+func TestValidateAllowsDisabledBotProtectionWithZeroValues(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.Bot.Enabled = false
+	cfg.Security.Bot.Window = 0
+	cfg.Security.Bot.MaxRequests = 0
+	cfg.Security.Bot.BlockDuration = 0
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("expected validate to allow disabled bot protection zero values, got %v", err)
 	}
 }
 
@@ -98,9 +140,20 @@ func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNonPositiveOTPIPLimit(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.OTP.Register.MaxIPRequests = 0
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject non-positive register otp ip limit")
+	}
+}
+
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000
+	cfg.App.MaxRequestBodyBytes = 1 << 20
 	cfg.Database.Host = "localhost"
 	cfg.Database.Port = 5432
 	cfg.Database.Name = "ddone_auth"
@@ -115,18 +168,26 @@ func validConfig() Config {
 	cfg.Security.Login.FailedAttemptWindow = time.Minute
 	cfg.Security.Login.MaxAttempts = 1
 	cfg.Security.Login.LockoutDuration = time.Minute
+	cfg.Security.Bot.Enabled = true
+	cfg.Security.Bot.Window = time.Minute
+	cfg.Security.Bot.MaxRequests = 10
+	cfg.Security.Bot.BlockDuration = time.Minute
 	cfg.Security.OTP.Register.TTL = time.Minute
 	cfg.Security.OTP.Register.PhoneWindow = time.Minute
+	cfg.Security.OTP.Register.IPWindow = time.Minute
 	cfg.Security.OTP.Register.ResendCooldown = time.Second
 	cfg.Security.OTP.Register.VerifyAttemptWindow = time.Minute
 	cfg.Security.OTP.Register.MaxPhoneRequests = 1
+	cfg.Security.OTP.Register.MaxIPRequests = 1
 	cfg.Security.OTP.Register.MaxResends = 1
 	cfg.Security.OTP.Register.MaxVerifyAttempts = 1
 	cfg.Security.OTP.PasswordReset.TTL = time.Minute
 	cfg.Security.OTP.PasswordReset.PhoneWindow = time.Minute
+	cfg.Security.OTP.PasswordReset.IPWindow = time.Minute
 	cfg.Security.OTP.PasswordReset.ResendCooldown = time.Second
 	cfg.Security.OTP.PasswordReset.VerifyAttemptWindow = time.Minute
 	cfg.Security.OTP.PasswordReset.MaxPhoneRequests = 1
+	cfg.Security.OTP.PasswordReset.MaxIPRequests = 1
 	cfg.Security.OTP.PasswordReset.MaxResends = 1
 	cfg.Security.OTP.PasswordReset.MaxVerifyAttempts = 1
 	cfg.Security.Auth.Issuer = "issuer"

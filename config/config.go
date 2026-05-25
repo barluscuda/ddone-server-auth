@@ -12,8 +12,10 @@ import (
 
 type Config struct {
 	App struct {
-		Debug bool
-		Port  int
+		Debug               bool
+		Port                int
+		TrustedProxies      []string `mapstructure:"trusted_proxies"`
+		MaxRequestBodyBytes int64    `mapstructure:"max_request_body_bytes"`
 	}
 	Database  DatabaseConfig
 	Redis     RedisConfig
@@ -63,9 +65,10 @@ type WenovaAPIConfig struct {
 }
 
 type SecurityConfig struct {
-	Login LoginConfig `mapstructure:"login"`
-	OTP   OTPConfig   `mapstructure:"otp"`
-	Auth  AuthConfig  `mapstructure:"auth"`
+	Login LoginConfig         `mapstructure:"login"`
+	OTP   OTPConfig           `mapstructure:"otp"`
+	Auth  AuthConfig          `mapstructure:"auth"`
+	Bot   BotProtectionConfig `mapstructure:"bot"`
 }
 
 type OTPConfig struct {
@@ -76,9 +79,11 @@ type OTPConfig struct {
 type OTPPolicyConfig struct {
 	TTL                 time.Duration `mapstructure:"ttl"`
 	PhoneWindow         time.Duration `mapstructure:"phone_window"`
+	IPWindow            time.Duration `mapstructure:"ip_window"`
 	ResendCooldown      time.Duration `mapstructure:"resend_cooldown"`
 	VerifyAttemptWindow time.Duration `mapstructure:"verify_attempt_window"`
 	MaxPhoneRequests    int           `mapstructure:"max_phone_requests"`
+	MaxIPRequests       int           `mapstructure:"max_ip_requests"`
 	MaxResends          int           `mapstructure:"max_resends"`
 	MaxVerifyAttempts   int           `mapstructure:"max_verify_attempts"`
 }
@@ -87,6 +92,13 @@ type LoginConfig struct {
 	FailedAttemptWindow time.Duration `mapstructure:"failed_attempt_window"`
 	MaxAttempts         int           `mapstructure:"max_attempts"`
 	LockoutDuration     time.Duration `mapstructure:"lockout_duration"`
+}
+
+type BotProtectionConfig struct {
+	Enabled       bool          `mapstructure:"enabled"`
+	Window        time.Duration `mapstructure:"window"`
+	MaxRequests   int           `mapstructure:"max_requests"`
+	BlockDuration time.Duration `mapstructure:"block_duration"`
 }
 
 type CORSConfig struct {
@@ -123,6 +135,8 @@ func Load() (*Config, error) {
 
 	viper.SetDefault("app.debug", false)
 	viper.SetDefault("app.port", 3000)
+	viper.SetDefault("app.trusted_proxies", []string{})
+	viper.SetDefault("app.max_request_body_bytes", int64(1<<20))
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.sslmode", "require")
 	viper.SetDefault("database.timezone", "UTC")
@@ -145,18 +159,26 @@ func Load() (*Config, error) {
 	viper.SetDefault("security.login.failed_attempt_window", "5m")
 	viper.SetDefault("security.login.max_attempts", 5)
 	viper.SetDefault("security.login.lockout_duration", "15m")
+	viper.SetDefault("security.bot.enabled", true)
+	viper.SetDefault("security.bot.window", "1m")
+	viper.SetDefault("security.bot.max_requests", 60)
+	viper.SetDefault("security.bot.block_duration", "5m")
 	viper.SetDefault("security.otp.register.ttl", "5m")
 	viper.SetDefault("security.otp.register.phone_window", "5m")
+	viper.SetDefault("security.otp.register.ip_window", "5m")
 	viper.SetDefault("security.otp.register.resend_cooldown", "60s")
 	viper.SetDefault("security.otp.register.verify_attempt_window", "5m")
 	viper.SetDefault("security.otp.register.max_phone_requests", 1)
+	viper.SetDefault("security.otp.register.max_ip_requests", 20)
 	viper.SetDefault("security.otp.register.max_resends", 3)
 	viper.SetDefault("security.otp.register.max_verify_attempts", 5)
 	viper.SetDefault("security.otp.password_reset.ttl", "5m")
 	viper.SetDefault("security.otp.password_reset.phone_window", "5m")
+	viper.SetDefault("security.otp.password_reset.ip_window", "5m")
 	viper.SetDefault("security.otp.password_reset.resend_cooldown", "60s")
 	viper.SetDefault("security.otp.password_reset.verify_attempt_window", "5m")
 	viper.SetDefault("security.otp.password_reset.max_phone_requests", 1)
+	viper.SetDefault("security.otp.password_reset.max_ip_requests", 20)
 	viper.SetDefault("security.otp.password_reset.max_resends", 3)
 	viper.SetDefault("security.otp.password_reset.max_verify_attempts", 5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
@@ -185,6 +207,8 @@ func Load() (*Config, error) {
 
 	viper.BindEnv("app.port", "DDONE_APP_PORT")
 	viper.BindEnv("app.debug", "DDONE_APP_DEBUG")
+	viper.BindEnv("app.trusted_proxies", "DDONE_APP_TRUSTED_PROXIES")
+	viper.BindEnv("app.max_request_body_bytes", "DDONE_APP_MAX_REQUEST_BODY_BYTES")
 	viper.BindEnv("database.host", "DDONE_DATABASE_HOST")
 	viper.BindEnv("database.port", "DDONE_DATABASE_PORT")
 	viper.BindEnv("database.name", "DDONE_DATABASE_NAME")
@@ -218,18 +242,26 @@ func Load() (*Config, error) {
 	viper.BindEnv("security.login.failed_attempt_window", "DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_RATE_LIMIT_WINDOW")
 	viper.BindEnv("security.login.max_attempts", "DDONE_SECURITY_LOGIN_MAX_ATTEMPTS", "DDONE_LOGIN_MAX_ATTEMPTS")
 	viper.BindEnv("security.login.lockout_duration", "DDONE_SECURITY_LOGIN_LOCKOUT_DURATION", "DDONE_LOGIN_LOCKOUT_DURATION")
+	viper.BindEnv("security.bot.enabled", "DDONE_SECURITY_BOT_ENABLED", "DDONE_BOT_PROTECTION_ENABLED")
+	viper.BindEnv("security.bot.window", "DDONE_SECURITY_BOT_WINDOW", "DDONE_BOT_PROTECTION_WINDOW")
+	viper.BindEnv("security.bot.max_requests", "DDONE_SECURITY_BOT_MAX_REQUESTS", "DDONE_BOT_PROTECTION_MAX_REQUESTS")
+	viper.BindEnv("security.bot.block_duration", "DDONE_SECURITY_BOT_BLOCK_DURATION", "DDONE_BOT_PROTECTION_BLOCK_DURATION")
 	viper.BindEnv("security.otp.register.ttl", "DDONE_SECURITY_OTP_REGISTER_TTL", "DDONE_OTP_REGISTER_TTL")
 	viper.BindEnv("security.otp.register.phone_window", "DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW", "DDONE_OTP_REGISTER_PHONE_WINDOW")
+	viper.BindEnv("security.otp.register.ip_window", "DDONE_SECURITY_OTP_REGISTER_IP_WINDOW", "DDONE_OTP_REGISTER_IP_WINDOW")
 	viper.BindEnv("security.otp.register.resend_cooldown", "DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN", "DDONE_OTP_REGISTER_RESEND_COOLDOWN")
 	viper.BindEnv("security.otp.register.verify_attempt_window", "DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW")
 	viper.BindEnv("security.otp.register.max_phone_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp.register.max_ip_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS", "DDONE_OTP_REGISTER_MAX_IP_REQUESTS")
 	viper.BindEnv("security.otp.register.max_resends", "DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS", "DDONE_OTP_REGISTER_MAX_RESENDS")
 	viper.BindEnv("security.otp.register.max_verify_attempts", "DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS")
 	viper.BindEnv("security.otp.password_reset.ttl", "DDONE_SECURITY_OTP_PASSWORD_RESET_TTL", "DDONE_OTP_PASSWORD_RESET_TTL")
 	viper.BindEnv("security.otp.password_reset.phone_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
+	viper.BindEnv("security.otp.password_reset.ip_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_IP_WINDOW", "DDONE_OTP_PASSWORD_RESET_IP_WINDOW")
 	viper.BindEnv("security.otp.password_reset.resend_cooldown", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN", "DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN")
 	viper.BindEnv("security.otp.password_reset.verify_attempt_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW")
 	viper.BindEnv("security.otp.password_reset.max_phone_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp.password_reset.max_ip_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_IP_REQUESTS")
 	viper.BindEnv("security.otp.password_reset.max_resends", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
 	viper.BindEnv("security.otp.password_reset.max_verify_attempts", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
@@ -262,6 +294,8 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	cfg.App.TrustedProxies = viper.GetStringSlice("app.trusted_proxies")
+	cfg.App.MaxRequestBodyBytes = viper.GetInt64("app.max_request_body_bytes")
 	cfg.CORS.AllowedOrigins = viper.GetStringSlice("cors.allowed_origins")
 	cfg.CORS.AllowedMethods = viper.GetStringSlice("cors.allowed_methods")
 	cfg.CORS.AllowedHeaders = viper.GetStringSlice("cors.allowed_headers")
@@ -279,6 +313,15 @@ func Load() (*Config, error) {
 func (c *Config) validate() error {
 	if c.App.Port <= 0 {
 		return fmt.Errorf("app.port must be greater than 0")
+	}
+	c.App.TrustedProxies = cleanStringSlice(c.App.TrustedProxies)
+	for _, proxy := range c.App.TrustedProxies {
+		if proxy == "0.0.0.0/0" || proxy == "::/0" {
+			return fmt.Errorf("app.trusted_proxies must not trust all network origins")
+		}
+	}
+	if c.App.MaxRequestBodyBytes < 0 {
+		return fmt.Errorf("app.max_request_body_bytes must be greater than or equal to 0")
 	}
 
 	if c.Database.Host == "" {
@@ -324,6 +367,17 @@ func (c *Config) validate() error {
 	}
 	if c.Security.Login.LockoutDuration <= 0 {
 		return fmt.Errorf("security.login.lockout_duration must be greater than 0")
+	}
+	if c.Security.Bot.Enabled {
+		if c.Security.Bot.Window <= 0 {
+			return fmt.Errorf("security.bot.window must be greater than 0 when security.bot.enabled is true")
+		}
+		if c.Security.Bot.MaxRequests <= 0 {
+			return fmt.Errorf("security.bot.max_requests must be greater than 0 when security.bot.enabled is true")
+		}
+		if c.Security.Bot.BlockDuration <= 0 {
+			return fmt.Errorf("security.bot.block_duration must be greater than 0 when security.bot.enabled is true")
+		}
 	}
 	if err := validateOTPPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
 		return err
@@ -409,6 +463,9 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	if cfg.PhoneWindow <= 0 {
 		return fmt.Errorf("%s.phone_window must be greater than 0", path)
 	}
+	if cfg.IPWindow <= 0 {
+		return fmt.Errorf("%s.ip_window must be greater than 0", path)
+	}
 	if cfg.ResendCooldown <= 0 {
 		return fmt.Errorf("%s.resend_cooldown must be greater than 0", path)
 	}
@@ -417,6 +474,9 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	}
 	if cfg.MaxPhoneRequests <= 0 {
 		return fmt.Errorf("%s.max_phone_requests must be greater than 0", path)
+	}
+	if cfg.MaxIPRequests <= 0 {
+		return fmt.Errorf("%s.max_ip_requests must be greater than 0", path)
 	}
 	if cfg.MaxResends <= 0 {
 		return fmt.Errorf("%s.max_resends must be greater than 0", path)

@@ -134,7 +134,7 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	result, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "  856 20 1234 5678  ",
 		Password:    "secretpass",
-		ClientID:    "127.0.0.1",
+		ClientIP:    "127.0.0.1",
 	})
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
@@ -249,7 +249,7 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
 		Password:    "secretpass",
-		ClientID:    "127.0.0.1",
+		ClientIP:    "127.0.0.1",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")
@@ -333,6 +333,37 @@ func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
 	}
 }
 
+func TestRegisterServiceRegisterRateLimitsByIP(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	policy := defaultOTPPolicy
+	policy.MaxPhoneRequests = 10
+	policy.MaxIPRequests = 1
+	service := NewServiceWithSettings(repo, store, sender, Settings{OTPPolicy: policy})
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b")
+	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b")
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+		ClientIP:    "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected register error on first attempt: %v", err)
+	}
+
+	_, err = service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562098765432",
+		Password:    "secretpass",
+		ClientIP:    "127.0.0.1",
+	})
+	if !errors.Is(err, ErrRegisterRateLimited) {
+		t.Fatalf("expected ErrRegisterRateLimited, got %v", err)
+	}
+}
+
 func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
@@ -357,7 +388,7 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 
 	result, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
 		TicketID: "reg_fixed123",
-		ClientID: "127.0.0.1",
+		ClientIP: "127.0.0.1",
 	})
 	if err != nil {
 		t.Fatalf("ResendRegisterOTP returned error: %v", err)
@@ -429,7 +460,7 @@ func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *tes
 
 	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
 		TicketID: "reg_fixed123",
-		ClientID: "127.0.0.1",
+		ClientIP: "127.0.0.1",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")

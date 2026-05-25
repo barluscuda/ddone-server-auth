@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -81,8 +83,22 @@ func CurrentAuth(c *gin.Context) (AuthContext, bool) {
 	return authContext, ok
 }
 
-func RequireSession(cookieName string, sessions SessionLookup) gin.HandlerFunc {
+func RequireSession(cookieName string, sessions SessionLookup, allowedOrigins ...[]string) gin.HandlerFunc {
+	trustedOrigins := []string{}
+	if len(allowedOrigins) > 0 {
+		trustedOrigins = trimAndCopy(allowedOrigins[0])
+	}
+
 	return func(c *gin.Context) {
+		if !sessionRequestOriginAllowed(c.Request, trustedOrigins) {
+			c.AbortWithStatusJSON(http.StatusForbidden, dto.ResMessage{
+				Success: false,
+				Code:    "session_origin_forbidden",
+				Message: "session request origin is not allowed",
+			})
+			return
+		}
+
 		tokenValue, err := c.Cookie(cookieName)
 		if err != nil || strings.TrimSpace(tokenValue) == "" {
 			c.AbortWithStatusJSON(401, dto.ResMessage{
@@ -129,6 +145,76 @@ func CurrentSession(c *gin.Context) (SessionContext, bool) {
 
 	sessionContext, ok := value.(SessionContext)
 	return sessionContext, ok
+}
+
+func sessionRequestOriginAllowed(req *http.Request, trustedOrigins []string) bool {
+	if sessionSafeMethod(req.Method) {
+		return true
+	}
+
+	origin := strings.TrimSpace(req.Header.Get("Origin"))
+	if origin == "" {
+		origin = refererOrigin(req.Header.Get("Referer"))
+	}
+	if origin == "" {
+		return true
+	}
+
+	if originHostMatchesRequestHost(origin, req.Host) {
+		return true
+	}
+
+	for _, trustedOrigin := range trustedOrigins {
+		if trustedOrigin == "*" {
+			continue
+		}
+		if sameOrigin(origin, trustedOrigin) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func sessionSafeMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	default:
+		return false
+	}
+}
+
+func refererOrigin(rawReferer string) string {
+	referer, err := url.Parse(strings.TrimSpace(rawReferer))
+	if err != nil || referer.Scheme == "" || referer.Host == "" {
+		return ""
+	}
+
+	return referer.Scheme + "://" + referer.Host
+}
+
+func originHostMatchesRequestHost(rawOrigin string, requestHost string) bool {
+	origin, err := url.Parse(strings.TrimSpace(rawOrigin))
+	if err != nil || origin.Host == "" {
+		return false
+	}
+
+	return strings.EqualFold(origin.Host, strings.TrimSpace(requestHost))
+}
+
+func sameOrigin(left string, right string) bool {
+	leftOrigin, err := url.Parse(strings.TrimSpace(left))
+	if err != nil || leftOrigin.Scheme == "" || leftOrigin.Host == "" {
+		return false
+	}
+	rightOrigin, err := url.Parse(strings.TrimSpace(right))
+	if err != nil || rightOrigin.Scheme == "" || rightOrigin.Host == "" {
+		return false
+	}
+
+	return strings.EqualFold(leftOrigin.Scheme, rightOrigin.Scheme) &&
+		strings.EqualFold(leftOrigin.Host, rightOrigin.Host)
 }
 
 func bearerToken(headerValue string) (string, bool) {

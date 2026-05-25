@@ -3,6 +3,8 @@
 app:
   debug: false
   port: 3000
+  trusted_proxies: []
+  max_request_body_bytes: 1048576
 
 database:
   host: localhost
@@ -41,21 +43,30 @@ security:
     failed_attempt_window: 5m
     max_attempts: 5
     lockout_duration: 15m
+  bot:
+    enabled: true
+    window: 1m
+    max_requests: 60
+    block_duration: 5m
   otp:
     register:
       ttl: 5m
       phone_window: 5m
+      ip_window: 5m
       resend_cooldown: 60s
       verify_attempt_window: 5m
       max_phone_requests: 1
+      max_ip_requests: 20
       max_resends: 3
       max_verify_attempts: 5
     password_reset:
       ttl: 5m
       phone_window: 5m
+      ip_window: 5m
       resend_cooldown: 60s
       verify_attempt_window: 5m
       max_phone_requests: 1
+      max_ip_requests: 20
       max_resends: 3
       max_verify_attempts: 5
   auth:

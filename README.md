@@ -256,6 +256,8 @@ Common environment variables:
 ```bash
 DDONE_APP_PORT=3000
 DDONE_APP_DEBUG=true
+DDONE_APP_TRUSTED_PROXIES=
+DDONE_APP_MAX_REQUEST_BODY_BYTES=1048576
 
 DDONE_DATABASE_HOST=localhost
 DDONE_DATABASE_PORT=5432
@@ -277,18 +279,27 @@ DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_LOGIN_MAX_ATTEMPTS=5
 DDONE_SECURITY_LOGIN_LOCKOUT_DURATION=15m
 
+DDONE_SECURITY_BOT_ENABLED=true
+DDONE_SECURITY_BOT_WINDOW=1m
+DDONE_SECURITY_BOT_MAX_REQUESTS=60
+DDONE_SECURITY_BOT_BLOCK_DURATION=5m
+
 DDONE_SECURITY_OTP_REGISTER_TTL=5m
 DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW=5m
+DDONE_SECURITY_OTP_REGISTER_IP_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN=60s
 DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS=1
+DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS=3
 DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS=5
 DDONE_SECURITY_OTP_PASSWORD_RESET_TTL=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW=5m
+DDONE_SECURITY_OTP_PASSWORD_RESET_IP_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN=60s
 DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
 
@@ -319,13 +330,16 @@ Safe defaults:
 - `database.log_sql` defaults to `false`
 - `security.auth.session_cookie_secure` defaults to `true`
 - `security.auth.login_session_ttl` defaults to `720h`
+- `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured
+- `app.max_request_body_bytes` defaults to `1048576`
+- bot protection defaults to `60` public auth requests per IP per `1m`, followed by a `5m` temporary block
 - login rate limiting defaults to `5` failed attempts per `5m` window, followed by a `15m` account lock
 - OTP rate-limit and resend rules default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
 
 `DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_SECURITY_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.
 
-For local HTTP development, set `DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=false` and `DDONE_DATABASE_LOG_SQL=true` if useful. For list-based CORS environment variables, use comma-separated values. Browser clients using the session-login flow need `DDONE_CORS_ALLOW_CREDENTIALS=true` and explicit origins instead of `*`.
+For local HTTP development, set `DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=false` and `DDONE_DATABASE_LOG_SQL=true` if useful. For list-based CORS and trusted proxy environment variables, use comma-separated values. Browser clients using the session-login flow need `DDONE_CORS_ALLOW_CREDENTIALS=true` and explicit origins instead of `*`; unsafe session-cookie requests also reject untrusted `Origin` or `Referer` values.
 
 ## API
 
