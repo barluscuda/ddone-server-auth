@@ -68,8 +68,6 @@ type fakeRegistrationStore struct {
 	deletedTicket string
 	counters      map[string]int64
 	counterTTLs   map[string]time.Duration
-	scores        map[string]float64
-	scoreTTLs     map[string]time.Duration
 	deletedKeys   []string
 }
 
@@ -106,26 +104,6 @@ func (s *fakeRegistrationStore) IncrementCounter(_ context.Context, key string, 
 	s.counters[key]++
 	s.counterTTLs[key] = ttl
 	return s.counters[key], nil
-}
-
-func (s *fakeRegistrationStore) AdjustScore(_ context.Context, key string, delta float64, ttl time.Duration) (float64, error) {
-	if s.scores == nil {
-		s.scores = map[string]float64{}
-	}
-	if s.scoreTTLs == nil {
-		s.scoreTTLs = map[string]time.Duration{}
-	}
-
-	score := s.scores[key] + delta
-	if score <= 0 {
-		delete(s.scores, key)
-		delete(s.scoreTTLs, key)
-		return 0, nil
-	}
-
-	s.scores[key] = score
-	s.scoreTTLs[key] = ttl
-	return score, nil
 }
 
 func (s *fakeRegistrationStore) DeleteCounter(_ context.Context, key string) error {
@@ -165,7 +143,6 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	result, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "  856 20 1234 5678  ",
 		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
 	})
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
@@ -280,7 +257,6 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 	_, err := service.Register(context.Background(), RegisterInput{
 		PhoneNumber: "+8562012345678",
 		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")
@@ -364,37 +340,6 @@ func TestRegisterServiceRegisterRateLimitsByPhoneNumber(t *testing.T) {
 	}
 }
 
-func TestRegisterServiceRegisterRateLimitsByIP(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{}
-	sender := &fakeOTPSender{}
-	policy := defaultOTPPolicy
-	policy.MaxPhoneRequests = 10
-	policy.MaxIPRequests = 1
-	service := NewServiceWithSettings(repo, store, sender, Settings{OTPPolicy: policy})
-	service.otpGenerator = func(int) (string, error) { return "123456", nil }
-	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b")
-	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b")
-
-	_, err := service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562012345678",
-		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
-	})
-	if err != nil {
-		t.Fatalf("unexpected register error on first attempt: %v", err)
-	}
-
-	_, err = service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562098765432",
-		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
-	})
-	if !errors.Is(err, ErrRegisterRateLimited) {
-		t.Fatalf("expected ErrRegisterRateLimited, got %v", err)
-	}
-}
-
 func TestRegisterServiceRegisterRateLimitsBySystemDefault(t *testing.T) {
 	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
@@ -462,201 +407,6 @@ func TestRegisterServiceRegisterUsesCustomSystemRateLimit(t *testing.T) {
 	}
 }
 
-func TestRegisterServiceUsesTenMinuteDefaultIPScoreWindow(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{}
-	sender := &fakeOTPSender{}
-	service := NewService(repo, store, sender)
-	service.otpGenerator = func(int) (string, error) { return "123456", nil }
-	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
-	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
-
-	_, err := service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562012345678",
-		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
-	})
-	if err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
-
-	if got, want := store.scoreTTLs[registerIPScoreKey("127.0.0.1")], 10*time.Minute; got != want {
-		t.Fatalf("expected default ip score ttl %v, got %v", want, got)
-	}
-}
-
-func TestRegisterServiceResendRegisterOTPRateLimitsByIP(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{}
-	sender := &fakeOTPSender{}
-	policy := defaultOTPPolicy
-	policy.MaxIPRequests = 1
-	service := NewServiceWithSettings(repo, store, sender, Settings{OTPPolicy: policy})
-
-	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
-		TicketID: "reg_missing_a",
-		ClientIP: "127.0.0.1",
-	})
-	if !errors.Is(err, user.ErrPendingRegistrationNotFound) {
-		t.Fatalf("expected missing registration on first attempt, got %v", err)
-	}
-
-	_, err = service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
-		TicketID: "reg_missing_b",
-		ClientIP: "127.0.0.1",
-	})
-	if !errors.Is(err, ErrResendRateLimited) {
-		t.Fatalf("expected ErrResendRateLimited, got %v", err)
-	}
-}
-
-func TestRegisterServiceInvalidRegisterOTPRateLimitsByIP(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{
-		values: map[string]*user.PendingRegistration{
-			"reg_fixed123": {
-				TicketID:     "reg_fixed123",
-				PasswordHash: "hashed-password",
-				PhoneNumber:  "+8562012345678",
-				OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
-				OTPExpiresAt: time.Now().UTC().Add(time.Minute),
-			},
-		},
-	}
-	sender := &fakeOTPSender{}
-	policy := defaultOTPPolicy
-	policy.MaxIPRequests = 1
-	policy.MaxVerifyAttempts = 10
-	service := NewServiceWithSettings(repo, store, sender, Settings{OTPPolicy: policy})
-
-	_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
-		TicketID: "reg_fixed123",
-		OTPCode:  "654321",
-		ClientIP: "127.0.0.1",
-	})
-	if !errors.Is(err, user.ErrInvalidOTPCode) {
-		t.Fatalf("expected invalid otp on first attempt, got %v", err)
-	}
-
-	_, err = service.VerifyRegister(context.Background(), VerifyRegisterInput{
-		TicketID: "reg_fixed123",
-		OTPCode:  "654321",
-		ClientIP: "127.0.0.1",
-	})
-	if !errors.Is(err, ErrVerifyRateLimited) {
-		t.Fatalf("expected ErrVerifyRateLimited, got %v", err)
-	}
-}
-
-func TestRegisterServiceRegistrationActionsShareIPScoreBudget(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{}
-	sender := &fakeOTPSender{}
-	policy := defaultOTPPolicy
-	policy.MaxPhoneRequests = 10
-	policy.MaxIPRequests = 2
-	service := NewServiceWithSettings(repo, store, sender, Settings{OTPPolicy: policy})
-	service.otpGenerator = func(int) (string, error) { return "123456", nil }
-	service.ticketGenerator = sequentialTicketGenerator("reg_a", "reg_b")
-	service.usernameGenerator = sequentialUsernameGenerator("user_a", "user_b")
-
-	_, err := service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562012345678",
-		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
-	})
-	if err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
-
-	_, err = service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
-		TicketID: "reg_missing_a",
-		ClientIP: "127.0.0.1",
-	})
-	if !errors.Is(err, user.ErrPendingRegistrationNotFound) {
-		t.Fatalf("expected missing registration after remaining score, got %v", err)
-	}
-
-	_, err = service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562098765432",
-		Password:    "secretpass",
-		ClientIP:    "127.0.0.1",
-	})
-	if !errors.Is(err, ErrRegisterRateLimited) {
-		t.Fatalf("expected ErrRegisterRateLimited after shared score budget, got %v", err)
-	}
-}
-
-func TestRegisterServiceUsesCustomIPScorePolicy(t *testing.T) {
-	repo := &fakeUserRepository{}
-	store := &fakeRegistrationStore{}
-	sender := &fakeOTPSender{}
-	policy := defaultOTPPolicy
-	policy.MaxPhoneRequests = 10
-	policy.MaxIPRequests = 3
-	service := NewServiceWithSettings(repo, store, sender, Settings{
-		OTPPolicy: policy,
-		IPScorePolicy: &IPScorePolicy{
-			PendingRegistration:    2,
-			ResendRegistration:     0.5,
-			InvalidVerification:    0.25,
-			SuccessfulVerification: -2.25,
-		},
-	})
-	service.otpGenerator = func(int) (string, error) { return "123456", nil }
-	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
-	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
-
-	clientIP := "127.0.0.1"
-	scoreKey := registerIPScoreKey(clientIP)
-	_, err := service.Register(context.Background(), RegisterInput{
-		PhoneNumber: "+8562012345678",
-		Password:    "secretpass",
-		ClientIP:    clientIP,
-	})
-	if err != nil {
-		t.Fatalf("unexpected register error: %v", err)
-	}
-	if got, want := store.scores[scoreKey], 2.0; got != want {
-		t.Fatalf("expected custom pending score %v, got %v", want, got)
-	}
-
-	_, err = service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
-		TicketID: "reg_missing",
-		ClientIP: clientIP,
-	})
-	if !errors.Is(err, user.ErrPendingRegistrationNotFound) {
-		t.Fatalf("expected missing registration after custom resend score, got %v", err)
-	}
-	if got, want := store.scores[scoreKey], 2.5; got != want {
-		t.Fatalf("expected custom resend score %v, got %v", want, got)
-	}
-
-	_, err = service.VerifyRegister(context.Background(), VerifyRegisterInput{
-		TicketID: "reg_fixed123",
-		OTPCode:  "654321",
-		ClientIP: clientIP,
-	})
-	if !errors.Is(err, user.ErrInvalidOTPCode) {
-		t.Fatalf("expected invalid otp after custom verify score, got %v", err)
-	}
-	if got, want := store.scores[scoreKey], 2.75; got != want {
-		t.Fatalf("expected custom invalid verification score %v, got %v", want, got)
-	}
-
-	_, err = service.VerifyRegister(context.Background(), VerifyRegisterInput{
-		TicketID: "reg_fixed123",
-		OTPCode:  "123456",
-		ClientIP: clientIP,
-	})
-	if err != nil {
-		t.Fatalf("unexpected successful verify error: %v", err)
-	}
-	if got, want := store.scores[scoreKey], 0.5; got != want {
-		t.Fatalf("expected custom successful verification score %v, got %v", want, got)
-	}
-}
-
 func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{
@@ -681,7 +431,6 @@ func TestRegisterServiceResendRegisterOTPRefreshesCodeAndExpiry(t *testing.T) {
 
 	result, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
 		TicketID: "reg_fixed123",
-		ClientIP: "127.0.0.1",
 	})
 	if err != nil {
 		t.Fatalf("ResendRegisterOTP returned error: %v", err)
@@ -753,7 +502,6 @@ func TestRegisterServiceResendRegisterOTPRestoresPreviousCodeWhenSMSFails(t *tes
 
 	_, err := service.ResendRegisterOTP(context.Background(), ResendRegisterOTPInput{
 		TicketID: "reg_fixed123",
-		ClientIP: "127.0.0.1",
 	})
 	if err == nil {
 		t.Fatal("expected sms failure")
@@ -893,62 +641,6 @@ func TestRegisterServiceVerifyRegisterCreatesUserAndDeletesCache(t *testing.T) {
 	}
 	if !containsString(store.deletedKeys, verifyAttemptKey(ticketID)) {
 		t.Fatalf("expected verify counter cleanup for %q", ticketID)
-	}
-}
-
-func TestRegisterServiceVerifyRegisterReducesIPScoreOnSuccess(t *testing.T) {
-	testCases := []struct {
-		name      string
-		score     float64
-		wantScore float64
-		wantKey   bool
-	}{
-		{name: "subtracts success score", score: 2, wantScore: 0.5, wantKey: true},
-		{name: "clamps at zero", score: 1, wantScore: 0, wantKey: false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			repo := &fakeUserRepository{}
-			clientIP := "127.0.0.1"
-			scoreKey := registerIPScoreKey(clientIP)
-			now := time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)
-			store := &fakeRegistrationStore{
-				values: map[string]*user.PendingRegistration{
-					"reg_fixed123": {
-						TicketID:     "reg_fixed123",
-						Username:     stringPtr("user_fixed123"),
-						PasswordHash: "hashed-password",
-						PhoneNumber:  "+8562012345678",
-						OTPCodeHash:  hashRegisterOTP("reg_fixed123", "123456"),
-						OTPExpiresAt: now.Add(time.Minute),
-						CreatedAt:    now.Add(-time.Minute),
-					},
-				},
-				scores: map[string]float64{
-					scoreKey: tc.score,
-				},
-			}
-			service := NewService(repo, store, &fakeOTPSender{})
-			service.now = func() time.Time { return now }
-
-			_, err := service.VerifyRegister(context.Background(), VerifyRegisterInput{
-				TicketID: "reg_fixed123",
-				OTPCode:  "123456",
-				ClientIP: clientIP,
-			})
-			if err != nil {
-				t.Fatalf("VerifyRegister returned error: %v", err)
-			}
-
-			got, ok := store.scores[scoreKey]
-			if ok != tc.wantKey {
-				t.Fatalf("expected score key presence %t, got %t", tc.wantKey, ok)
-			}
-			if got != tc.wantScore {
-				t.Fatalf("expected score %v, got %v", tc.wantScore, got)
-			}
-		})
 	}
 }
 

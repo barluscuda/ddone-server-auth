@@ -194,6 +194,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("security.otp.password_reset.max_ip_requests", 20)
 	viper.SetDefault("security.otp.password_reset.max_resends", 3)
 	viper.SetDefault("security.otp.password_reset.max_verify_attempts", 5)
+	viper.SetDefault("security.otp.password_reset.pending_ip_score", 1)
+	viper.SetDefault("security.otp.password_reset.resend_ip_score", 1)
+	viper.SetDefault("security.otp.password_reset.invalid_verify_ip_score", 1)
+	viper.SetDefault("security.otp.password_reset.success_verify_ip_score", -1.5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
 	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
@@ -283,6 +287,10 @@ func Load() (*Config, error) {
 	viper.BindEnv("security.otp.password_reset.max_ip_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_IP_REQUESTS")
 	viper.BindEnv("security.otp.password_reset.max_resends", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
 	viper.BindEnv("security.otp.password_reset.max_verify_attempts", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
+	viper.BindEnv("security.otp.password_reset.pending_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_PENDING_IP_SCORE")
+	viper.BindEnv("security.otp.password_reset.resend_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_RESEND_IP_SCORE")
+	viper.BindEnv("security.otp.password_reset.invalid_verify_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE")
+	viper.BindEnv("security.otp.password_reset.success_verify_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
 	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
@@ -401,13 +409,16 @@ func (c *Config) validate() error {
 	if err := validateOTPPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
 		return err
 	}
-	if err := validateRegisterIPScorePolicy("security.otp.register", c.Security.OTP.Register); err != nil {
+	if err := validateOTPIPScorePolicy("security.otp.register", c.Security.OTP.Register); err != nil {
 		return err
 	}
 	if err := validateRegisterSystemRateLimitPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
 		return err
 	}
 	if err := validateOTPPolicy("security.otp.password_reset", c.Security.OTP.PasswordReset); err != nil {
+		return err
+	}
+	if err := validateOTPIPScorePolicy("security.otp.password_reset", c.Security.OTP.PasswordReset); err != nil {
 		return err
 	}
 
@@ -513,7 +524,7 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	return nil
 }
 
-func validateRegisterIPScorePolicy(path string, cfg OTPPolicyConfig) error {
+func validateOTPIPScorePolicy(path string, cfg OTPPolicyConfig) error {
 	scoreFields := map[string]float64{
 		"pending_ip_score":        cfg.PendingIPScore,
 		"resend_ip_score":         cfg.ResendIPScore,

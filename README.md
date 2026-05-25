@@ -32,7 +32,7 @@ The service uses:
 
 - `gin` for HTTP delivery
 - `gorm` + PostgreSQL for persistent user storage
-- `redis` for pending registration state, password-reset state, OTP counters, and read-through caches
+- `redis` for pending registration state, password-reset state, OTP counters, middleware spam scores, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
 
@@ -308,6 +308,10 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
+DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE=-1.5
 
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
@@ -340,7 +344,7 @@ Safe defaults:
 - `app.max_request_body_bytes` defaults to `1048576`
 - bot protection defaults to `60` public auth requests per IP per `1m`, followed by a `5m` temporary block
 - login rate limiting defaults to `5` failed attempts per `5m` window, followed by a `15m` account lock
-- OTP rate-limit and resend rules default to the values shown in `config/config.yaml`
+- OTP flow limits and middleware spam-score rules default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
 
 `DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_SECURITY_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.

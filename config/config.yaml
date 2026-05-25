@@ -75,6 +75,10 @@ security:
       max_ip_requests: 20
       max_resends: 3
       max_verify_attempts: 5
+      pending_ip_score: 1
+      resend_ip_score: 1
+      invalid_verify_ip_score: 1
+      success_verify_ip_score: -1.5
   auth:
     issuer: ddone-server-auth
     audience: ddone-clients

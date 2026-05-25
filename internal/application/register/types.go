@@ -17,7 +17,6 @@ type UseCase interface {
 type RegisterInput struct {
 	PhoneNumber string
 	Password    string
-	ClientIP    string
 }
 
 type RegisterResult struct {
@@ -29,15 +28,7 @@ type RegisterResult struct {
 
 type Settings struct {
 	OTPPolicy             otp.Policy
-	IPScorePolicy         *IPScorePolicy
 	SystemRateLimitPolicy *SystemRateLimitPolicy
-}
-
-type IPScorePolicy struct {
-	PendingRegistration    float64
-	ResendRegistration     float64
-	InvalidVerification    float64
-	SuccessfulVerification float64
 }
 
 type SystemRateLimitPolicy struct {
@@ -47,11 +38,9 @@ type SystemRateLimitPolicy struct {
 
 type ResendRegisterOTPInput struct {
 	TicketID string
-	ClientIP string
 }
 
 type VerifyRegisterInput struct {
 	TicketID string
 	OTPCode  string
-	ClientIP string
 }

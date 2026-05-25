@@ -72,6 +72,10 @@ func (f *fakeResetStore) Delete(_ context.Context, ticketID string) error {
 }
 
 func (f *fakeResetStore) IncrementCounter(_ context.Context, key string, _ time.Duration) (int64, error) {
+	if f.counters == nil {
+		f.counters = map[string]int64{}
+	}
+
 	f.counters[key]++
 	return f.counters[key], nil
 }
@@ -191,49 +195,39 @@ func TestForgotPasswordRejectsPasswordCooldown(t *testing.T) {
 	}
 }
 
-func TestForgotPasswordRateLimitsByIP(t *testing.T) {
+func TestForgotPasswordRateLimitsByPhoneNumber(t *testing.T) {
 	hashed, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	firstUser := &user.User{
+	userModel := &user.User{
 		ID:           "user-1",
 		PhoneNumber:  "+8562012345678",
 		PasswordHash: string(hashed),
 	}
-	secondUser := &user.User{
-		ID:           "user-2",
-		PhoneNumber:  "+8562098765432",
-		PasswordHash: string(hashed),
-	}
 	users := &fakeUserStore{
 		byID: map[string]*user.User{
-			firstUser.ID:  firstUser,
-			secondUser.ID: secondUser,
+			userModel.ID: userModel,
 		},
 		byPhone: map[string]*user.User{
-			firstUser.PhoneNumber:  firstUser,
-			secondUser.PhoneNumber: secondUser,
+			userModel.PhoneNumber: userModel,
 		},
 	}
 	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
 	policy := defaultOTPPolicy
-	policy.MaxPhoneRequests = 10
-	policy.MaxIPRequests = 1
+	policy.MaxPhoneRequests = 1
 	service := NewServiceWithSettings(users, store, &fakeSender{}, &fakeRevoker{}, &fakeRevoker{}, Settings{OTPPolicy: policy})
 
 	_, err = service.ForgotPassword(context.Background(), ForgotPasswordInput{
-		PhoneNumber: firstUser.PhoneNumber,
-		ClientIP:    "127.0.0.1",
+		PhoneNumber: userModel.PhoneNumber,
 	})
 	if err != nil {
 		t.Fatalf("unexpected forgot password error on first attempt: %v", err)
 	}
 
 	_, err = service.ForgotPassword(context.Background(), ForgotPasswordInput{
-		PhoneNumber: secondUser.PhoneNumber,
-		ClientIP:    "127.0.0.1",
+		PhoneNumber: userModel.PhoneNumber,
 	})
 	if !errors.Is(err, ErrResetRateLimited) {
 		t.Fatalf("expected ErrResetRateLimited, got %v", err)

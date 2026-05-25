@@ -181,6 +181,16 @@ func TestValidateRejectsInfiniteOTPRegisterIPScore(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInfiniteOTPPasswordResetIPScore(t *testing.T) {
+	cfg := validConfig()
+	cfg.Security.OTP.PasswordReset.InvalidVerifyIPScore = math.Inf(1)
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject infinite password reset otp ip score")
+	}
+}
+
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000

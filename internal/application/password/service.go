@@ -108,7 +108,7 @@ func (s *Service) ForgotPassword(
 	if globalPhoneNumber == "" {
 		return nil, ErrPhoneNumberRequired
 	}
-	if err := s.enforceResetRateLimits(ctx, globalPhoneNumber, input.ClientIP); err != nil {
+	if err := s.enforceResetRateLimits(ctx, globalPhoneNumber); err != nil {
 		return nil, err
 	}
 
@@ -367,18 +367,7 @@ func (s *Service) revokeSessions(ctx context.Context, userID string, reason stri
 	return nil
 }
 
-func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string, clientIP string) error {
-	clientIP = strings.TrimSpace(clientIP)
-	if clientIP != "" {
-		ipCount, err := s.store.IncrementCounter(ctx, resetIPRateKey(clientIP), s.otpPolicy.IPWindow)
-		if err != nil {
-			return err
-		}
-		if ipCount > int64(s.otpPolicy.MaxIPRequests) {
-			return ErrResetRateLimited
-		}
-	}
-
+func (s *Service) enforceResetRateLimits(ctx context.Context, phoneNumber string) error {
 	count, err := s.store.IncrementCounter(ctx, resetPhoneRateKey(phoneNumber), s.otpPolicy.PhoneWindow)
 	if err != nil {
 		return err
@@ -428,10 +417,6 @@ func matchResetOTP(expectedHash string, ticketID string, otpCode string) bool {
 
 func resetPhoneRateKey(phoneNumber string) string {
 	return fmt.Sprintf("password_reset:phone:%s", phoneNumber)
-}
-
-func resetIPRateKey(clientIP string) string {
-	return fmt.Sprintf("password_reset:ip:%s", clientIP)
 }
 
 func resetVerifyAttemptKey(ticketID string) string {

@@ -48,13 +48,6 @@ var defaultOTPPolicy = otp.Policy{
 	MaxVerifyAttempts:   5,
 }
 
-var defaultIPScorePolicy = IPScorePolicy{
-	PendingRegistration:    1,
-	ResendRegistration:     1,
-	InvalidVerification:    1,
-	SuccessfulVerification: -1.5,
-}
-
 var defaultSystemRateLimitPolicy = SystemRateLimitPolicy{
 	Window:      10 * time.Minute,
 	MaxRequests: 30,
@@ -65,7 +58,6 @@ type Service struct {
 	store                 RegistrationStore
 	sender                OTPSender
 	otpPolicy             otp.Policy
-	ipScorePolicy         IPScorePolicy
 	systemRateLimitPolicy SystemRateLimitPolicy
 	now                   func() time.Time
 	otpGenerator          func(int) (string, error)
@@ -88,10 +80,6 @@ func NewServiceWithSettings(
 	sender OTPSender,
 	settings Settings,
 ) *Service {
-	ipScorePolicy := defaultIPScorePolicy
-	if settings.IPScorePolicy != nil {
-		ipScorePolicy = *settings.IPScorePolicy
-	}
 	systemRateLimitPolicy := defaultSystemRateLimitPolicy
 	if settings.SystemRateLimitPolicy != nil {
 		systemRateLimitPolicy = systemRateLimitPolicyWithDefaults(*settings.SystemRateLimitPolicy)
@@ -102,7 +90,6 @@ func NewServiceWithSettings(
 		store:                 store,
 		sender:                sender,
 		otpPolicy:             settings.OTPPolicy.WithDefaults(defaultOTPPolicy),
-		ipScorePolicy:         ipScorePolicy,
 		systemRateLimitPolicy: systemRateLimitPolicy,
 		now:                   func() time.Time { return time.Now().UTC() },
 		otpGenerator:          GenerateOTP,
@@ -127,7 +114,7 @@ func (s *Service) Register(
 	if strings.TrimSpace(input.Password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber, input.ClientIP); err != nil {
+	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber); err != nil {
 		return nil, err
 	}
 
@@ -217,10 +204,6 @@ func (s *Service) VerifyRegister(
 	}
 
 	if !matchRegisterOTP(pendingRegistration.OTPCodeHash, ticketID, otpCode) {
-		if err := s.enforceInvalidVerifyRateLimits(ctx, input.ClientIP); err != nil {
-			return nil, err
-		}
-
 		attempts, err := s.store.IncrementCounter(ctx, verifyAttemptKey(ticketID), s.otpPolicy.VerifyAttemptWindow)
 		if err != nil {
 			return nil, err
@@ -278,7 +261,6 @@ func (s *Service) VerifyRegister(
 	if err := s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID)); err != nil {
 		return nil, err
 	}
-	_, _ = s.adjustIPScore(ctx, input.ClientIP, s.ipScorePolicy.SuccessfulVerification)
 
 	return userModel, nil
 }
@@ -290,9 +272,6 @@ func (s *Service) ResendRegisterOTP(
 	ticketID := strings.TrimSpace(input.TicketID)
 	if ticketID == "" {
 		return nil, ErrRegisterTicketRequired
-	}
-	if err := s.enforceResendRateLimits(ctx, input.ClientIP); err != nil {
-		return nil, err
 	}
 
 	pendingRegistration, err := s.store.Get(ctx, ticketID)
@@ -370,10 +349,7 @@ func (s *Service) ResendRegisterOTP(
 	}, nil
 }
 
-func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string, clientIP string) error {
-	if err := s.enforceIPScoreLimit(ctx, clientIP, s.ipScorePolicy.PendingRegistration, ErrRegisterRateLimited); err != nil {
-		return err
-	}
+func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {
 	if err := s.enforceSystemRegisterRateLimit(ctx); err != nil {
 		return err
 	}
@@ -403,40 +379,6 @@ func (s *Service) enforceSystemRegisterRateLimit(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (s *Service) enforceResendRateLimits(ctx context.Context, clientIP string) error {
-	return s.enforceIPScoreLimit(ctx, clientIP, s.ipScorePolicy.ResendRegistration, ErrResendRateLimited)
-}
-
-func (s *Service) enforceInvalidVerifyRateLimits(ctx context.Context, clientIP string) error {
-	return s.enforceIPScoreLimit(ctx, clientIP, s.ipScorePolicy.InvalidVerification, ErrVerifyRateLimited)
-}
-
-func (s *Service) enforceIPScoreLimit(
-	ctx context.Context,
-	clientIP string,
-	score float64,
-	limitErr error,
-) error {
-	currentScore, err := s.adjustIPScore(ctx, clientIP, score)
-	if err != nil {
-		return err
-	}
-	if currentScore > float64(s.otpPolicy.MaxIPRequests) {
-		return limitErr
-	}
-
-	return nil
-}
-
-func (s *Service) adjustIPScore(ctx context.Context, clientIP string, score float64) (float64, error) {
-	clientIP = strings.TrimSpace(clientIP)
-	if clientIP == "" || score == 0 {
-		return 0, nil
-	}
-
-	return s.store.AdjustScore(ctx, registerIPScoreKey(clientIP), score, s.otpPolicy.IPWindow)
 }
 
 func (s *Service) generateUniqueUsername(ctx context.Context) (*string, error) {
@@ -518,10 +460,6 @@ func registerPhoneRateKey(phoneNumber string) string {
 
 func registerSystemRateKey() string {
 	return "register:rate:system"
-}
-
-func registerIPScoreKey(clientIP string) string {
-	return fmt.Sprintf("register:score:ip:%s", clientIP)
 }
 
 func verifyAttemptKey(ticketID string) string {

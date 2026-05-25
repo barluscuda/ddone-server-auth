@@ -28,7 +28,7 @@ The service is moving toward hexagonal architecture:
 - Change authenticated-user passwords.
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
-- Run request body limits, bot protection, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
+- Run request body limits, bot protection, OTP spam detection, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
 
 ## 3. Main Dependencies
 
@@ -36,7 +36,7 @@ The service is moving toward hexagonal architecture:
 - Gin for HTTP delivery
 - GORM for PostgreSQL persistence
 - PostgreSQL 17 in local Docker, with `pgcrypto` for UUID generation
-- Redis 7 for pending OTP state, counters, and read-through caches
+- Redis 7 for pending OTP state, counters, scores, and read-through caches
 - Wenova SMS API for OTP delivery
 - Zap for structured logging
 - Viper and godotenv for config
@@ -69,7 +69,7 @@ internal/application/jwks/       Signing-key lifecycle and public JWKS orchestra
 internal/application/otp/        Shared OTP policy values
 
 internal/adapters/handler/       Gin HTTP handlers
-internal/adapters/middleware/    Body limits, bot protection, CORS, auth, session, logging, recovery, 404/405
+internal/adapters/middleware/    Body limits, bot protection, OTP spam detection, CORS, auth, session, logging, recovery, 404/405
 internal/adapters/dto/           HTTP request/response DTOs
 internal/adapters/repository/    GORM repositories and table row types
 internal/adapters/cache/         Redis stores and read-through cache decorators
@@ -101,7 +101,7 @@ Owns phone registration:
 - Reject already registered phone numbers.
 - Generate default usernames.
 - Hash passwords and OTP codes.
-- Enforce OTP phone-window, IP-window, resend, cooldown, and verify-attempt limits.
+- Enforce OTP phone-window, resend, cooldown, and verify-attempt flow limits.
 - Store pending registrations in Redis through a port.
 - Send OTP through an SMS port.
 - Create users after successful OTP verification.
@@ -168,6 +168,7 @@ Owns password reset and password change:
 - Start password reset by phone number.
 - Resend password-reset OTP.
 - Verify OTP and update password.
+- Enforce password-reset OTP phone-window, resend, cooldown, and verify-attempt flow limits.
 - Verify current password for authenticated password changes.
 - Revoke refresh tokens and login sessions after password reset or password change.
 
@@ -286,17 +287,27 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Registration and password reset use separate OTP policies.
 - Default OTP TTL is `5m`.
 - Default system-wide registration start limit is `30` requests per `10m`.
+- OTP spam detection runs in middleware before OTP handlers.
+- The middleware classifies OTP clients as likely user, suspicious, or likely bot from request metadata and body shape without storing raw request bodies.
+- Bot-like signals such as automation user agents, missing user agents, malformed OTP fields, and unexpected content types add risk to the request's IP score.
+- Likely browser traffic with normal JSON headers gets a lower request score.
 - Default registration IP score budget is `20` points per `10m`.
-- Pending registration and registration resend requests add `1` IP score point.
+- Pending registration and registration resend requests add `1` base IP score point before classifier risk is applied.
 - Successful registration verification subtracts `1.5` IP score points, clamped at `0`.
-- Invalid registration OTP verification adds `1` IP score point.
-- Registration IP scores over `20` are rate-limited until the score key expires.
+- Invalid registration OTP verification adds `1` IP score point after the handler returns `invalid_otp_code`.
+- Registration IP scores over `20` are rate-limited by middleware until the score key expires.
+- Default password-reset IP score budget is `20` points per `5m`.
+- Password-reset start and resend requests add `1` base IP score point before classifier risk is applied.
+- Invalid password-reset OTP verification adds `1` IP score point after the handler returns `invalid_otp_code`.
+- Successful password-reset verification subtracts `1.5` IP score points, clamped at `0`.
+- Password-reset IP scores over `20` are rate-limited by middleware until the score key expires.
 - System-wide registration start limits are configurable with `DDONE_SECURITY_OTP_REGISTER_SYSTEM_WINDOW` and `DDONE_SECURITY_OTP_REGISTER_MAX_SYSTEM_REQUESTS`.
 - Registration IP score deltas are configurable with `DDONE_SECURITY_OTP_REGISTER_PENDING_IP_SCORE`, `DDONE_SECURITY_OTP_REGISTER_RESEND_IP_SCORE`, `DDONE_SECURITY_OTP_REGISTER_INVALID_VERIFY_IP_SCORE`, and `DDONE_SECURITY_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE`.
+- Password-reset IP score deltas are configurable with `DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE`, `DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE`, `DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE`, and `DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE`.
 - Default resend cooldown is `60s`.
 - Default maximum resends is `3`.
 - Default maximum verification attempts is `5`.
-- Rate-limit counters and score state live in Redis.
+- OTP rate-limit counters and score state live in Redis.
 
 ### Bot Protection
 
@@ -388,7 +399,7 @@ Local Docker initializes this through `db/init/001_pgcrypto.sql` only when the P
 
 ### Redis Data
 
-Redis is used for pending state, counters, and read-through caches.
+Redis is used for pending state, counters, OTP risk scores, and read-through caches.
 
 Known key families:
 
@@ -397,9 +408,12 @@ Known key families:
 - `register:rate:system`
 - `register:score:ip:<clientIp>`
 - `register:verify:attempts:<ticketId>`
+- `otp_spam:register:phone:<phoneHash>`
 - `password_reset:ticket:<ticketId>`
 - `password_reset:phone:<phoneNumber>`
 - `password_reset:ip:<clientIp>`
+- `password_reset:verify:<ticketId>`
+- `otp_spam:password_reset:phone:<phoneHash>`
 - `cache:user:id:<userId>`
 - `cache:user:phone:<phoneNumber>`
 - `cache:user:username:<username>`
@@ -411,7 +425,7 @@ Known key families:
 - `cache:login_sessions:user:<userId>`
 - `cache:signing_keys:public:v1`
 
-Login and OTP rate-limit keys are generated by the corresponding application services and stored through Redis-backed ports.
+Login and OTP flow-limit keys are generated by the corresponding application services and stored through Redis-backed ports. OTP spam score keys are generated by HTTP middleware and stored through the Redis OTP spam adapter.
 
 ## 11. Configuration
 
@@ -508,6 +522,10 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS=20
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
+DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE=1
+DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE=-1.5
 
 DDONE_SECURITY_AUTH_ISSUER=ddone-server-auth
 DDONE_SECURITY_AUTH_AUDIENCE=ddone-clients
@@ -553,7 +571,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 14. Start the HTTP server.
 15. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits and bot protection before public auth handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits and bot protection before public auth handlers, and applies OTP spam detection middleware on registration and password-reset OTP routes. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 
