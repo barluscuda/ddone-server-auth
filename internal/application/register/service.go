@@ -39,11 +39,9 @@ var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a 
 var defaultOTPPolicy = otp.Policy{
 	TTL:                 5 * time.Minute,
 	PhoneWindow:         5 * time.Minute,
-	IPWindow:            10 * time.Minute,
 	ResendCooldown:      60 * time.Second,
 	VerifyAttemptWindow: 5 * time.Minute,
 	MaxPhoneRequests:    1,
-	MaxIPRequests:       20,
 	MaxResends:          3,
 	MaxVerifyAttempts:   5,
 }

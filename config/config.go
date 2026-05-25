@@ -66,29 +66,45 @@ type WenovaAPIConfig struct {
 }
 
 type SecurityConfig struct {
-	Login LoginConfig         `mapstructure:"login"`
-	OTP   OTPConfig           `mapstructure:"otp"`
-	Auth  AuthConfig          `mapstructure:"auth"`
-	Bot   BotProtectionConfig `mapstructure:"bot"`
+	Login   LoginConfig         `mapstructure:"login"`
+	OTP     OTPConfig           `mapstructure:"otp"`
+	OTPSpam OTPSpamConfig       `mapstructure:"otp_spam"`
+	Auth    AuthConfig          `mapstructure:"auth"`
+	Bot     BotProtectionConfig `mapstructure:"bot"`
 }
 
 type OTPConfig struct {
-	Register      OTPPolicyConfig `mapstructure:"register"`
-	PasswordReset OTPPolicyConfig `mapstructure:"password_reset"`
+	Register      RegisterOTPPolicyConfig `mapstructure:"register"`
+	PasswordReset OTPPolicyConfig         `mapstructure:"password_reset"`
 }
 
 type OTPPolicyConfig struct {
-	TTL                  time.Duration `mapstructure:"ttl"`
+	TTL                 time.Duration `mapstructure:"ttl"`
+	PhoneWindow         time.Duration `mapstructure:"phone_window"`
+	ResendCooldown      time.Duration `mapstructure:"resend_cooldown"`
+	VerifyAttemptWindow time.Duration `mapstructure:"verify_attempt_window"`
+	MaxPhoneRequests    int           `mapstructure:"max_phone_requests"`
+	MaxResends          int           `mapstructure:"max_resends"`
+	MaxVerifyAttempts   int           `mapstructure:"max_verify_attempts"`
+}
+
+type RegisterOTPPolicyConfig struct {
+	OTPPolicyConfig   `mapstructure:",squash"`
+	SystemWindow      time.Duration `mapstructure:"system_window"`
+	MaxSystemRequests int           `mapstructure:"max_system_requests"`
+}
+
+type OTPSpamConfig struct {
+	Enabled       bool              `mapstructure:"enabled"`
+	Register      OTPSpamFlowConfig `mapstructure:"register"`
+	PasswordReset OTPSpamFlowConfig `mapstructure:"password_reset"`
+}
+
+type OTPSpamFlowConfig struct {
 	PhoneWindow          time.Duration `mapstructure:"phone_window"`
 	IPWindow             time.Duration `mapstructure:"ip_window"`
-	SystemWindow         time.Duration `mapstructure:"system_window"`
-	ResendCooldown       time.Duration `mapstructure:"resend_cooldown"`
-	VerifyAttemptWindow  time.Duration `mapstructure:"verify_attempt_window"`
 	MaxPhoneRequests     int           `mapstructure:"max_phone_requests"`
-	MaxIPRequests        int           `mapstructure:"max_ip_requests"`
-	MaxSystemRequests    int           `mapstructure:"max_system_requests"`
-	MaxResends           int           `mapstructure:"max_resends"`
-	MaxVerifyAttempts    int           `mapstructure:"max_verify_attempts"`
+	MaxIPScore           int           `mapstructure:"max_ip_score"`
 	PendingIPScore       float64       `mapstructure:"pending_ip_score"`
 	ResendIPScore        float64       `mapstructure:"resend_ip_score"`
 	InvalidVerifyIPScore float64       `mapstructure:"invalid_verify_ip_score"`
@@ -172,32 +188,37 @@ func Load() (*Config, error) {
 	viper.SetDefault("security.bot.block_duration", "5m")
 	viper.SetDefault("security.otp.register.ttl", "5m")
 	viper.SetDefault("security.otp.register.phone_window", "5m")
-	viper.SetDefault("security.otp.register.ip_window", "10m")
 	viper.SetDefault("security.otp.register.system_window", "10m")
 	viper.SetDefault("security.otp.register.resend_cooldown", "60s")
 	viper.SetDefault("security.otp.register.verify_attempt_window", "5m")
 	viper.SetDefault("security.otp.register.max_phone_requests", 1)
-	viper.SetDefault("security.otp.register.max_ip_requests", 20)
 	viper.SetDefault("security.otp.register.max_system_requests", 30)
 	viper.SetDefault("security.otp.register.max_resends", 3)
 	viper.SetDefault("security.otp.register.max_verify_attempts", 5)
-	viper.SetDefault("security.otp.register.pending_ip_score", 1)
-	viper.SetDefault("security.otp.register.resend_ip_score", 1)
-	viper.SetDefault("security.otp.register.invalid_verify_ip_score", 1)
-	viper.SetDefault("security.otp.register.success_verify_ip_score", -1.5)
 	viper.SetDefault("security.otp.password_reset.ttl", "5m")
 	viper.SetDefault("security.otp.password_reset.phone_window", "5m")
-	viper.SetDefault("security.otp.password_reset.ip_window", "5m")
 	viper.SetDefault("security.otp.password_reset.resend_cooldown", "60s")
 	viper.SetDefault("security.otp.password_reset.verify_attempt_window", "5m")
 	viper.SetDefault("security.otp.password_reset.max_phone_requests", 1)
-	viper.SetDefault("security.otp.password_reset.max_ip_requests", 20)
 	viper.SetDefault("security.otp.password_reset.max_resends", 3)
 	viper.SetDefault("security.otp.password_reset.max_verify_attempts", 5)
-	viper.SetDefault("security.otp.password_reset.pending_ip_score", 1)
-	viper.SetDefault("security.otp.password_reset.resend_ip_score", 1)
-	viper.SetDefault("security.otp.password_reset.invalid_verify_ip_score", 1)
-	viper.SetDefault("security.otp.password_reset.success_verify_ip_score", -1.5)
+	viper.SetDefault("security.otp_spam.enabled", true)
+	viper.SetDefault("security.otp_spam.register.phone_window", "5m")
+	viper.SetDefault("security.otp_spam.register.ip_window", "10m")
+	viper.SetDefault("security.otp_spam.register.max_phone_requests", 1)
+	viper.SetDefault("security.otp_spam.register.max_ip_score", 20)
+	viper.SetDefault("security.otp_spam.register.pending_ip_score", 1)
+	viper.SetDefault("security.otp_spam.register.resend_ip_score", 1)
+	viper.SetDefault("security.otp_spam.register.invalid_verify_ip_score", 1)
+	viper.SetDefault("security.otp_spam.register.success_verify_ip_score", -1.5)
+	viper.SetDefault("security.otp_spam.password_reset.phone_window", "5m")
+	viper.SetDefault("security.otp_spam.password_reset.ip_window", "5m")
+	viper.SetDefault("security.otp_spam.password_reset.max_phone_requests", 1)
+	viper.SetDefault("security.otp_spam.password_reset.max_ip_score", 20)
+	viper.SetDefault("security.otp_spam.password_reset.pending_ip_score", 1)
+	viper.SetDefault("security.otp_spam.password_reset.resend_ip_score", 1)
+	viper.SetDefault("security.otp_spam.password_reset.invalid_verify_ip_score", 1)
+	viper.SetDefault("security.otp_spam.password_reset.success_verify_ip_score", -1.5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
 	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
@@ -265,32 +286,37 @@ func Load() (*Config, error) {
 	viper.BindEnv("security.bot.block_duration", "DDONE_SECURITY_BOT_BLOCK_DURATION", "DDONE_BOT_PROTECTION_BLOCK_DURATION")
 	viper.BindEnv("security.otp.register.ttl", "DDONE_SECURITY_OTP_REGISTER_TTL", "DDONE_OTP_REGISTER_TTL")
 	viper.BindEnv("security.otp.register.phone_window", "DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW", "DDONE_OTP_REGISTER_PHONE_WINDOW")
-	viper.BindEnv("security.otp.register.ip_window", "DDONE_SECURITY_OTP_REGISTER_IP_WINDOW", "DDONE_OTP_REGISTER_IP_WINDOW")
 	viper.BindEnv("security.otp.register.system_window", "DDONE_SECURITY_OTP_REGISTER_SYSTEM_WINDOW", "DDONE_OTP_REGISTER_SYSTEM_WINDOW")
 	viper.BindEnv("security.otp.register.resend_cooldown", "DDONE_SECURITY_OTP_REGISTER_RESEND_COOLDOWN", "DDONE_OTP_REGISTER_RESEND_COOLDOWN")
 	viper.BindEnv("security.otp.register.verify_attempt_window", "DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW")
 	viper.BindEnv("security.otp.register.max_phone_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
-	viper.BindEnv("security.otp.register.max_ip_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS", "DDONE_OTP_REGISTER_MAX_IP_REQUESTS")
 	viper.BindEnv("security.otp.register.max_system_requests", "DDONE_SECURITY_OTP_REGISTER_MAX_SYSTEM_REQUESTS", "DDONE_OTP_REGISTER_MAX_SYSTEM_REQUESTS")
 	viper.BindEnv("security.otp.register.max_resends", "DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS", "DDONE_OTP_REGISTER_MAX_RESENDS")
 	viper.BindEnv("security.otp.register.max_verify_attempts", "DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_REGISTER_MAX_VERIFY_ATTEMPTS")
-	viper.BindEnv("security.otp.register.pending_ip_score", "DDONE_SECURITY_OTP_REGISTER_PENDING_IP_SCORE", "DDONE_OTP_REGISTER_PENDING_IP_SCORE")
-	viper.BindEnv("security.otp.register.resend_ip_score", "DDONE_SECURITY_OTP_REGISTER_RESEND_IP_SCORE", "DDONE_OTP_REGISTER_RESEND_IP_SCORE")
-	viper.BindEnv("security.otp.register.invalid_verify_ip_score", "DDONE_SECURITY_OTP_REGISTER_INVALID_VERIFY_IP_SCORE", "DDONE_OTP_REGISTER_INVALID_VERIFY_IP_SCORE")
-	viper.BindEnv("security.otp.register.success_verify_ip_score", "DDONE_SECURITY_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE", "DDONE_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE")
 	viper.BindEnv("security.otp.password_reset.ttl", "DDONE_SECURITY_OTP_PASSWORD_RESET_TTL", "DDONE_OTP_PASSWORD_RESET_TTL")
 	viper.BindEnv("security.otp.password_reset.phone_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
-	viper.BindEnv("security.otp.password_reset.ip_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_IP_WINDOW", "DDONE_OTP_PASSWORD_RESET_IP_WINDOW")
 	viper.BindEnv("security.otp.password_reset.resend_cooldown", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN", "DDONE_OTP_PASSWORD_RESET_RESEND_COOLDOWN")
 	viper.BindEnv("security.otp.password_reset.verify_attempt_window", "DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW", "DDONE_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW")
 	viper.BindEnv("security.otp.password_reset.max_phone_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
-	viper.BindEnv("security.otp.password_reset.max_ip_requests", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_IP_REQUESTS")
 	viper.BindEnv("security.otp.password_reset.max_resends", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS", "DDONE_OTP_PASSWORD_RESET_MAX_RESENDS")
 	viper.BindEnv("security.otp.password_reset.max_verify_attempts", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS", "DDONE_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS")
-	viper.BindEnv("security.otp.password_reset.pending_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_PENDING_IP_SCORE")
-	viper.BindEnv("security.otp.password_reset.resend_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_RESEND_IP_SCORE")
-	viper.BindEnv("security.otp.password_reset.invalid_verify_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE")
-	viper.BindEnv("security.otp.password_reset.success_verify_ip_score", "DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE")
+	viper.BindEnv("security.otp_spam.enabled", "DDONE_SECURITY_OTP_SPAM_ENABLED")
+	viper.BindEnv("security.otp_spam.register.phone_window", "DDONE_SECURITY_OTP_SPAM_REGISTER_PHONE_WINDOW", "DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW", "DDONE_OTP_REGISTER_PHONE_WINDOW")
+	viper.BindEnv("security.otp_spam.register.ip_window", "DDONE_SECURITY_OTP_SPAM_REGISTER_IP_WINDOW", "DDONE_SECURITY_OTP_REGISTER_IP_WINDOW", "DDONE_OTP_REGISTER_IP_WINDOW")
+	viper.BindEnv("security.otp_spam.register.max_phone_requests", "DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_PHONE_REQUESTS", "DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS", "DDONE_OTP_REGISTER_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp_spam.register.max_ip_score", "DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_IP_SCORE", "DDONE_SECURITY_OTP_REGISTER_MAX_IP_REQUESTS", "DDONE_OTP_REGISTER_MAX_IP_REQUESTS")
+	viper.BindEnv("security.otp_spam.register.pending_ip_score", "DDONE_SECURITY_OTP_SPAM_REGISTER_PENDING_IP_SCORE", "DDONE_SECURITY_OTP_REGISTER_PENDING_IP_SCORE", "DDONE_OTP_REGISTER_PENDING_IP_SCORE")
+	viper.BindEnv("security.otp_spam.register.resend_ip_score", "DDONE_SECURITY_OTP_SPAM_REGISTER_RESEND_IP_SCORE", "DDONE_SECURITY_OTP_REGISTER_RESEND_IP_SCORE", "DDONE_OTP_REGISTER_RESEND_IP_SCORE")
+	viper.BindEnv("security.otp_spam.register.invalid_verify_ip_score", "DDONE_SECURITY_OTP_SPAM_REGISTER_INVALID_VERIFY_IP_SCORE", "DDONE_SECURITY_OTP_REGISTER_INVALID_VERIFY_IP_SCORE", "DDONE_OTP_REGISTER_INVALID_VERIFY_IP_SCORE")
+	viper.BindEnv("security.otp_spam.register.success_verify_ip_score", "DDONE_SECURITY_OTP_SPAM_REGISTER_SUCCESS_VERIFY_IP_SCORE", "DDONE_SECURITY_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE", "DDONE_OTP_REGISTER_SUCCESS_VERIFY_IP_SCORE")
+	viper.BindEnv("security.otp_spam.password_reset.phone_window", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PHONE_WINDOW", "DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW", "DDONE_OTP_PASSWORD_RESET_PHONE_WINDOW")
+	viper.BindEnv("security.otp_spam.password_reset.ip_window", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_IP_WINDOW", "DDONE_SECURITY_OTP_PASSWORD_RESET_IP_WINDOW", "DDONE_OTP_PASSWORD_RESET_IP_WINDOW")
+	viper.BindEnv("security.otp_spam.password_reset.max_phone_requests", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_PHONE_REQUESTS", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS")
+	viper.BindEnv("security.otp_spam.password_reset.max_ip_score", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_IP_SCORE", "DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_IP_REQUESTS", "DDONE_OTP_PASSWORD_RESET_MAX_IP_REQUESTS")
+	viper.BindEnv("security.otp_spam.password_reset.pending_ip_score", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PENDING_IP_SCORE", "DDONE_SECURITY_OTP_PASSWORD_RESET_PENDING_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_PENDING_IP_SCORE")
+	viper.BindEnv("security.otp_spam.password_reset.resend_ip_score", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_RESEND_IP_SCORE", "DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_RESEND_IP_SCORE")
+	viper.BindEnv("security.otp_spam.password_reset.invalid_verify_ip_score", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE", "DDONE_SECURITY_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE")
+	viper.BindEnv("security.otp_spam.password_reset.success_verify_ip_score", "DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE", "DDONE_SECURITY_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE", "DDONE_OTP_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE")
 	viper.BindEnv("cors.allowed_origins", "DDONE_CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("cors.allowed_methods", "DDONE_CORS_ALLOWED_METHODS")
 	viper.BindEnv("cors.allowed_headers", "DDONE_CORS_ALLOWED_HEADERS")
@@ -406,10 +432,7 @@ func (c *Config) validate() error {
 			return fmt.Errorf("security.bot.block_duration must be greater than 0 when security.bot.enabled is true")
 		}
 	}
-	if err := validateOTPPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
-		return err
-	}
-	if err := validateOTPIPScorePolicy("security.otp.register", c.Security.OTP.Register); err != nil {
+	if err := validateOTPPolicy("security.otp.register", c.Security.OTP.Register.OTPPolicyConfig); err != nil {
 		return err
 	}
 	if err := validateRegisterSystemRateLimitPolicy("security.otp.register", c.Security.OTP.Register); err != nil {
@@ -418,7 +441,7 @@ func (c *Config) validate() error {
 	if err := validateOTPPolicy("security.otp.password_reset", c.Security.OTP.PasswordReset); err != nil {
 		return err
 	}
-	if err := validateOTPIPScorePolicy("security.otp.password_reset", c.Security.OTP.PasswordReset); err != nil {
+	if err := validateOTPSpamConfig(c.Security.OTPSpam); err != nil {
 		return err
 	}
 
@@ -499,9 +522,6 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	if cfg.PhoneWindow <= 0 {
 		return fmt.Errorf("%s.phone_window must be greater than 0", path)
 	}
-	if cfg.IPWindow <= 0 {
-		return fmt.Errorf("%s.ip_window must be greater than 0", path)
-	}
 	if cfg.ResendCooldown <= 0 {
 		return fmt.Errorf("%s.resend_cooldown must be greater than 0", path)
 	}
@@ -510,9 +530,6 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	}
 	if cfg.MaxPhoneRequests <= 0 {
 		return fmt.Errorf("%s.max_phone_requests must be greater than 0", path)
-	}
-	if cfg.MaxIPRequests <= 0 {
-		return fmt.Errorf("%s.max_ip_requests must be greater than 0", path)
 	}
 	if cfg.MaxResends <= 0 {
 		return fmt.Errorf("%s.max_resends must be greater than 0", path)
@@ -524,7 +541,20 @@ func validateOTPPolicy(path string, cfg OTPPolicyConfig) error {
 	return nil
 }
 
-func validateOTPIPScorePolicy(path string, cfg OTPPolicyConfig) error {
+func validateOTPSpamFlow(path string, cfg OTPSpamFlowConfig) error {
+	if cfg.PhoneWindow <= 0 {
+		return fmt.Errorf("%s.phone_window must be greater than 0", path)
+	}
+	if cfg.IPWindow <= 0 {
+		return fmt.Errorf("%s.ip_window must be greater than 0", path)
+	}
+	if cfg.MaxPhoneRequests <= 0 {
+		return fmt.Errorf("%s.max_phone_requests must be greater than 0", path)
+	}
+	if cfg.MaxIPScore <= 0 {
+		return fmt.Errorf("%s.max_ip_score must be greater than 0", path)
+	}
+
 	scoreFields := map[string]float64{
 		"pending_ip_score":        cfg.PendingIPScore,
 		"resend_ip_score":         cfg.ResendIPScore,
@@ -540,7 +570,21 @@ func validateOTPIPScorePolicy(path string, cfg OTPPolicyConfig) error {
 	return nil
 }
 
-func validateRegisterSystemRateLimitPolicy(path string, cfg OTPPolicyConfig) error {
+func validateOTPSpamConfig(cfg OTPSpamConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if err := validateOTPSpamFlow("security.otp_spam.register", cfg.Register); err != nil {
+		return err
+	}
+	if err := validateOTPSpamFlow("security.otp_spam.password_reset", cfg.PasswordReset); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateRegisterSystemRateLimitPolicy(path string, cfg RegisterOTPPolicyConfig) error {
 	if cfg.SystemWindow <= 0 {
 		return fmt.Errorf("%s.system_window must be greater than 0", path)
 	}

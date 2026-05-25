@@ -45,10 +45,8 @@ type OTPSpamDetectionConfig struct {
 type OTPSpamFlowConfig struct {
 	IPWindow             time.Duration
 	PhoneWindow          time.Duration
-	VerifyAttemptWindow  time.Duration
 	MaxIPScore           int
 	MaxPhoneRequests     int
-	MaxVerifyAttempts    int
 	PendingIPScore       float64
 	ResendIPScore        float64
 	InvalidVerifyIPScore float64

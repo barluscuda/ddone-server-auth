@@ -147,10 +147,8 @@ func testOTPSpamConfig() OTPSpamDetectionConfig {
 	flow := OTPSpamFlowConfig{
 		IPWindow:             10 * time.Minute,
 		PhoneWindow:          5 * time.Minute,
-		VerifyAttemptWindow:  5 * time.Minute,
 		MaxIPScore:           20,
 		MaxPhoneRequests:     20,
-		MaxVerifyAttempts:    5,
 		PendingIPScore:       1,
 		ResendIPScore:        1,
 		InvalidVerifyIPScore: 1,

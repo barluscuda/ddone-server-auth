@@ -143,11 +143,11 @@ func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
 
 func TestValidateRejectsNonPositiveOTPIPLimit(t *testing.T) {
 	cfg := validConfig()
-	cfg.Security.OTP.Register.MaxIPRequests = 0
+	cfg.Security.OTPSpam.Register.MaxIPScore = 0
 
 	err := cfg.validate()
 	if err == nil {
-		t.Fatal("expected validate to reject non-positive register otp ip limit")
+		t.Fatal("expected validate to reject non-positive register otp spam ip score limit")
 	}
 }
 
@@ -173,21 +173,21 @@ func TestValidateRejectsNonPositiveOTPRegisterSystemLimit(t *testing.T) {
 
 func TestValidateRejectsInfiniteOTPRegisterIPScore(t *testing.T) {
 	cfg := validConfig()
-	cfg.Security.OTP.Register.PendingIPScore = math.Inf(1)
+	cfg.Security.OTPSpam.Register.PendingIPScore = math.Inf(1)
 
 	err := cfg.validate()
 	if err == nil {
-		t.Fatal("expected validate to reject infinite register otp ip score")
+		t.Fatal("expected validate to reject infinite register otp spam ip score")
 	}
 }
 
 func TestValidateRejectsInfiniteOTPPasswordResetIPScore(t *testing.T) {
 	cfg := validConfig()
-	cfg.Security.OTP.PasswordReset.InvalidVerifyIPScore = math.Inf(1)
+	cfg.Security.OTPSpam.PasswordReset.InvalidVerifyIPScore = math.Inf(1)
 
 	err := cfg.validate()
 	if err == nil {
-		t.Fatal("expected validate to reject infinite password reset otp ip score")
+		t.Fatal("expected validate to reject infinite password reset otp spam ip score")
 	}
 }
 
@@ -213,26 +213,31 @@ func validConfig() Config {
 	cfg.Security.Bot.Window = time.Minute
 	cfg.Security.Bot.MaxRequests = 10
 	cfg.Security.Bot.BlockDuration = time.Minute
+	cfg.Security.OTPSpam.Enabled = true
 	cfg.Security.OTP.Register.TTL = time.Minute
 	cfg.Security.OTP.Register.PhoneWindow = time.Minute
-	cfg.Security.OTP.Register.IPWindow = time.Minute
 	cfg.Security.OTP.Register.SystemWindow = time.Minute
 	cfg.Security.OTP.Register.ResendCooldown = time.Second
 	cfg.Security.OTP.Register.VerifyAttemptWindow = time.Minute
 	cfg.Security.OTP.Register.MaxPhoneRequests = 1
-	cfg.Security.OTP.Register.MaxIPRequests = 1
 	cfg.Security.OTP.Register.MaxSystemRequests = 1
 	cfg.Security.OTP.Register.MaxResends = 1
 	cfg.Security.OTP.Register.MaxVerifyAttempts = 1
 	cfg.Security.OTP.PasswordReset.TTL = time.Minute
 	cfg.Security.OTP.PasswordReset.PhoneWindow = time.Minute
-	cfg.Security.OTP.PasswordReset.IPWindow = time.Minute
 	cfg.Security.OTP.PasswordReset.ResendCooldown = time.Second
 	cfg.Security.OTP.PasswordReset.VerifyAttemptWindow = time.Minute
 	cfg.Security.OTP.PasswordReset.MaxPhoneRequests = 1
-	cfg.Security.OTP.PasswordReset.MaxIPRequests = 1
 	cfg.Security.OTP.PasswordReset.MaxResends = 1
 	cfg.Security.OTP.PasswordReset.MaxVerifyAttempts = 1
+	cfg.Security.OTPSpam.Register.PhoneWindow = time.Minute
+	cfg.Security.OTPSpam.Register.IPWindow = time.Minute
+	cfg.Security.OTPSpam.Register.MaxPhoneRequests = 1
+	cfg.Security.OTPSpam.Register.MaxIPScore = 1
+	cfg.Security.OTPSpam.PasswordReset.PhoneWindow = time.Minute
+	cfg.Security.OTPSpam.PasswordReset.IPWindow = time.Minute
+	cfg.Security.OTPSpam.PasswordReset.MaxPhoneRequests = 1
+	cfg.Security.OTPSpam.PasswordReset.MaxIPScore = 1
 	cfg.Security.Auth.Issuer = "issuer"
 	cfg.Security.Auth.Audience = "audience"
 	cfg.Security.Auth.AccessTokenTTL = 1

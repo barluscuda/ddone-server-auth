@@ -72,7 +72,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	)
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewServiceWithSettings(userRepository, registerStore, smsClient, appregister.Settings{
-		OTPPolicy:             otpPolicyFromConfig(cfg.Security.OTP.Register),
+		OTPPolicy:             otpPolicyFromConfig(cfg.Security.OTP.Register.OTPPolicyConfig),
 		SystemRateLimitPolicy: registerSystemRateLimitPolicyFromConfig(cfg.Security.OTP.Register),
 	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
@@ -186,17 +186,15 @@ func otpPolicyFromConfig(cfg config.OTPPolicyConfig) appotp.Policy {
 	return appotp.Policy{
 		TTL:                 cfg.TTL,
 		PhoneWindow:         cfg.PhoneWindow,
-		IPWindow:            cfg.IPWindow,
 		ResendCooldown:      cfg.ResendCooldown,
 		VerifyAttemptWindow: cfg.VerifyAttemptWindow,
 		MaxPhoneRequests:    cfg.MaxPhoneRequests,
-		MaxIPRequests:       cfg.MaxIPRequests,
 		MaxResends:          cfg.MaxResends,
 		MaxVerifyAttempts:   cfg.MaxVerifyAttempts,
 	}
 }
 
-func registerSystemRateLimitPolicyFromConfig(cfg config.OTPPolicyConfig) *appregister.SystemRateLimitPolicy {
+func registerSystemRateLimitPolicyFromConfig(cfg config.RegisterOTPPolicyConfig) *appregister.SystemRateLimitPolicy {
 	return &appregister.SystemRateLimitPolicy{
 		Window:      cfg.SystemWindow,
 		MaxRequests: cfg.MaxSystemRequests,
@@ -205,20 +203,18 @@ func registerSystemRateLimitPolicyFromConfig(cfg config.OTPPolicyConfig) *appreg
 
 func otpSpamDetectionConfigFromConfig(cfg *config.Config) middleware.OTPSpamDetectionConfig {
 	return middleware.OTPSpamDetectionConfig{
-		Enabled:       cfg.Security.Bot.Enabled,
-		Register:      otpSpamFlowConfigFromConfig(cfg.Security.OTP.Register),
-		PasswordReset: otpSpamFlowConfigFromConfig(cfg.Security.OTP.PasswordReset),
+		Enabled:       cfg.Security.OTPSpam.Enabled,
+		Register:      otpSpamFlowConfigFromConfig(cfg.Security.OTPSpam.Register),
+		PasswordReset: otpSpamFlowConfigFromConfig(cfg.Security.OTPSpam.PasswordReset),
 	}
 }
 
-func otpSpamFlowConfigFromConfig(cfg config.OTPPolicyConfig) middleware.OTPSpamFlowConfig {
+func otpSpamFlowConfigFromConfig(cfg config.OTPSpamFlowConfig) middleware.OTPSpamFlowConfig {
 	return middleware.OTPSpamFlowConfig{
 		IPWindow:             cfg.IPWindow,
 		PhoneWindow:          cfg.PhoneWindow,
-		VerifyAttemptWindow:  cfg.VerifyAttemptWindow,
-		MaxIPScore:           cfg.MaxIPRequests,
+		MaxIPScore:           cfg.MaxIPScore,
 		MaxPhoneRequests:     cfg.MaxPhoneRequests,
-		MaxVerifyAttempts:    cfg.MaxVerifyAttempts,
 		PendingIPScore:       cfg.PendingIPScore,
 		ResendIPScore:        cfg.ResendIPScore,
 		InvalidVerifyIPScore: cfg.InvalidVerifyIPScore,

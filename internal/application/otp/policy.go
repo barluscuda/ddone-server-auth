@@ -5,11 +5,9 @@ import "time"
 type Policy struct {
 	TTL                 time.Duration
 	PhoneWindow         time.Duration
-	IPWindow            time.Duration
 	ResendCooldown      time.Duration
 	VerifyAttemptWindow time.Duration
 	MaxPhoneRequests    int
-	MaxIPRequests       int
 	MaxResends          int
 	MaxVerifyAttempts   int
 }
@@ -21,9 +19,6 @@ func (p Policy) WithDefaults(defaults Policy) Policy {
 	if p.PhoneWindow <= 0 {
 		p.PhoneWindow = defaults.PhoneWindow
 	}
-	if p.IPWindow <= 0 {
-		p.IPWindow = defaults.IPWindow
-	}
 	if p.ResendCooldown <= 0 {
 		p.ResendCooldown = defaults.ResendCooldown
 	}
@@ -32,9 +27,6 @@ func (p Policy) WithDefaults(defaults Policy) Policy {
 	}
 	if p.MaxPhoneRequests <= 0 {
 		p.MaxPhoneRequests = defaults.MaxPhoneRequests
-	}
-	if p.MaxIPRequests <= 0 {
-		p.MaxIPRequests = defaults.MaxIPRequests
 	}
 	if p.MaxResends <= 0 {
 		p.MaxResends = defaults.MaxResends
