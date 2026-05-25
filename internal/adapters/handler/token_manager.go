@@ -75,8 +75,8 @@ func (h *TokenManagerHandler) Revoke(c *gin.Context) {
 	}
 
 	err := h.tokens.Revoke(c.Request.Context(), apptokenmanager.RevokeInput{
-		UserID: authContext.UserID,
-		TokenID:   c.Param("tokenId"),
+		UserID:  authContext.UserID,
+		TokenID: c.Param("tokenId"),
 	})
 	if err != nil {
 		handleTokenManagerError(c, err)

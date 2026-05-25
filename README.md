@@ -36,6 +36,11 @@ The service uses:
 - Wenova SMS for OTP delivery
 - `zap` for logging
 
+## Documentation
+
+- [Full API reference](docs/api.md)
+- [JWT integration guide](docs/jwt.md)
+
 ## Architecture
 
 The project is being shaped toward a hexagonal architecture:

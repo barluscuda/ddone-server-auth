@@ -6,7 +6,7 @@ import "time"
 // Rotations create a replacement record so the token lineage remains auditable.
 type TokenRecord struct {
 	ID            string
-	UserID     string
+	UserID        string
 	RootTokenID   string
 	ParentTokenID *string
 	TokenHash     string

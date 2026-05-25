@@ -10,14 +10,14 @@ import (
 )
 
 type fakeStore struct {
-	byID               map[string]auth.TokenRecord
-	byUser          map[string][]auth.TokenRecord
-	revokedTokenID     string
-	revokedReason      string
-	revokedUserID   string
-	revokedAllReason   string
-	revokeByIDErr      error
-	revokeByUserErr error
+	byID             map[string]auth.TokenRecord
+	byUser           map[string][]auth.TokenRecord
+	revokedTokenID   string
+	revokedReason    string
+	revokedUserID    string
+	revokedAllReason string
+	revokeByIDErr    error
+	revokeByUserErr  error
 }
 
 func (f *fakeStore) GetByID(_ context.Context, tokenID string) (*auth.TokenRecord, error) {
@@ -66,7 +66,7 @@ func TestListReturnsUserTokens(t *testing.T) {
 			"user-1": {
 				{
 					ID:        "token-1",
-					UserID: "user-1",
+					UserID:    "user-1",
 					ExpiresAt: time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC),
 					CreatedAt: time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC),
 				},
@@ -90,15 +90,15 @@ func TestRevokeRejectsTokenFromAnotherUser(t *testing.T) {
 	service := NewService(&fakeStore{
 		byID: map[string]auth.TokenRecord{
 			"token-1": {
-				ID:        "token-1",
+				ID:     "token-1",
 				UserID: "user-2",
 			},
 		},
 	})
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		UserID: "user-1",
-		TokenID:   "token-1",
+		UserID:  "user-1",
+		TokenID: "token-1",
 	})
 	if !errors.Is(err, auth.ErrTokenNotFound) {
 		t.Fatalf("expected ErrTokenNotFound, got %v", err)
@@ -109,7 +109,7 @@ func TestRevokeMarksTokenByID(t *testing.T) {
 	store := &fakeStore{
 		byID: map[string]auth.TokenRecord{
 			"token-1": {
-				ID:        "token-1",
+				ID:     "token-1",
 				UserID: "user-1",
 			},
 		},
@@ -117,8 +117,8 @@ func TestRevokeMarksTokenByID(t *testing.T) {
 	service := NewService(store)
 
 	err := service.Revoke(context.Background(), RevokeInput{
-		UserID: "user-1",
-		TokenID:   "token-1",
+		UserID:  "user-1",
+		TokenID: "token-1",
 	})
 	if err != nil {
 		t.Fatalf("Revoke returned error: %v", err)

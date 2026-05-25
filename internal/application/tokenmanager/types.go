@@ -16,8 +16,8 @@ type ListInput struct {
 }
 
 type RevokeInput struct {
-	UserID string
-	TokenID   string
+	UserID  string
+	TokenID string
 }
 
 type RevokeAllInput struct {
