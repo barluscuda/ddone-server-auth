@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	appjwt "ddone-server-auth/internal/application/jwt"
 	"ddone-server-auth/internal/domain/auth"
 	"ddone-server-auth/internal/domain/user"
 )
@@ -32,6 +33,4 @@ type UserLookup interface {
 	GetByID(ctx context.Context, id string) (*user.User, error)
 }
 
-type AccessTokenIssuer interface {
-	IssueAccessToken(ctx context.Context, userID string, phoneNumber string) (*auth.AccessToken, error)
-}
+type AccessTokenIssuer = appjwt.Issuer

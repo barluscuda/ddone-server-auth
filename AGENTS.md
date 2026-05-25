@@ -44,6 +44,7 @@ cmd/app/                  Process entrypoint
 
 - Run `gofmt -w` on touched Go files.
 - Run `go test ./...` after code changes.
+- After every code change, review `docs/project.md` and update it in the same change when architecture, dependencies, routes, config, storage, security behavior, startup wiring, or business flows changed. If no `docs/project.md` update is needed, say why in the final response.
 - If you change config, routes, or startup behavior, keep `README.md` and any relevant skill guidance aligned.
 
 ## Current Functional Scope

@@ -2,17 +2,9 @@ package jwks
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/sha256"
-	"encoding/base64"
-	"errors"
-	"math/big"
-	"strings"
 	"testing"
 	"time"
 
-	"ddone-server-auth/internal/adapters/token"
 	"ddone-server-auth/internal/domain/auth"
 )
 
@@ -53,10 +45,7 @@ func (s *fakeSigningKeyStore) WithRotationLock(ctx context.Context, fn func(cont
 }
 
 type fakeTokenCodec struct {
-	generatedKeys  []*auth.SigningKey
-	issuedClaims   auth.AccessTokenClaims
-	verifiedClaims *auth.AccessTokenClaims
-	verifiedKeys   []auth.SigningKey
+	generatedKeys []*auth.SigningKey
 }
 
 func (c *fakeTokenCodec) GenerateSigningKey(
@@ -88,24 +77,6 @@ func (c *fakeTokenCodec) GenerateSigningKey(
 	return key, nil
 }
 
-func (c *fakeTokenCodec) IssueAccessToken(
-	key *auth.SigningKey,
-	claims auth.AccessTokenClaims,
-) (*auth.AccessToken, error) {
-	if key == nil {
-		return nil, errors.New("missing key")
-	}
-
-	c.issuedClaims = claims
-	return &auth.AccessToken{
-		Token:     "signed-token",
-		TokenType: "Bearer",
-		ExpiresAt: claims.ExpiresAt,
-		ExpiresIn: int64(claims.ExpiresAt.Sub(claims.IssuedAt).Seconds()),
-		KeyID:     key.KeyID,
-	}, nil
-}
-
 func (c *fakeTokenCodec) PublicJWK(key auth.SigningKey) auth.JWK {
 	return auth.JWK{
 		KeyType:   "EC",
@@ -118,28 +89,10 @@ func (c *fakeTokenCodec) PublicJWK(key auth.SigningKey) auth.JWK {
 	}
 }
 
-func (c *fakeTokenCodec) VerifyAccessToken(
-	_ string,
-	keys []auth.SigningKey,
-	_ string,
-	_ string,
-	_ time.Time,
-) (*auth.AccessTokenClaims, error) {
-	c.verifiedKeys = append([]auth.SigningKey(nil), keys...)
-	if c.verifiedClaims == nil {
-		return nil, auth.ErrInvalidAccessToken
-	}
-
-	return c.verifiedClaims, nil
-}
-
 func TestEnsureActiveSigningKeyCreatesFirstKey(t *testing.T) {
 	store := &fakeSigningKeyStore{}
 	codec := &fakeTokenCodec{}
 	service := NewService(store, codec, Settings{
-		Issuer:              "issuer",
-		Audience:            "audience",
-		AccessTokenTTL:      15 * time.Minute,
 		SigningKeyRotation:  90 * 24 * time.Hour,
 		SigningKeyRetention: 180 * 24 * time.Hour,
 	})
@@ -175,202 +128,40 @@ func TestEnsureActiveSigningKeyCreatesFirstKey(t *testing.T) {
 	}
 }
 
-func TestIssueAccessTokenUsesActiveKey(t *testing.T) {
+func TestPublicJWKSReturnsPublishedKeys(t *testing.T) {
 	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
 	store := &fakeSigningKeyStore{
 		keys: []auth.SigningKey{{
-			KeyID:         "kid-1",
-			Algorithm:     "ES256",
-			Curve:         "P-256",
-			Status:        auth.SigningKeyStatusActive,
-			CreatedAt:     now.Add(-time.Hour),
-			ActivatesAt:   now.Add(-time.Hour),
-			RotatesAt:     now.Add(time.Hour),
-			RetiresAt:     now.Add(90 * 24 * time.Hour),
-			PublicX:       "x",
-			PublicY:       "y",
-			PrivateKeyPEM: "pem",
+			KeyID:       "kid-1",
+			Algorithm:   "ES256",
+			Curve:       "P-256",
+			PublicX:     "x",
+			PublicY:     "y",
+			Status:      auth.SigningKeyStatusActive,
+			CreatedAt:   now.Add(-time.Hour),
+			ActivatesAt: now.Add(-time.Hour),
+			RotatesAt:   now.Add(time.Hour),
+			RetiresAt:   now.Add(90 * 24 * time.Hour),
 		}},
 	}
 	codec := &fakeTokenCodec{}
 	service := NewService(store, codec, Settings{
-		Issuer:              "issuer",
-		Audience:            "audience",
-		AccessTokenTTL:      15 * time.Minute,
 		SigningKeyRotation:  90 * 24 * time.Hour,
 		SigningKeyRetention: 180 * 24 * time.Hour,
 	})
 	service.now = func() time.Time { return now }
-
-	token, err := service.IssueAccessToken(context.Background(), "user-1", "+8562012345678")
-	if err != nil {
-		t.Fatalf("IssueAccessToken returned error: %v", err)
-	}
-
-	if token.Token != "signed-token" {
-		t.Fatalf("expected signed token, got %q", token.Token)
-	}
-	if token.KeyID != "kid-1" {
-		t.Fatalf("expected access token to use existing key %q, got %q", "kid-1", token.KeyID)
-	}
-	if codec.issuedClaims.Subject != "user-1" {
-		t.Fatalf("expected subject %q, got %q", "user-1", codec.issuedClaims.Subject)
-	}
-	if codec.issuedClaims.UserID != "user-1" {
-		t.Fatalf("expected user id %q, got %q", "user-1", codec.issuedClaims.UserID)
-	}
-	if codec.issuedClaims.PhoneNumber != "+8562012345678" {
-		t.Fatalf("expected phone number %q, got %q", "+8562012345678", codec.issuedClaims.PhoneNumber)
-	}
-	if len(store.keys) != 2 {
-		t.Fatalf("expected successor key to be created, got %d keys", len(store.keys))
-	}
-}
-
-func TestIssueAccessTokenVerifiesAgainstPublishedJWKS(t *testing.T) {
-	now := time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC)
-	store := &fakeSigningKeyStore{}
-	codec := token.NewES256Codec()
-	service := NewService(store, codec, Settings{
-		Issuer:              "issuer",
-		Audience:            "audience",
-		AccessTokenTTL:      15 * time.Minute,
-		SigningKeyRotation:  90 * 24 * time.Hour,
-		SigningKeyRetention: 180 * 24 * time.Hour,
-	})
-	service.now = func() time.Time { return now }
-
-	issued, err := service.IssueAccessToken(context.Background(), "user-1", "+8562012345678")
-	if err != nil {
-		t.Fatalf("IssueAccessToken returned error: %v", err)
-	}
 
 	jwks, err := service.PublicJWKS(context.Background())
 	if err != nil {
 		t.Fatalf("PublicJWKS returned error: %v", err)
 	}
-	if len(jwks.Keys) != 2 {
-		t.Fatalf("expected 2 jwks entries, got %d", len(jwks.Keys))
-	}
-
-	headerSegment, payloadSegment, signatureSegment := splitJWTForVerify(t, issued.Token)
-	signature := decodeJWTSegment(t, signatureSegment)
-	if len(signature) != 64 {
-		t.Fatalf("expected 64-byte JOSE signature, got %d bytes", len(signature))
-	}
-	publicJWK, ok := findJWK(jwks.Keys, issued.KeyID)
-	if !ok {
-		t.Fatalf("expected issued kid %q to be present in jwks", issued.KeyID)
-	}
-
-	sum := sha256.Sum256([]byte(headerSegment + "." + payloadSegment))
-	publicKey := publicKeyFromJWK(t, publicJWK)
-	if !ecdsa.Verify(publicKey, sum[:], decodeSignaturePart(signature[:32]), decodeSignaturePart(signature[32:])) {
-		t.Fatal("expected issued token to verify against published jwk")
-	}
-}
-
-func TestVerifyAccessTokenDelegatesToCodec(t *testing.T) {
-	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
-	store := &fakeSigningKeyStore{
-		keys: []auth.SigningKey{{
-			KeyID:         "kid-1",
-			Algorithm:     "ES256",
-			Curve:         "P-256",
-			PublicX:       "x",
-			PublicY:       "y",
-			PrivateKeyPEM: "private-key",
-			Status:        auth.SigningKeyStatusActive,
-			CreatedAt:     now.Add(-time.Hour),
-			ActivatesAt:   now.Add(-time.Hour),
-			RotatesAt:     now.Add(time.Hour),
-			RetiresAt:     now.Add(90 * 24 * time.Hour),
-		}},
-	}
-	codec := &fakeTokenCodec{
-		verifiedClaims: &auth.AccessTokenClaims{
-			UserID:    "user-1",
-			Subject:   "user-1",
-			Audience:  "audience",
-			Issuer:    "issuer",
-			ExpiresAt: now.Add(time.Minute),
-		},
-	}
-	service := NewService(store, codec, Settings{
-		Issuer:              "issuer",
-		Audience:            "audience",
-		AccessTokenTTL:      15 * time.Minute,
-		SigningKeyRotation:  90 * 24 * time.Hour,
-		SigningKeyRetention: 180 * 24 * time.Hour,
-	})
-	service.now = func() time.Time { return now }
-
-	claims, err := service.VerifyAccessToken(context.Background(), "token")
-	if err != nil {
-		t.Fatalf("VerifyAccessToken returned error: %v", err)
-	}
-	if claims.Subject != "user-1" {
-		t.Fatalf("expected subject %q, got %q", "user-1", claims.Subject)
-	}
-	if claims.UserID != "user-1" {
-		t.Fatalf("expected user id %q, got %q", "user-1", claims.UserID)
-	}
-	if store.signingKeyListHits != 0 {
-		t.Fatalf("expected verification to avoid private signing-key reads, got %d", store.signingKeyListHits)
-	}
 	if store.publicKeyListHits == 0 {
-		t.Fatal("expected verification to read public keys")
+		t.Fatal("expected public jwks to read public keys")
 	}
-	if len(codec.verifiedKeys) != 1 {
-		t.Fatalf("expected codec to receive one public key, got %d", len(codec.verifiedKeys))
+	if len(jwks.Keys) != 1 {
+		t.Fatalf("expected 1 jwks entry, got %d", len(jwks.Keys))
 	}
-	if codec.verifiedKeys[0].PrivateKeyPEM != "" {
-		t.Fatal("expected verification key material to exclude private pem")
+	if jwks.Keys[0].KeyID != "kid-1" {
+		t.Fatalf("expected jwks key %q, got %q", "kid-1", jwks.Keys[0].KeyID)
 	}
-}
-
-func findJWK(keys []auth.JWK, keyID string) (auth.JWK, bool) {
-	for _, key := range keys {
-		if key.KeyID == keyID {
-			return key, true
-		}
-	}
-
-	return auth.JWK{}, false
-}
-
-func splitJWTForVerify(t *testing.T, tokenValue string) (string, string, string) {
-	t.Helper()
-
-	parts := strings.Split(tokenValue, ".")
-	if len(parts) != 3 {
-		t.Fatalf("expected compact JWT with 3 segments, got %d", len(parts))
-	}
-
-	return parts[0], parts[1], parts[2]
-}
-
-func decodeJWTSegment(t *testing.T, segment string) []byte {
-	t.Helper()
-
-	payload, err := base64.RawURLEncoding.DecodeString(segment)
-	if err != nil {
-		t.Fatalf("decode jwt segment: %v", err)
-	}
-
-	return payload
-}
-
-func publicKeyFromJWK(t *testing.T, key auth.JWK) *ecdsa.PublicKey {
-	t.Helper()
-
-	return &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     decodeSignaturePart(decodeJWTSegment(t, key.X)),
-		Y:     decodeSignaturePart(decodeJWTSegment(t, key.Y)),
-	}
-}
-
-func decodeSignaturePart(raw []byte) *big.Int {
-	return new(big.Int).SetBytes(raw)
 }

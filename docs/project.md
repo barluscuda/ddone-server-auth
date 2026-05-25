@@ -1,115 +1,419 @@
 # ddone-server-auth Project Handbook
 
-This document is the main engineering reference for `ddone-server-auth`. It covers the service purpose, setup, architecture, API surface, business flows, storage, security model, and maintenance rules.
+Last reviewed against the repository on 2026-05-25.
 
-## 1. Service Overview
+This handbook is the source-of-truth engineering overview for `ddone-server-auth`. Keep it aligned with code changes that affect architecture, dependencies, routes, config, storage, security behavior, startup wiring, or business flows.
 
-`ddone-server-auth` is the authentication service for DDONE. It owns phone-based account registration, password authentication, refresh-token sessions, server-side browser login sessions, password reset, user settings, and ES256 access-token signing with JWKS publication.
+## 1. Service Summary
 
-The service is written in Go and is moving toward hexagonal architecture. Application use cases orchestrate business behavior. Domain packages hold business concepts and errors. Adapters handle HTTP, PostgreSQL, Redis, SMS, JWT signing, middleware, and DTO mapping.
+`ddone-server-auth` is a Go authentication service for DDONE. It owns phone-based account registration, password login, raw refresh-token rotation, server-side browser sessions, password reset, user settings, ES256 JWT access-token issuing and verification, and public JWKS publication.
 
-### Runtime Responsibilities
+The service is moving toward hexagonal architecture:
 
+- `internal/domain` holds persistence-free business types and domain errors.
+- `internal/application` holds use cases, orchestration, and ports.
+- `internal/adapters` holds HTTP, PostgreSQL, Redis, SMS, DTO, middleware, and token codec adapters.
+- `cmd/app` is the composition root and process entrypoint.
+
+## 2. Runtime Responsibilities
+
+- Serve health and robots endpoints.
 - Register users by phone number with OTP verification.
 - Authenticate users with phone number and password.
 - Issue ES256 JWT access tokens.
-- Issue, rotate, list, and revoke raw refresh tokens.
+- Issue, rotate, list, and revoke opaque raw refresh tokens.
 - Create and manage database-backed login sessions transported by `HttpOnly` cookies.
-- Return access tokens for active login sessions.
+- Return current or refreshed access tokens for active login sessions.
 - Reset forgotten passwords with OTP verification.
 - Change authenticated-user passwords.
-- Revoke tokens and login sessions after password reset or password change.
-- Expose public JWKS for access-token verification.
-- Serve health, CORS, request logging, and panic recovery middleware.
+- Revoke refresh tokens and login sessions after password reset or password change.
+- Publish public ES256 JWK sets at `/.well-known/jwks.json`.
+- Run CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
 
-### Main Dependencies
+## 3. Main Dependencies
 
 - Go `1.26.2`
 - Gin for HTTP delivery
 - GORM for PostgreSQL persistence
-- PostgreSQL with `pgcrypto` enabled
-- Redis for pending OTP state, counters, and read-through caches
+- PostgreSQL 17 in local Docker, with `pgcrypto` for UUID generation
+- Redis 7 for pending OTP state, counters, and read-through caches
 - Wenova SMS API for OTP delivery
 - Zap for structured logging
+- Viper and godotenv for config
+- bytedance/sonic for JSON in token/cache helpers
 
-## 2. Quick Start
+## 4. Project Layout
 
-Start PostgreSQL and Redis:
+```text
+cmd/app/                         Process entrypoint, dependency wiring, HTTP server
+config/                          Config loading, defaults, validation
+db/init/                         PostgreSQL init SQL for local Docker volumes
+deploy/release/                  Release helper scripts included in zip bundles
+deploy/systemd/                  systemd unit and environment template
+docs/                            Project, API, JWT, and Postman docs
+postman/                         Postman collection and local environment
+scripts/                         Release build automation
+agents/                          Repo-local agent skill guidance
 
-```bash
-make infra-up
+internal/domain/user/            User model, phone normalization, user errors
+internal/domain/auth/            Access-token, refresh-token, session, signing-key, JWKS types
+
+internal/application/register/   Registration OTP use case
+internal/application/login/      Password login, refresh-token rotation, session login creation
+internal/application/password/   Password reset and authenticated password change
+internal/application/settings/   Current-user settings and username update
+internal/application/session/    Login-session listing, current view, token refresh, revocation
+internal/application/tokenmanager/ Refresh-token listing and revocation
+internal/application/jwt/        Access-token issuing and verification orchestration
+internal/application/jwks/       Signing-key lifecycle and public JWKS orchestration
+internal/application/otp/        Shared OTP policy values
+
+internal/adapters/handler/       Gin HTTP handlers
+internal/adapters/middleware/    CORS, auth, session, logging, recovery, 404/405
+internal/adapters/dto/           HTTP request/response DTOs
+internal/adapters/repository/    GORM repositories and table row types
+internal/adapters/cache/         Redis stores and read-through cache decorators
+internal/adapters/token/         ES256 JWT/JWK codec
+internal/adapters/sms/           Wenova SMS adapter
+internal/adapters/database/      PostgreSQL connection setup
+
+internal/bootstrap/logging/      Zap logger setup
 ```
 
-Run the API server:
+## 5. Architecture Rules
 
-```bash
-make run
+Dependencies point inward:
+
+- Domain imports no adapters, GORM, Redis, Gin, HTTP DTOs, migrations, or transport metadata.
+- Application imports domain and defines use-case-owned ports.
+- Adapters import application ports and domain types to implement delivery and infrastructure.
+- `cmd/app` wires concrete adapters to application services.
+
+Use-case orchestration belongs in `internal/application/<usecase>`. HTTP request parsing and response mapping belongs in handlers and DTOs. PostgreSQL rows, Redis shapes, and SMS/JWT implementation details belong in adapters.
+
+## 6. Application Package Ownership
+
+### `internal/application/register`
+
+Owns phone registration:
+
+- Normalize and validate phone numbers.
+- Reject already registered phone numbers.
+- Generate default usernames.
+- Hash passwords and OTP codes.
+- Enforce OTP phone-window, resend, cooldown, and verify-attempt limits.
+- Store pending registrations in Redis through a port.
+- Send OTP through an SMS port.
+- Create users after successful OTP verification.
+
+### `internal/application/login`
+
+Owns password login, refresh-token rotation, and session-login creation:
+
+- Normalize phone numbers.
+- Enforce login failed-attempt counters and lockouts.
+- Verify bcrypt password hashes.
+- Request access tokens through `jwt.Issuer`.
+- Generate opaque refresh tokens and session tokens.
+- Store only token hashes.
+- Detect refresh-token replay and revoke the affected token lineage.
+- Create login-session records for cookie-based login.
+
+### `internal/application/jwt`
+
+Owns JWT access-token orchestration:
+
+- Ensures issuance uses the active signing key supplied by `jwks.SigningKeyProvider`.
+- Builds access-token claims using configured issuer, audience, and access-token TTL.
+- Generates JWT IDs.
+- Verifies access tokens using public signing-key material from `SigningKeyReader`.
+- Delegates ES256 signing and verification mechanics to the token adapter.
+
+Login and session use `jwt.Issuer`. Auth middleware uses `jwt.Verifier`.
+
+### `internal/application/jwks`
+
+Owns signing-key lifecycle and public JWKS:
+
+- Deletes expired signing keys.
+- Ensures an active signing key exists.
+- Pre-generates the next scheduled key.
+- Uses a PostgreSQL advisory lock through the signing-key store port to avoid duplicate key-ring creation across instances.
+- Publishes only public key material for JWKS.
+
+JWKS no longer issues or verifies access tokens. That responsibility belongs to `internal/application/jwt`.
+
+### `internal/application/session`
+
+Owns server-side login-session workflows:
+
+- List a user's sessions.
+- Return the current session.
+- Return the stored access token if still valid.
+- Issue and persist a fresh access token when the stored one expired but the login session remains active.
+- Revoke one session, all other sessions, or all sessions for a user.
+
+### `internal/application/tokenmanager`
+
+Owns refresh-token management for authenticated users:
+
+- List refresh-token records for the current user.
+- Revoke one refresh-token record.
+- Revoke all refresh-token records for the current user.
+
+### `internal/application/password`
+
+Owns password reset and password change:
+
+- Start password reset by phone number.
+- Resend password-reset OTP.
+- Verify OTP and update password.
+- Verify current password for authenticated password changes.
+- Revoke refresh tokens and login sessions after password reset or password change.
+
+### `internal/application/settings`
+
+Owns current-user settings:
+
+- Read the authenticated user's settings.
+- Update username.
+- Enforce username change cooldown behavior through the user domain model.
+
+## 7. HTTP API
+
+All JSON request and response fields use camelCase. Most responses use:
+
+```json
+{
+  "success": true,
+  "code": "machine_readable_code",
+  "message": "human readable message",
+  "data": {}
+}
 ```
 
-Run the test suite:
+Errors use the same envelope without `data`.
 
-```bash
-make test
-```
+### Public Routes
 
-Format Go code:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/healthz` | Process health |
+| `GET` | `/robots.txt` | Restrictive robots policy |
+| `GET` | `/.well-known/jwks.json` | Public ES256 JWK set |
+| `POST` | `/registrations` | Start phone registration and send OTP |
+| `POST` | `/registrations/resend` | Resend registration OTP |
+| `POST` | `/registrations/verify` | Verify registration OTP and create account |
+| `POST` | `/tokens` | Password login with response-body access and refresh tokens |
+| `POST` | `/tokens/refresh` | Rotate refresh token and return new body tokens |
+| `POST` | `/sessions` | Password login with `HttpOnly` session cookie |
+| `POST` | `/password-resets` | Start password-reset OTP |
+| `POST` | `/password-resets/resend` | Resend password-reset OTP |
+| `POST` | `/password-resets/verify` | Verify reset OTP and update password |
 
-```bash
-make fmt
-```
+### Bearer Access-Token Routes
 
-Stop local infrastructure:
+These routes require `Authorization: Bearer <accessToken>`.
 
-```bash
-make infra-down
-```
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/settings` | Current-user settings |
+| `GET` | `/settings/me` | Current-user settings alias |
+| `PATCH` | `/settings/username` | Update username |
+| `POST` | `/settings/password` | Change password |
+| `GET` | `/tokens` | List refresh-token records |
+| `DELETE` | `/tokens/:tokenId` | Revoke one refresh-token record |
+| `POST` | `/tokens/revoke-all` | Revoke all refresh-token records |
 
-The local API listens on `http://localhost:3000` by default.
+### Session Cookie Routes
 
-## 3. Required Setup
+These routes require the configured session cookie, default `ddone_session`.
 
-### PostgreSQL
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/sessions/token` | Return current or refreshed session access token |
+| `GET` | `/sessions` | List login sessions |
+| `GET` | `/sessions/current` | Return current login session |
+| `DELETE` | `/sessions/:sessionId` | Revoke one login session |
+| `POST` | `/sessions/revoke-others` | Revoke all other login sessions |
+| `POST` | `/sessions/revoke-all` | Revoke all login sessions |
 
-The database must support UUID generation through the `pgcrypto` extension:
+Full endpoint examples and common error codes live in `docs/api.md`.
+
+## 8. Authentication Model
+
+### Access Tokens
+
+- Access tokens are compact JWTs signed with ES256 on P-256.
+- Access tokens are transported as bearer tokens.
+- Default TTL is `5m`.
+- Header includes `alg=ES256`, `kid`, and `typ=JWT`.
+- Claims include `iss`, `sub`, `aud`, `jti`, `iat`, `nbf`, `exp`, `userId`, and optional `phone_number`.
+- Verification rejects malformed tokens, unsupported algorithm, missing key ID, unpublished/future/retired keys, bad signatures, high-S ECDSA signatures, wrong issuer, wrong audience, missing subject, missing JWT ID, and invalid time claims.
+
+Downstream verification guidance lives in `docs/jwt.md`.
+
+### Refresh Tokens
+
+- Refresh tokens are opaque random values returned by body-token login and refresh.
+- Only SHA-256 hashes are stored.
+- Refresh rotates on every use.
+- Rotation marks the current record used and replaced, then creates a replacement record linked to the same root lineage.
+- Reuse of a replaced refresh token is treated as replay and revokes the lineage.
+
+### Login Sessions
+
+- Session login creates an opaque random session token.
+- The token is transported in an `HttpOnly` cookie.
+- Only the session-token hash is stored.
+- Login sessions store the current access token and its expiry.
+- `/sessions/token` returns the stored access token if still valid.
+- If the stored access token expired but the session is valid, `/sessions/token` issues a fresh access token, updates the session record, and refreshes the cookie max age.
+
+## 9. Security And Policy Rules
+
+### Passwords
+
+- Password request fields are required to be 8 to 72 characters at the HTTP binding layer.
+- Password hashes are produced with bcrypt.
+- Password reset and authenticated password change revoke all refresh tokens and login sessions for the user.
+
+### OTP
+
+- OTPs are 6 numeric digits.
+- OTPs are not stored directly.
+- OTP hashes include the ticket ID.
+- Registration and password reset use separate OTP policies.
+- Default OTP TTL is `5m`.
+- Default resend cooldown is `60s`.
+- Default maximum resends is `3`.
+- Default maximum verification attempts is `5`.
+- Rate-limit counters live in Redis.
+
+### Phone Numbers
+
+- Phone inputs are normalized by `internal/domain/user`.
+- The current supported country code path is Lao phone numbers.
+- Unsupported telephone codes produce application/domain errors mapped by handlers.
+
+### Cookies And CORS
+
+- Session cookies are `HttpOnly`.
+- `session_cookie_secure` defaults to true in code defaults, but local `config/config.yaml` sets it false for HTTP development.
+- `SameSite=None` requires `Secure=true`.
+- Cross-origin cookie clients need explicit allowed origins and `cors.allow_credentials=true`.
+- Config validation rejects `cors.allowed_origins=["*"]` when credentials are enabled.
+
+### Signing Keys
+
+- Private signing keys are stored in PostgreSQL.
+- Redis caches public signing-key material only.
+- Public JWKS responses include `Cache-Control` and `ETag`.
+- Signing-key retention must be greater than or equal to signing-key rotation.
+
+## 10. Data Storage
+
+### PostgreSQL Tables
+
+GORM auto-migration runs on startup for:
+
+- `accounts`
+- `auth_refresh_sessions`
+- `auth_login_sessions`
+- `auth_signing_keys`
+
+`accounts` stores:
+
+- UUID account ID generated by PostgreSQL `gen_random_uuid()`
+- optional unique username
+- password hash
+- unique phone number
+- phone verification timestamp
+- username/password change timestamps
+- created/updated timestamps
+
+`auth_refresh_sessions` stores refresh-token history:
+
+- token ID, account ID, root token ID, optional parent token ID
+- token hash
+- client IP and user agent
+- expiry, last used, replaced, revoked, revoke reason, created timestamp
+
+The table name and some column names are legacy-compatible: `account_id`, `root_session_id`, and `parent_session_id`.
+
+`auth_login_sessions` stores server-side browser sessions:
+
+- session ID and account ID
+- session-token hash
+- client IP and user agent
+- current access token and access-token expiry
+- session expiry
+- revoked timestamp and reason
+- created timestamp
+
+`auth_signing_keys` stores ES256 signing keys:
+
+- key ID, algorithm, curve
+- public X/Y coordinates
+- private key PEM
+- status
+- created, activation, rotation, and retirement timestamps
+
+### PostgreSQL Extension
+
+PostgreSQL must have `pgcrypto` enabled:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```
 
-Docker Compose installs this extension through [db/init/001_pgcrypto.sql](https://github.com/barluscuda/ddone-server-auth/blob/main/db/init/001_pgcrypto.sql) when the PostgreSQL data volume is first created.
+Local Docker initializes this through `db/init/001_pgcrypto.sql` only when the PostgreSQL volume is first created.
 
-Important: PostgreSQL init scripts run only on first volume creation. If `postgres_data` already exists, either run the SQL manually in the database or recreate the volume.
+### Redis Data
 
-### Redis
+Redis is used for pending state, counters, and read-through caches.
 
-Redis is required for:
+Known key families:
 
-- Pending registration tickets
-- Pending password-reset tickets
-- OTP resend and verification counters
-- User read-through cache
-- Login-session list cache
-- Public signing-key cache
+- `register:ticket:<ticketId>`
+- `password_reset:ticket:<ticketId>`
+- `cache:user:id:<userId>`
+- `cache:user:phone:<phoneNumber>`
+- `cache:user:username:<username>`
+- `cache:token:hash:<tokenHash>`
+- `cache:token:id:<tokenId>`
+- `cache:token:root:<rootTokenId>`
+- `cache:login_session:token:<tokenHash>`
+- `cache:login_session:id:<sessionId>`
+- `cache:login_sessions:user:<userId>`
+- `cache:signing_keys:public:v1`
 
-### Wenova SMS
+Login and OTP rate-limit keys are generated by the corresponding application services and stored through Redis-backed ports.
 
-Registration and password reset require a Wenova API token in real environments:
+## 11. Configuration
 
-```bash
-DDONE_WENOVA_TOKEN=your-token
-```
-
-The service sends OTP messages through the SMS adapter under `internal/adapters/sms`.
-
-## 4. Configuration
-
-Configuration is loaded from:
+Config load order:
 
 1. `config/config.yaml`
 2. environment variables prefixed with `DDONE_`
 3. optional `.env`
 
-### Common Variables
+The local `config/config.yaml` is for development. Deployed environments should override values with environment variables.
+
+Important config groups:
+
+- `app`: debug mode and port
+- `database`: PostgreSQL connection, pool, timeout, timezone, SQL logging
+- `redis`: Redis address, auth, DB, timeout, pool settings
+- `cache`: user cache, user-session-list cache, public signing-key cache TTLs
+- `security.login`: failed-attempt window, max attempts, lockout duration
+- `security.otp.register`: registration OTP policy
+- `security.otp.password_reset`: password-reset OTP policy
+- `security.auth`: JWT issuer/audience, token TTLs, signing-key rotation/retention, session-cookie settings
+- `cors`: allowed origins, methods, headers, exposed headers, credential mode, max age
+- `wenovaapi.token`: Wenova token
+
+Common environment variables:
 
 ```bash
 DDONE_APP_PORT=3000
@@ -121,11 +425,24 @@ DDONE_DATABASE_NAME=ddone_auth
 DDONE_DATABASE_USERNAME=postgres
 DDONE_DATABASE_PASSWORD=postgres
 DDONE_DATABASE_SSLMODE=disable
-DDONE_DATABASE_LOG_SQL=true
+DDONE_DATABASE_TIMEZONE=UTC
+DDONE_DATABASE_CONNECT_TIMEOUT=10
+DDONE_DATABASE_MAX_OPEN_CONNS=25
+DDONE_DATABASE_MAX_IDLE_CONNS=5
+DDONE_DATABASE_CONN_MAX_LIFETIME=30m
+DDONE_DATABASE_CONN_MAX_IDLE_TIME=15m
+DDONE_DATABASE_LOG_SQL=false
 
 DDONE_REDIS_HOST=localhost
 DDONE_REDIS_PORT=6380
+DDONE_REDIS_USERNAME=
+DDONE_REDIS_PASSWORD=
 DDONE_REDIS_DB=0
+DDONE_REDIS_DIAL_TIMEOUT=5s
+DDONE_REDIS_READ_TIMEOUT=3s
+DDONE_REDIS_WRITE_TIMEOUT=3s
+DDONE_REDIS_POOL_SIZE=10
+DDONE_REDIS_MIN_IDLE_CONNS=2
 
 DDONE_CACHE_USER_TTL=5m
 DDONE_CACHE_USER_SESSION_LIST_TTL=1m
@@ -142,6 +459,7 @@ DDONE_SECURITY_OTP_REGISTER_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_REGISTER_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_REGISTER_MAX_RESENDS=3
 DDONE_SECURITY_OTP_REGISTER_MAX_VERIFY_ATTEMPTS=5
+
 DDONE_SECURITY_OTP_PASSWORD_RESET_TTL=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_PHONE_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_RESEND_COOLDOWN=60s
@@ -149,12 +467,6 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
-
-DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
-DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
-DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
-DDONE_CORS_ALLOW_CREDENTIALS=false
-DDONE_CORS_MAX_AGE=12h
 
 DDONE_SECURITY_AUTH_ISSUER=ddone-server-auth
 DDONE_SECURITY_AUTH_AUDIENCE=ddone-clients
@@ -168,1018 +480,161 @@ DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=false
 DDONE_SECURITY_AUTH_SESSION_COOKIE_SAME_SITE=lax
 DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE=720h
 
-DDONE_WENOVA_TOKEN=your-token
+DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
+DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
+DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
+DDONE_CORS_EXPOSED_HEADERS=
+DDONE_CORS_ALLOW_CREDENTIALS=false
+DDONE_CORS_MAX_AGE=12h
+
+DDONE_WENOVA_TOKEN=replace-me
 ```
 
-### Validation Rules
+Several legacy env aliases are still accepted for auth, OTP, login, and cache settings. See `config/config.go` for the exact bindings.
 
-- `app.port` must be positive.
-- `database.host`, `database.name`, `database.username`, and `database.sslmode` are required.
-- `redis.host` is required.
-- Cache TTL values must be zero or positive. A zero TTL disables that read-through cache.
-- CORS origins, methods, and headers must not be empty.
-- `cors.allowed_origins` cannot include `*` when `cors.allow_credentials=true`.
-- Auth TTL values must be positive.
-- `security.auth.signing_key_retention` must be greater than or equal to `security.auth.signing_key_rotation`.
-- `security.auth.session_cookie_same_site` must be `lax`, `strict`, or `none`.
-- `security.auth.session_cookie_secure` must be true when `security.auth.session_cookie_same_site=none`.
-- `security.auth.session_cookie_max_age`, when set, must not exceed `security.auth.login_session_ttl`.
+## 12. Startup Flow
 
-## 5. Project Structure
-
-```text
-cmd/app/                       Process entrypoint and HTTP server wiring
-config/                        Config loading, defaults, validation
-db/init/                       Local PostgreSQL initialization SQL
-docs/                          Engineering and API documentation
-postman/                       Postman collection and local environment
-internal/domain/user/          User domain types, phone normalization, domain errors
-internal/domain/auth/          Auth token, session, signing-key, JWKS domain types
-internal/application/register/ Registration use case and ports
-internal/application/login/    Login, refresh-token, and login-session creation use case
-internal/application/password/ Password reset and change-password use case
-internal/application/settings/ Current-user settings and username update use case
-internal/application/session/  Login-session listing, current session, token issue, revocation
-internal/application/tokenmanager/ Raw refresh-token listing and revocation
-internal/application/jwks/     Signing-key lifecycle, JWT issue/verify, public JWKS
-internal/adapters/handler/     Gin HTTP handlers
-internal/adapters/middleware/  CORS, auth, session, logging, recovery, 404/405
-internal/adapters/dto/         HTTP request/response DTOs
-internal/adapters/repository/  GORM PostgreSQL repositories and table records
-internal/adapters/cache/       Redis stores and read-through caches
-internal/adapters/token/       ES256 JWT/JWK implementation
-internal/adapters/sms/         Wenova SMS adapter
-internal/adapters/database/    PostgreSQL connection setup
-internal/bootstrap/logging/    Zap logger setup
-agents/                        Repo-local skills for coding agents
-```
-
-## 6. Architecture
-
-The intended architecture is hexagonal.
-
-```text
-HTTP / Middleware / CLI
-        |
-        v
-internal/application/<usecase>
-        |
-        v
-internal/domain/<area>
-        ^
-        |
-Postgres / Redis / SMS / Token adapters
-```
-
-### Dependency Rule
-
-Dependencies point inward:
-
-- `internal/domain` imports only standard-library or pure business dependencies.
-- `internal/application` imports domain packages and defines ports close to use cases.
-- `internal/adapters` imports application ports and domain types to implement infrastructure and delivery.
-- `cmd/app` is the composition root that wires concrete adapters to application services.
-
-### Domain Layer
-
-Domain packages own business concepts:
-
-- `user.User`
-- `user.PendingRegistration`
-- phone normalization
-- user errors such as duplicate phone, duplicate username, invalid OTP
-- `auth.AccessToken`
-- `auth.TokenRecord`
-- `auth.LoginSession`
-- `auth.SigningKey`
-- `auth.JWK`
-- auth errors such as invalid credentials, token expired, token revoked
-
-Domain packages must not contain:
-
-- GORM tags
-- table names
-- Redis key names
-- JSON DTO tags for HTTP responses
-- Gin, GORM, Redis, Viper, or HTTP framework imports
-
-### Application Layer
-
-Application packages own orchestration:
-
-- Validate use-case input.
-- Normalize phone numbers and usernames.
-- Check rate limits.
-- Hash passwords and OTP codes.
-- Call persistence, cache, SMS, and token ports.
-- Decide transaction-like sequence and rollback behavior where needed.
-- Return domain/application errors for handlers to map to HTTP.
-
-Ports are defined close to the use case that owns them. For example, registration defines `UserStore`, `RegistrationStore`, and `OTPSender` in `internal/application/register`.
-
-### Adapter Layer
-
-Adapters own all I/O:
-
-- HTTP handlers map JSON requests to application inputs and application outputs to DTOs.
-- Middleware handles CORS, request logging, panic recovery, bearer-token auth, and session-cookie auth.
-- Repositories map domain types to GORM row records.
-- Redis stores serialize pending OTP state and cache read-heavy data.
-- SMS adapter calls Wenova.
-- Token adapter implements ES256 JWT signing, verification, and JWK conversion.
-
-### Composition Root
-
-`cmd/app/main.go` wires the service:
+`cmd/app` currently starts the service as follows:
 
 1. Load config.
-2. Build logger.
+2. Build Zap logger.
 3. Connect PostgreSQL.
 4. Connect Redis.
-5. Run GORM auto-migration for tables.
-6. Create SMS client.
-7. Create repositories and Redis caches.
-8. Create ES256 codec and JWKS service.
-9. Ensure an active signing key exists.
-10. Create application services.
-11. Create handlers and middleware.
-12. Start the HTTP server and handle graceful shutdown.
-
-## 7. Data Ownership
-
-### PostgreSQL
-
-PostgreSQL is the source of truth for:
-
-- Accounts
-- Raw refresh-token records
-- Server-side login sessions
-- ES256 signing keys
-
-GORM row types live in `internal/adapters/repository`. The user domain model is mapped to the `accounts` table through an adapter-local `accountRecord`.
-
-### Redis
-
-Redis is used for short-lived and cacheable data:
-
-- `register:ticket:<ticketId>` pending registration tickets
-- password-reset ticket state
-- OTP request and verification counters
-- user cache by id, phone number, and username
-- login-session list cache
-- public signing-key cache
-
-Private signing keys are not cached in Redis. Public JWKS and token verification paths use public key material only.
-
-### SMS Provider
-
-Wenova sends OTP messages for:
-
-- Registration OTP
-- Password reset OTP
-
-The service writes pending OTP state before or around SMS delivery depending on the flow. Registration sends the OTP before saving the ticket. Password reset saves the ticket before SMS and deletes it if SMS delivery fails.
-
-## 8. API Contract
-
-All JSON request and response fields use camelCase.
-
-Most API responses use this envelope:
-
-```json
-{
-  "success": true,
-  "code": "machine_readable_code",
-  "message": "human readable message",
-  "data": {}
-}
-```
-
-Error responses use the same envelope without `data`:
-
-```json
-{
-  "success": false,
-  "code": "invalid_request_body",
-  "message": "invalid request body"
-}
-```
-
-### Authentication Types
-
-Bearer-token endpoints require:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Session endpoints require the configured session cookie:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-Public endpoints do not require authentication.
-
-## 9. API Reference
-
-### Public
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/healthz` | Health check |
-| `GET` | `/robots.txt` | Robots policy |
-| `GET` | `/.well-known/jwks.json` | Public ES256 JWK set |
-| `POST` | `/registrations` | Start phone registration |
-| `POST` | `/registrations/resend` | Resend registration OTP |
-| `POST` | `/registrations/verify` | Verify registration OTP and create account |
-| `POST` | `/tokens` | Login with phone/password and return body tokens |
-| `POST` | `/tokens/refresh` | Rotate refresh token and return new body tokens |
-| `POST` | `/sessions` | Login with phone/password and set session cookie |
-| `POST` | `/password-resets` | Start password reset OTP |
-| `POST` | `/password-resets/resend` | Resend password reset OTP |
-| `POST` | `/password-resets/verify` | Verify reset OTP and update password |
-
-### Bearer Access Token
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/settings` | Current-user settings |
-| `GET` | `/settings/me` | Current-user settings alias |
-| `PATCH` | `/settings/username` | Update username |
-| `POST` | `/settings/password` | Change password |
-| `GET` | `/tokens` | List raw refresh-token records |
-| `DELETE` | `/tokens/:tokenId` | Revoke one raw refresh token |
-| `POST` | `/tokens/revoke-all` | Revoke all raw refresh tokens |
-
-### Session Cookie
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/sessions/token` | Return current or refreshed session access token |
-| `GET` | `/sessions` | List login sessions |
-| `GET` | `/sessions/current` | Return current login session |
-| `DELETE` | `/sessions/:sessionId` | Revoke one login session |
-| `POST` | `/sessions/revoke-others` | Revoke all other login sessions |
-| `POST` | `/sessions/revoke-all` | Revoke all login sessions |
-
-## 10. Endpoint Details
-
-### `GET /healthz`
-
-Returns service health.
-
-Example response:
-
-```json
-{
-  "success": true,
-  "code": "healthz_ok",
-  "message": "service is healthy",
-  "active": true,
-  "serverTime": "2026-05-24T00:00:00Z"
-}
-```
-
-### `GET /robots.txt`
-
-Returns a restrictive robots policy for this API service.
-
-Success: `200 OK`
-
-```text
-User-agent: *
-Disallow: /
-```
-
-### `POST /registrations`
-
-Starts phone registration and sends a 6-digit OTP.
-
-Request:
-
-```json
-{
-  "phoneNumber": "+8562012345678",
-  "password": "secretpass"
-}
-```
-
-Success: `202 Accepted`
-
-```json
-{
-  "success": true,
-  "code": "register_otp_sent",
-  "message": "otp sent successfully",
-  "data": {
-    "ticketId": "reg_abc123",
-    "expiresAt": "2026-05-24T00:05:00Z",
-    "otpLength": 6,
-    "resendCooldownSeconds": 60,
-    "remainingResendCount": 3
-  }
-}
-```
-
-Rules:
-
-- Phone number is normalized to Lao mobile format.
-- Password must be non-empty and is bcrypt hashed.
-- OTP TTL is 5 minutes.
-- One registration request per phone number per 5-minute window.
-- Maximum resend count is 3.
-- Resend cooldown is 60 seconds.
-- Maximum invalid verification attempts is 5.
-
-### `POST /registrations/resend`
-
-Resends a registration OTP for an existing ticket.
-
-Request:
-
-```json
-{
-  "ticketId": "reg_abc123"
-}
-```
-
-Success: `202 Accepted`
-
-Response body matches `/registrations`.
-
-### `POST /registrations/verify`
-
-Verifies a registration OTP and creates the user.
-
-Request:
-
-```json
-{
-  "ticketId": "reg_abc123",
-  "otpCode": "123456"
-}
-```
-
-Success: `201 Created`
-
-```json
-{
-  "success": true,
-  "code": "register_verified",
-  "message": "registration completed successfully",
-  "data": {
-    "id": "user-id",
-    "username": "user_abcd12",
-    "phoneNumber": "2012345678",
-    "phoneVerifiedAt": "2026-05-24T00:00:00Z",
-    "createdAt": "2026-05-24T00:00:00Z"
-  }
-}
-```
-
-### `POST /tokens`
-
-Authenticates with phone number and password. Returns an access token plus raw refresh token in the JSON response body.
-
-Request:
-
-```json
-{
-  "phoneNumber": "+8562012345678",
-  "password": "secretpass"
-}
-```
-
-Success: `200 OK`
-
-```json
-{
-  "success": true,
-  "code": "login_succeeded",
-  "message": "login completed successfully",
-  "data": {
-    "accessToken": "jwt",
-    "tokenType": "Bearer",
-    "expiresAt": "2026-05-24T00:05:00Z",
-    "expiresIn": 300,
-    "refreshToken": "opaque-refresh-token",
-    "refreshExpiresAt": "2026-06-23T00:00:00Z"
-  }
-}
-```
-
-Rules:
-
-- Failed login attempts are tracked per normalized phone number.
-- Five incorrect logins within five minutes lock that account for fifteen minutes.
-- Refresh tokens are opaque random values.
-- Only the token hash is stored.
-- Refresh token records include lineage fields for replay detection.
-- A successful login creates a root refresh-token record.
-
-### `POST /tokens/refresh`
-
-Rotates a raw refresh token.
-
-Request:
-
-```json
-{
-  "refreshToken": "opaque-refresh-token"
-}
-```
-
-Success: `200 OK`
-
-Response body matches `/tokens`.
-
-Rules:
-
-- The current refresh token is marked used and replaced.
-- A replacement refresh token is created in the same lineage.
-- Reuse of an already replaced token revokes the whole lineage and returns a replay error.
-- Revoked or expired refresh tokens are rejected.
-
-### `GET /tokens`
-
-Lists raw refresh-token records for the authenticated user.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Success: `200 OK`
-
-Each item includes:
-
-- `id`
-- `clientIp`
-- `userAgent`
-- `expiresAt`
-- `lastUsedAt`
-- `replacedAt`
-- `revokedAt`
-- `createdAt`
-
-### `DELETE /tokens/:tokenId`
-
-Revokes one raw refresh-token record owned by the authenticated user.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Success response is a message envelope.
-
-### `POST /tokens/revoke-all`
-
-Revokes all raw refresh-token records for the authenticated user.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-### `POST /sessions`
-
-Authenticates with phone number and password. Creates a database-backed login session and sets the configured `HttpOnly` cookie.
-
-Request:
-
-```json
-{
-  "phoneNumber": "+8562012345678",
-  "password": "secretpass"
-}
-```
-
-Success: `200 OK`
-
-```json
-{
-  "success": true,
-  "code": "login_session_created",
-  "message": "login session created successfully",
-  "data": {}
-}
-```
-
-Cookie behavior:
-
-- Cookie name defaults to `ddone_session`.
-- Cookie path is `/`.
-- Cookie is `HttpOnly`.
-- `Secure`, `SameSite`, and max age are configurable.
-- The raw session token is not returned in the body.
-
-### `POST /sessions/token`
-
-Returns the current access token stored in the login session. If the stored access token has expired but the login session is still active, the service issues a fresh access token, updates the session, and refreshes the cookie max age.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-Success: `200 OK`
-
-```json
-{
-  "success": true,
-  "code": "session_token_issued",
-  "message": "session token issued successfully",
-  "data": {
-    "accessToken": "jwt",
-    "tokenType": "Bearer",
-    "expiresAt": "2026-05-24T00:05:00Z",
-    "expiresIn": 300
-  }
-}
-```
-
-### `GET /sessions`
-
-Lists login sessions for the current session user.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-Each item includes:
-
-- `id`
-- `clientIp`
-- `userAgent`
-- `currentAccessExpires`
-- `createdAt`
-- `revokedAt`
-
-### `GET /sessions/current`
-
-Returns the current login session.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-### `DELETE /sessions/:sessionId`
-
-Revokes one login session owned by the current session user.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-### `POST /sessions/revoke-others`
-
-Revokes all other login sessions for the current session user while keeping the current session active.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-### `POST /sessions/revoke-all`
-
-Revokes all login sessions for the current session user.
-
-Auth:
-
-```text
-Cookie: ddone_session=<sessionToken>
-```
-
-### `POST /password-resets`
-
-Starts a password reset OTP flow.
-
-Request:
-
-```json
-{
-  "phoneNumber": "+8562012345678"
-}
-```
-
-Success: `202 Accepted`
-
-```json
-{
-  "success": true,
-  "code": "password_reset_otp_sent",
-  "message": "otp sent successfully",
-  "data": {
-    "ticketId": "pwd_abc123",
-    "expiresAt": "2026-05-24T00:05:00Z",
-    "otpLength": 6,
-    "resendCooldownSeconds": 60,
-    "remainingResendCount": 3
-  }
-}
-```
-
-Rules:
-
-- OTP TTL is 5 minutes.
-- One reset request per phone number per 5-minute window.
-- Maximum resend count is 3.
-- Resend cooldown is 60 seconds.
-- Maximum invalid verification attempts is 5.
-- Password reset cannot be started within 7 days of the last successful password reset or password change.
-
-### `POST /password-resets/resend`
-
-Resends a password-reset OTP.
-
-Request:
-
-```json
-{
-  "ticketId": "pwd_abc123"
-}
-```
-
-Success response matches `/password-resets`.
-
-### `POST /password-resets/verify`
-
-Verifies the reset OTP, updates the password, and revokes existing raw refresh-token records and login sessions.
-
-Request:
-
-```json
-{
-  "ticketId": "pwd_abc123",
-  "otpCode": "123456",
-  "newPassword": "newsecretpass"
-}
-```
-
-Success response is a message envelope.
-
-Additional rule:
-
-- Verification is rejected if the user's password was changed within the last 7 days.
-
-### `GET /settings` and `GET /settings/me`
-
-Returns the current authenticated user's profile and change metadata.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Success fields:
-
-- `id`
-- `username`
-- `phoneNumber`
-- `phoneVerifiedAt`
-- `usernameChangedAt`
-- `usernameCanChangeAt`
-- `canChangeUsername`
-- `canChangePassword`
-- `passwordChangedAt`
-- `createdAt`
-- `updatedAt`
-
-### `PATCH /settings/username`
-
-Updates the username for the authenticated user.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Request:
-
-```json
-{
-  "username": "new_name"
-}
-```
-
-Rules:
-
-- Username is lowercased and trimmed.
-- Username length must be 3 to 50 characters.
-- Allowed characters are `a-z`, `0-9`, and `_`.
-- Username must be unique.
-- Username can be changed once every 7 days.
-
-### `POST /settings/password`
-
-Changes the authenticated user's password after verifying the current password. A successful change revokes existing raw refresh-token records and login sessions.
-
-Auth:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-Request:
-
-```json
-{
-  "currentPassword": "secretpass",
-  "newPassword": "newsecretpass"
-}
-```
-
-Rules:
-
-- Password change is rejected if the user's password was changed within the last 7 days.
-
-### `GET /.well-known/jwks.json`
-
-Returns public signing keys for access-token verification.
-
-Success: `200 OK`
-
-```json
-{
-  "keys": [
-    {
-      "kty": "EC",
-      "use": "sig",
-      "crv": "P-256",
-      "alg": "ES256",
-      "kid": "key-id",
-      "x": "base64url-x",
-      "y": "base64url-y"
-    }
-  ]
-}
-```
-
-Response headers:
-
-- `Cache-Control: public, max-age=300`
-- `ETag: "<hash>"`
-
-If `If-None-Match` matches the current ETag, the server returns `304 Not Modified`.
-
-## 11. Business Logic
-
-### Phone Normalization
-
-Phone normalization lives in `internal/domain/user/phone.go`.
-
-Accepted input examples include:
-
-- `+8562012345678`
-- `8562012345678`
-- `008562012345678`
-- `02012345678`
-- `2012345678`
-
-The normalized result must be 10 digits and start with `20`.
-
-### Registration Flow
-
-1. Normalize the phone number.
-2. Require password.
-3. Enforce phone-based registration rate limit.
-4. Reject if the phone number is already registered.
-5. Generate a unique username.
-6. Hash the password with bcrypt.
-7. Generate a 6-digit OTP.
-8. Hash the OTP with the ticket ID.
-9. Send the OTP by SMS.
-10. Store pending registration state in Redis.
-11. Return the registration ticket.
-
-Verification:
-
-1. Load pending registration state from Redis.
-2. Reject expired, missing, or malformed ticket state.
-3. Enforce invalid OTP attempt limit.
-4. Recheck phone and username uniqueness.
-5. Create the PostgreSQL account.
-6. Delete ticket and verification counter state.
-
-### Password Reset Flow
-
-1. Normalize the phone number.
-2. Enforce phone-based reset rate limit.
-3. Load the user by phone number.
-4. Reject if `PasswordChangedAt` is within the 7-day cooldown window.
-5. Generate a 6-digit OTP and reset ticket.
-6. Store reset ticket state in Redis.
-7. Send OTP by SMS.
-8. Return the reset ticket.
-
-Verification:
-
-1. Load reset ticket state.
-2. Reject expired, missing, or malformed ticket state.
-3. Enforce invalid OTP attempt limit.
-4. Load the user by ID.
-5. Reject if `PasswordChangedAt` is within the 7-day cooldown window.
-6. Hash and store the new password.
-7. Delete ticket and verification counter state.
-8. Revoke raw refresh tokens with reason `password_reset`.
-9. Revoke login sessions with reason `password_reset`.
-
-### Login With Raw Refresh Token
-
-1. Normalize phone number.
-2. Load user by phone number.
-3. Compare bcrypt password hash.
-4. Issue ES256 access token.
-5. Generate opaque refresh token and UUID record.
-6. Store token hash, metadata, expiry, and lineage.
-7. Return access token and raw refresh token.
-
-Refresh:
-
-1. Hash provided refresh token.
-2. Load token record.
-3. Reject replaced, revoked, or expired tokens.
-4. Revoke lineage on refresh-token replay.
-5. Load user and issue new access token.
-6. Create replacement refresh-token record.
-7. Mark current record used and replaced.
-8. Return new access token and raw refresh token.
-
-### Login Session Flow
-
-1. Normalize phone number.
-2. Authenticate password.
-3. Issue ES256 access token.
-4. Generate opaque session token and UUID session ID.
-5. Store only the session token hash.
-6. Store current access token and expiry in the session record.
-7. Set `HttpOnly` session cookie.
-
-Session token endpoint:
-
-1. Authenticate session cookie in middleware.
-2. Load current session.
-3. Reject revoked or expired session.
-4. Return existing access token if still active.
-5. Issue and store a fresh access token if needed.
-6. Extend login-session expiry only when a fresh access token is issued.
-
-### JWKS And Signing Key Flow
-
-Startup calls `EnsureActiveSigningKey`.
-
-The JWKS service:
-
-- Deletes expired signing keys.
-- Ensures one active key exists.
-- Pre-generates the next scheduled key.
-- Uses PostgreSQL advisory locks so multiple app instances do not create duplicate key rings.
-- Separates private signing-key reads from public key reads.
-- Uses Redis to cache public key material only.
-
-JWT behavior:
-
-- Access tokens are ES256 compact JWTs.
-- Header includes `alg=ES256`, `kid`, and `typ=JWT`.
-- Claims include `iss`, `sub`, `aud`, `jti`, `iat`, `nbf`, `exp`, `userId`, and optional `phone_number`.
-- Verification rejects invalid algorithm, missing key ID, wrong issuer, wrong audience, missing subject, missing JWT ID, invalid time claims, future scheduled keys, retired unpublished keys, malformed signatures, and high-S ECDSA signatures.
-
-## 12. Security Model
-
-### Passwords
-
-- Passwords are bcrypt hashed.
-- Password request fields require 8 to 72 characters at the HTTP binding layer.
-- Password reset and password change revoke both raw refresh-token records and login sessions.
-
-### OTP
-
-- OTP values are 6 numeric digits.
-- OTP values are not stored directly.
-- OTP hashes include the ticket ID.
-- Registration and password reset OTPs expire after 5 minutes.
-- Invalid OTP attempts are rate limited and eventually invalidate the ticket.
-
-### Tokens
-
-- Access tokens are signed JWTs with ES256.
-- Refresh tokens and session tokens are opaque random values.
-- Only hashes of refresh tokens and session tokens are stored.
-- Refresh token replay revokes the full token lineage.
-- Login sessions store the current access token server-side.
-
-### Cookies
-
-- Session cookies are `HttpOnly`.
-- `Secure` defaults to true in config defaults, but local `config/config.yaml` disables it for HTTP development.
-- `SameSite=None` requires `Secure=true`.
-- Browser clients using cookies across origins need explicit CORS origins and `DDONE_CORS_ALLOW_CREDENTIALS=true`.
-
-### Signing Keys
-
-- Private signing keys are stored in PostgreSQL.
-- Private signing keys are required only for issuing JWTs.
-- Public JWKS and token verification use public key material only.
-- Redis signing-key cache stores public key material only.
-- Public JWKS responses include ETag and `Cache-Control`.
-
-## 13. Maintenance
-
-### Daily Development
-
-Use:
-
-```bash
-make test
-make fmt
-```
-
-Run infrastructure as needed:
+5. Run GORM auto-migration.
+6. Create Wenova SMS client.
+7. Build repositories and Redis cache decorators.
+8. Build ES256 token codec.
+9. Build JWKS service and ensure an active signing key exists.
+10. Build JWT service.
+11. Build login, registration, password, settings, session, token-manager services.
+12. Build handlers and middleware.
+13. Register routes.
+14. Start the HTTP server.
+15. Gracefully shut down on `SIGINT` or `SIGTERM`.
+
+The HTTP server uses a 5-second read-header timeout and a 10-second graceful shutdown timeout.
+
+## 13. Local Development
+
+Start PostgreSQL and Redis only:
 
 ```bash
 make infra-up
-make infra-ps
-make infra-logs
+```
+
+Run the service directly:
+
+```bash
+make run
+```
+
+Run the full Docker Compose stack:
+
+```bash
+make compose-up
+```
+
+Build and start the full Docker Compose stack:
+
+```bash
+make compose-up-build
+```
+
+Run tests:
+
+```bash
+make test
+```
+
+Format Go code:
+
+```bash
+make fmt
+```
+
+Stop infrastructure:
+
+```bash
 make infra-down
 ```
 
-### Database
+Stop the full stack:
 
-The app currently runs GORM `AutoMigrate` on startup for:
+```bash
+make compose-down
+```
 
-- `accounts`
-- `auth_refresh_sessions`
-- `auth_login_sessions`
-- `auth_signing_keys`
+`docker-infra.yml` exposes PostgreSQL and Redis on host ports for direct local development. `docker-compose.yml` runs the app, PostgreSQL, and Redis on an internal Docker network and exposes only the app port.
 
-The `pgcrypto` extension setup is external to runtime code and belongs to database provisioning.
+## 14. Build, Release, And Deployment
 
-For production, prefer explicit migration tooling before startup instead of relying only on runtime auto-migration.
+Build a local binary:
 
-### Redis
+```bash
+make build
+```
 
-Redis state is safe to clear in local development, but clearing production Redis can affect:
+Build release zip bundles:
 
-- Pending registration tickets
-- Pending password-reset tickets
-- OTP counters
-- Read-through cache hit rates
+```bash
+make release
+make release RELEASE_VERSION=v1.0.0
+```
 
-Clearing Redis does not delete accounts, refresh-token records, login sessions, or signing keys because those live in PostgreSQL.
+Release artifacts are written to `dist/` and include:
 
-### Signing-Key Rotation
+- compiled binary
+- `config/config.yaml`
+- `deploy/systemd/`
+- `start.sh`
+- `systemctl.sh`
+- `README.md`
+- `RUN.txt`
 
-Defaults:
+Supported release architectures default to Linux `amd64` and Linux `arm64`.
 
-- Rotation interval: `2160h`
-- Retention window: `4320h`
+Build a Docker image:
 
-The service keeps retired public keys published until retention ends so access tokens signed shortly before rotation can still verify.
+```bash
+docker build -t barluscuda/ddone-server-auth .
+```
 
-Operational notes:
+systemd assets:
 
-- All app instances should share the same PostgreSQL signing-key table.
-- Redis public-key cache TTL should remain short enough that key publication changes propagate quickly.
-- If signing keys are lost, existing access tokens cannot be verified and new signing keys must be generated.
-- If private key material is suspected compromised, rotate keys and consider shortening access-token TTL or revoking dependent sessions/tokens at the application level.
+- `deploy/systemd/ddone-server-auth.service`
+- `deploy/systemd/ddone-server-auth.env.example`
 
-### Token And Session Revocation
+Makefile systemd helpers:
 
-Revocation is represented by timestamps and reason strings.
+```bash
+make systemd-install
+make systemd-bootstrap
+make systemd-enable
+make systemd-start
+make systemd-status
+make systemd-logs
+make systemd-restart
+make systemd-stop
+```
 
-Known reasons include:
+Default install layout:
 
-- `refresh_token_replay`
-- `password_reset`
-- `password_changed`
-- `token_revoked`
-- `all_tokens_revoked`
-- `session_revoked`
-- `other_sessions_revoked`
-- `all_sessions_revoked`
+- binary: `/usr/local/bin/ddone-server-auth`
+- working directory: `/opt/ddone-server-auth`
+- environment file: `/etc/ddone-server-auth/ddone-server-auth.env`
 
-### Logging
+## 15. Documentation Set
 
-Zap logging is configured under `internal/bootstrap/logging`.
+- `docs/project.md`: this project handbook
+- `docs/api.md`: endpoint-level API reference
+- `docs/jwt.md`: downstream JWT verification guide
+- `docs/postman.md`: Postman usage guide
+- `README.md`: quick-start and deployment overview
+- `AGENTS.md`: coding-agent rules for this repository
 
-Middleware logs HTTP requests and recovers panics. Avoid logging raw tokens, OTP codes, passwords, or private key material.
+Keep `README.md`, `docs/api.md`, `docs/jwt.md`, Postman assets, and this file aligned when changing behavior that affects them.
 
-## 14. Testing
+## 16. Testing
 
 Run all tests:
 
@@ -1187,76 +642,38 @@ Run all tests:
 go test ./...
 ```
 
-Test coverage currently includes:
+Current coverage includes:
 
 - Config validation
 - DTO JSON field casing
 - HTTP handler behavior
-- Middleware auth, CORS, and recovery
-- ES256 signing and verification
+- Middleware auth, CORS, and recovery behavior
+- Redis signing-key cache behavior
+- ES256 signing, verification, and JWK behavior
+- JWT application orchestration
 - JWKS key lifecycle
 - Registration OTP flow and limits
-- Login and refresh-token behavior
+- Login, refresh-token rotation, and replay handling
 - Password reset and password change
 - Login-session behavior
-- Settings username behavior
+- Settings and username update behavior
 - Token manager behavior
 
 When adding behavior:
 
-- Prefer application-level unit tests for business logic.
-- Use handler tests for HTTP mapping and status codes.
-- Add adapter tests when serialization, token verification, cache key behavior, or persistence mapping changes.
+- Prefer application-level unit tests for business rules and orchestration.
+- Use handler tests for HTTP request/response mapping and status codes.
+- Add adapter tests for serialization, token verification, cache-key behavior, persistence mapping, and external integration boundaries.
+- Run `gofmt -w` on touched Go files.
+- Run `go test ./...` after code changes.
 
-## 15. Postman
+## 17. Operational Notes
 
-Postman assets live in:
-
-- [postman/ddone-server-auth.postman_collection.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.postman_collection.json)
-- [postman/ddone-server-auth.local.postman_environment.json](https://github.com/barluscuda/ddone-server-auth/blob/main/postman/ddone-server-auth.local.postman_environment.json)
-- [docs/postman.md](https://github.com/barluscuda/ddone-server-auth/blob/main/docs/postman.md)
-
-Recommended manual flow:
-
-1. Health check
-2. Register
-3. Verify registration OTP
-4. Login with body tokens
-5. Refresh token
-6. Create login session
-7. Get session access token
-8. Forgot password
-9. Verify password reset OTP
-10. Login again
-11. Change password
-12. Settings
-13. Update username
-14. Token manager
-15. Session manager
-16. JWKS
-
-## 16. Extension Rules
-
-When adding a feature:
-
-1. Put new orchestration in `internal/application/<usecase>`.
-2. Define ports close to the use case that owns them.
-3. Keep domain types free of framework, transport, cache, and persistence metadata.
-4. Add HTTP request and response DTOs under `internal/adapters/dto`.
-5. Keep handlers thin and dependent on application interfaces.
-6. Put PostgreSQL records and GORM tags in `internal/adapters/repository`.
-7. Put Redis keys and JSON cache shapes in `internal/adapters/cache`.
-8. Put SMS or other external integrations under `internal/adapters`.
-9. Wire concrete adapters only from `cmd/app`.
-10. Update README, this document, Postman assets, and tests when behavior or API contracts change.
-
-## 17. Known Architecture Work
-
-The current structure is close to the target hexagonal shape, but these are good future improvements:
-
-- Replace runtime GORM `AutoMigrate` with explicit migration tooling.
-- Move route registration and server construction out of `cmd/app` if `cmd/app` grows beyond composition.
-- Add repository integration tests with PostgreSQL for key migration and unique constraint behavior.
-- Add a formal OpenAPI document generated from the DTO contract.
-- Add operational metrics for OTP sends, login failures, token refreshes, session refreshes, and JWKS cache hits.
-- Add administrative tooling for emergency signing-key rotation and token/session revocation.
+- Do not log raw tokens, OTP codes, passwords, or private key material.
+- Preserve refresh-token lineage fields because replay handling depends on them.
+- Preserve `auth_refresh_sessions` table compatibility unless a migration plan exists.
+- Public signing-key cache must not include private key PEM.
+- Startup requires PostgreSQL and Redis availability.
+- Registration and password reset require a valid Wenova token in real environments.
+- If signing keys are lost, existing access tokens cannot be verified and new keys must be generated.
+- If private signing-key material is suspected compromised, rotate keys and consider shortening token TTLs or revoking dependent sessions/tokens.

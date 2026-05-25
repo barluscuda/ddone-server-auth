@@ -8,16 +8,19 @@ import (
 )
 
 type UseCase interface {
+	SigningKeyProvider
+	PublicJWKSetProvider
+}
+
+type SigningKeyProvider interface {
 	EnsureActiveSigningKey(ctx context.Context) (*auth.SigningKey, error)
-	IssueAccessToken(ctx context.Context, userID string, phoneNumber string) (*auth.AccessToken, error)
-	VerifyAccessToken(ctx context.Context, tokenValue string) (*auth.AccessTokenClaims, error)
+}
+
+type PublicJWKSetProvider interface {
 	PublicJWKS(ctx context.Context) (*auth.JWKSet, error)
 }
 
 type Settings struct {
-	Issuer              string
-	Audience            string
-	AccessTokenTTL      time.Duration
 	SigningKeyRotation  time.Duration
 	SigningKeyRetention time.Duration
 }

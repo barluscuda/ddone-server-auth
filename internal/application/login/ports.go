@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	appjwt "ddone-server-auth/internal/application/jwt"
 	"ddone-server-auth/internal/domain/auth"
 	"ddone-server-auth/internal/domain/user"
 )
@@ -25,9 +26,7 @@ type LoginSessionStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error)
 }
 
-type AccessTokenIssuer interface {
-	IssueAccessToken(ctx context.Context, userID string, phoneNumber string) (*auth.AccessToken, error)
-}
+type AccessTokenIssuer = appjwt.Issuer
 
 type LoginRateLimiter interface {
 	GetCounter(ctx context.Context, key string) (int64, error)

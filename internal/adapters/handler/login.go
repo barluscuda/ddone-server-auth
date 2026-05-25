@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"context"
 	"crypto/sha256"
 	"ddone-server-auth/internal/adapters/dto"
+	appjwks "ddone-server-auth/internal/application/jwks"
 	applogin "ddone-server-auth/internal/application/login"
 	"ddone-server-auth/internal/domain/auth"
 	"encoding/hex"
@@ -248,9 +248,7 @@ type JWKSHandler struct {
 	jwks JWKSUseCase
 }
 
-type JWKSUseCase interface {
-	PublicJWKS(cxt context.Context) (*auth.JWKSet, error)
-}
+type JWKSUseCase = appjwks.PublicJWKSetProvider
 
 func NewJWKSHandler(jwks JWKSUseCase) *JWKSHandler {
 	return &JWKSHandler{jwks: jwks}

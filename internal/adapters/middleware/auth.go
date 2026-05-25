@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ddone-server-auth/internal/adapters/dto"
+	appjwt "ddone-server-auth/internal/application/jwt"
 	"ddone-server-auth/internal/domain/auth"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +14,7 @@ import (
 
 const authContextKey = "auth_context"
 
-type AccessTokenVerifier interface {
-	VerifyAccessToken(ctx context.Context, tokenValue string) (*auth.AccessTokenClaims, error)
-}
+type AccessTokenVerifier = appjwt.Verifier
 
 type AuthContext struct {
 	UserID      string

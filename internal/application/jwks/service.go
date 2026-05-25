@@ -127,35 +127,6 @@ func hasPreparedSuccessor(keys []auth.SigningKey, current auth.SigningKey) bool 
 	return false
 }
 
-func (s *Service) IssueAccessToken(
-	ctx context.Context,
-	userID string,
-	phoneNumber string,
-) (*auth.AccessToken, error) {
-	key, err := s.EnsureActiveSigningKey(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	now := s.now()
-	tokenID, err := randomTokenID()
-	if err != nil {
-		return nil, err
-	}
-
-	return s.codec.IssueAccessToken(key, auth.AccessTokenClaims{
-		Issuer:      s.settings.Issuer,
-		UserID:      userID,
-		Subject:     userID,
-		Audience:    s.settings.Audience,
-		JWTID:       tokenID,
-		PhoneNumber: phoneNumber,
-		IssuedAt:    now,
-		NotBefore:   now,
-		ExpiresAt:   now.Add(s.settings.AccessTokenTTL),
-	})
-}
-
 func (s *Service) PublicJWKS(ctx context.Context) (*auth.JWKSet, error) {
 	now := s.now()
 	if err := s.store.DeleteExpired(ctx, now); err != nil {
@@ -176,26 +147,6 @@ func (s *Service) PublicJWKS(ctx context.Context) (*auth.JWKSet, error) {
 	}
 
 	return &auth.JWKSet{Keys: publicKeys}, nil
-}
-
-func (s *Service) VerifyAccessToken(ctx context.Context, tokenValue string) (*auth.AccessTokenClaims, error) {
-	now := s.now()
-	if err := s.store.DeleteExpired(ctx, now); err != nil {
-		return nil, err
-	}
-
-	keys, err := s.store.ListPublicKeys(ctx, now)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.codec.VerifyAccessToken(
-		tokenValue,
-		keys,
-		s.settings.Issuer,
-		s.settings.Audience,
-		now,
-	)
 }
 
 func randomTokenID() (string, error) {

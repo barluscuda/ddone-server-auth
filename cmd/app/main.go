@@ -11,6 +11,7 @@ import (
 	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/adapters/token"
 	appjwks "ddone-server-auth/internal/application/jwks"
+	appjwt "ddone-server-auth/internal/application/jwt"
 	applogin "ddone-server-auth/internal/application/login"
 	appotp "ddone-server-auth/internal/application/otp"
 	apppassword "ddone-server-auth/internal/application/password"
@@ -91,16 +92,18 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 	loginRateLimiter := cache.NewLoginRateLimiter(redisClient)
 	tokenCodec := token.NewES256Codec()
 	jwksService := appjwks.NewService(signingKeyRepository, tokenCodec, appjwks.Settings{
-		Issuer:              cfg.Security.Auth.Issuer,
-		Audience:            cfg.Security.Auth.Audience,
-		AccessTokenTTL:      cfg.Security.Auth.AccessTokenTTL,
 		SigningKeyRotation:  cfg.Security.Auth.SigningKeyRotation,
 		SigningKeyRetention: cfg.Security.Auth.SigningKeyRetention,
 	})
 	if _, err := jwksService.EnsureActiveSigningKey(context.Background()); err != nil {
 		logger.Fatal("failed to ensure active signing key", zap.Error(err))
 	}
-	loginService := applogin.NewService(userRepository, tokenRepository, loginSessionRepository, jwksService, loginRateLimiter, applogin.Settings{
+	jwtService := appjwt.NewService(jwksService, signingKeyRepository, tokenCodec, appjwt.Settings{
+		Issuer:         cfg.Security.Auth.Issuer,
+		Audience:       cfg.Security.Auth.Audience,
+		AccessTokenTTL: cfg.Security.Auth.AccessTokenTTL,
+	})
+	loginService := applogin.NewService(userRepository, tokenRepository, loginSessionRepository, jwtService, loginRateLimiter, applogin.Settings{
 		RefreshTokenTTL:     cfg.Security.Auth.RefreshTokenTTL,
 		LoginSessionTTL:     cfg.Security.Auth.LoginSessionTTL,
 		FailedAttemptWindow: cfg.Security.Login.FailedAttemptWindow,
@@ -118,7 +121,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		},
 	)
 	settingsService := appsettings.NewService(userRepository)
-	sessionService := appsession.NewService(loginSessionRepository, userRepository, jwksService, appsession.Settings{
+	sessionService := appsession.NewService(loginSessionRepository, userRepository, jwtService, appsession.Settings{
 		LoginSessionTTL: cfg.Security.Auth.LoginSessionTTL,
 	})
 	tokenManagerService := apptokenmanager.NewService(tokenRepository)
@@ -149,7 +152,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		sessionHandler,
 		tokenManagerHandler,
 		passwordHandler,
-		middleware.RequireAccessToken(jwksService),
+		middleware.RequireAccessToken(jwtService),
 		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository),
 		jwksHandler,
 	)
