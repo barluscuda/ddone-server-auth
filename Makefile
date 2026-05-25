@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 .PHONY: \
-	help build run test fmt tidy clean \
+	help build run test fmt tidy clean release \
 	compose-up compose-up-build compose-down compose-logs compose-ps compose-build \
 	infra-up infra-down infra-logs infra-ps \
 	install-user install-dirs install-bin install-config install-env install-unit \
@@ -24,6 +24,8 @@ BIN := ddone-server-auth
 BUILD_DIR ?= .
 BIN_PATH := $(BUILD_DIR)/$(BIN)
 GO_FILES := $(shell rg --files . -g'*.go')
+RELEASE_OUT_DIR ?= dist
+RELEASE_VERSION ?=
 
 SERVICE_NAME ?= ddone-server-auth
 SERVICE_USER ?= ddone
@@ -52,6 +54,7 @@ help:
 	@echo "  make fmt               - Format Go files"
 	@echo "  make tidy              - Tidy Go modules"
 	@echo "  make clean             - Remove the built binary"
+	@echo "  make release           - Build zip release bundles for linux amd64 and linux arm64"
 	@echo "  make compose-build     - Build the full Docker Compose app image"
 	@echo "  make compose-up        - Start the full Docker Compose stack without rebuilding"
 	@echo "  make compose-up-build  - Build and start the full Docker Compose stack"
@@ -74,6 +77,8 @@ help:
 	@echo ""
 	@echo "Overridable variables:"
 	@echo "  BUILD_DIR=$(BUILD_DIR)"
+	@echo "  RELEASE_OUT_DIR=$(RELEASE_OUT_DIR)"
+	@echo "  RELEASE_VERSION=$(RELEASE_VERSION)"
 	@echo "  SERVICE_NAME=$(SERVICE_NAME)"
 	@echo "  SERVICE_USER=$(SERVICE_USER)"
 	@echo "  SERVICE_GROUP=$(SERVICE_GROUP)"
@@ -101,6 +106,9 @@ tidy:
 
 clean:
 	rm -f $(BIN_PATH)
+
+release:
+	VERSION="$(RELEASE_VERSION)" OUT_DIR="$(RELEASE_OUT_DIR)" ./scripts/release.sh
 
 compose-build:
 	$(DOCKER) compose -f $(COMPOSE_FILE) build

@@ -131,6 +131,23 @@ Build the production binary:
 make build
 ```
 
+Build release zip bundles for Linux `amd64` and Linux `arm64`:
+
+```bash
+make release
+```
+
+Override the release version when needed:
+
+```bash
+make release RELEASE_VERSION=v1.0.0
+```
+
+Release artifacts are written to `dist/`:
+
+- `ddone-server-auth_<version>_linux-x86_64.zip`
+- `ddone-server-auth_<version>_linux-arm64.zip`
+
 Build the Docker image:
 
 ```bash
