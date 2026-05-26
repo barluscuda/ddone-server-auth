@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"ddone-server-auth/internal/domain/user"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -272,7 +273,7 @@ func enforceOTPPhoneCounter(
 	if endpoint.Action != otpSpamActionStart || !endpoint.RequiresPhone {
 		return nil
 	}
-	phoneNumber := strings.TrimSpace(payload.PhoneNumber)
+	phoneNumber := normalizedOTPPhoneValue(payload.PhoneNumber)
 	if phoneNumber == "" || cfg.PhoneWindow <= 0 || cfg.MaxPhoneRequests <= 0 {
 		return nil
 	}
@@ -454,6 +455,20 @@ func otpPhoneRateKey(flow otpSpamFlow, phoneNumber string) string {
 	default:
 		return fmt.Sprintf("otp_spam:%s:phone:%s", flow, digest)
 	}
+}
+
+func normalizedOTPPhoneValue(raw string) string {
+	phoneNumber := strings.TrimSpace(raw)
+	if phoneNumber == "" {
+		return ""
+	}
+
+	normalized, err := user.NormalizePhoneNumber(phoneNumber)
+	if err == nil && normalized != "" {
+		return normalized
+	}
+
+	return phoneNumber
 }
 
 type otpSpamResponseWriter struct {

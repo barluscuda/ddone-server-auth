@@ -261,6 +261,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Refresh rotates on every use.
 - Rotation marks the current record used and replaced, then creates a replacement record linked to the same root lineage.
 - Reuse of a replaced refresh token is treated as replay and revokes the lineage.
+- Refresh also rejects a different non-empty `User-Agent` than the one stored on the current refresh-token record and revokes that token lineage.
 
 ### Login Sessions
 
@@ -278,6 +279,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Password request fields are required to be 8 to 72 characters at the HTTP binding layer.
 - Password hashes are produced with bcrypt.
 - Password reset and authenticated password change revoke all refresh tokens and login sessions for the user.
+- Public password-reset start requests return the same accepted response for unknown phone numbers, but do not persist reset state or send an OTP for those requests.
 
 ### OTP
 
@@ -288,6 +290,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Default OTP TTL is `5m`.
 - Default system-wide registration start limit is `30` requests per `10m`.
 - OTP spam detection runs in middleware before OTP handlers.
+- OTP spam phone counters normalize phone numbers before hashing the phone key so equivalent input formats share the same counter.
 - The middleware classifies OTP clients as likely user, suspicious, or likely bot from request metadata and body shape without storing raw request bodies.
 - Bot-like signals such as automation user agents, missing user agents, malformed OTP fields, and unexpected content types add risk to the request's IP score.
 - Likely browser traffic with normal JSON headers gets a lower request score.
@@ -323,6 +326,13 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - The current supported country code path is Lao phone numbers.
 - Unsupported telephone codes produce application/domain errors mapped by handlers.
 
+### Login Rate Limiting
+
+- Password login still enforces failed-attempt windows and lockouts through the Redis-backed rate limiter port.
+- When a client IP is available, login failures lock on `ip` and `phone_ip` scopes instead of globally locking the phone number.
+- If the client IP is unavailable, the service falls back to the legacy phone-number lock scope.
+- Successful login clears the failed-attempt counters for the scopes used by that login attempt.
+
 ### Cookies And CORS
 
 - Session cookies are `HttpOnly`.
@@ -330,7 +340,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - `SameSite=None` requires `Secure=true`.
 - Cross-origin cookie clients need explicit allowed origins and `cors.allow_credentials=true`.
 - Config validation rejects `cors.allowed_origins=["*"]` when credentials are enabled.
-- Unsafe cookie-session requests with `Origin` or `Referer` are accepted only from the same host or configured explicit CORS origins; wildcard origins are not trusted for this check.
+- Unsafe cookie-session requests require `Origin` or `Referer` and accept only the same host or configured explicit CORS origins; wildcard origins are not trusted for this check.
 
 ### Signing Keys
 

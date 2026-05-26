@@ -24,7 +24,7 @@ Bearer-token routes require:
 Authorization: Bearer <accessToken>
 ```
 
-Session routes require the `HttpOnly` session cookie set by `POST /sessions`. The default cookie name is `ddone_session`. Unsafe session-cookie requests reject untrusted `Origin` or `Referer` values with `403 session_origin_forbidden`.
+Session routes require the `HttpOnly` session cookie set by `POST /sessions`. The default cookie name is `ddone_session`. Unsafe session-cookie requests reject missing or untrusted `Origin` and `Referer` values with `403 session_origin_forbidden`.
 
 ## Health
 
@@ -430,7 +430,7 @@ Common errors: `401 session_token_required`, `401 invalid_session`, `403 session
 
 ### `POST /password-resets`
 
-Starts password reset and sends an OTP by SMS. This is blocked for 7 days after a successful password reset or password change.
+Starts password reset and sends an OTP by SMS when the phone number belongs to an account. This is blocked for 7 days after a successful password reset or password change. Unknown phone numbers still receive the same accepted response shape, but no OTP is sent and no reset ticket is persisted.
 
 Request:
 
@@ -457,7 +457,7 @@ Success `202 Accepted`:
 }
 ```
 
-Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `404 user_not_found`, `429 password_reset_rate_limited`, `429 password_change_cooldown_active`.
+Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `429 password_reset_rate_limited`, `429 password_change_cooldown_active`.
 
 ### `POST /password-resets/resend`
 

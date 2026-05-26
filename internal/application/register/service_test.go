@@ -69,9 +69,14 @@ type fakeRegistrationStore struct {
 	counters      map[string]int64
 	counterTTLs   map[string]time.Duration
 	deletedKeys   []string
+	saveErr       error
+	deleteErr     error
 }
 
 func (s *fakeRegistrationStore) Save(_ context.Context, registration *user.PendingRegistration, _ time.Duration) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	if s.values == nil {
 		s.values = map[string]*user.PendingRegistration{}
 	}
@@ -88,6 +93,9 @@ func (s *fakeRegistrationStore) Get(_ context.Context, ticketID string) (*user.P
 }
 
 func (s *fakeRegistrationStore) Delete(_ context.Context, ticketID string) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
 	s.deletedTicket = ticketID
 	delete(s.values, ticketID)
 	return nil
@@ -122,9 +130,11 @@ type fakeOTPSender struct {
 	phoneNumber string
 	message     string
 	err         error
+	called      bool
 }
 
 func (s *fakeOTPSender) SendOTP(_ context.Context, telCode string, number string, msg string) error {
+	s.called = true
 	s.telCode = telCode
 	s.phoneNumber = number
 	s.message = msg
@@ -262,10 +272,30 @@ func TestRegisterServiceRegisterDoesNotSaveRegistrationWhenSMSFails(t *testing.T
 		t.Fatal("expected sms failure")
 	}
 	if _, getErr := store.Get(context.Background(), "reg_fixed123"); !errors.Is(getErr, user.ErrPendingRegistrationNotFound) {
-		t.Fatalf("expected no registration to be saved after sms failure, got %v", getErr)
+		t.Fatalf("expected saved registration to be cleaned up after sms failure, got %v", getErr)
 	}
-	if store.deletedTicket != "" {
-		t.Fatalf("expected no cleanup delete when registration was never saved, got %q", store.deletedTicket)
+	if store.deletedTicket != "reg_fixed123" {
+		t.Fatalf("expected cleanup delete for failed sms send, got %q", store.deletedTicket)
+	}
+}
+
+func TestRegisterServiceRegisterDoesNotSendSMSWhenSaveFails(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{saveErr: errors.New("redis unavailable")}
+	sender := &fakeOTPSender{}
+	service := NewService(repo, store, sender)
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
+
+	_, err := service.Register(context.Background(), RegisterInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+	})
+	if err == nil {
+		t.Fatal("expected save failure")
+	}
+	if sender.called {
+		t.Fatal("expected sms sender not to be called when save fails")
 	}
 }
 

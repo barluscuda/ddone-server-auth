@@ -203,6 +203,34 @@ func TestRequireSessionAllowsConfiguredOriginForUnsafeRequest(t *testing.T) {
 	}
 }
 
+func TestRequireSessionRejectsUnsafeRequestWithoutOriginOrReferer(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(RequireSession("ddone_session", &fakeSessionLookup{
+		session: &auth.LoginSession{
+			ID:        "session-1",
+			UserID:    "user-1",
+			ExpiresAt: time.Now().UTC().Add(time.Minute),
+		},
+	}, []string{"https://app.example.com"}))
+	router.POST("/sessions/token", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/sessions/token", nil)
+	req.Host = "api.example.com"
+	req.AddCookie(&http.Cookie{Name: "ddone_session", Value: "session-token"})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, recorder.Code)
+	}
+}
+
 func TestRequireSessionDoesNotTrustWildcardOriginForUnsafeRequest(t *testing.T) {
 	t.Setenv("GIN_MODE", gin.TestMode)
 	gin.SetMode(gin.TestMode)

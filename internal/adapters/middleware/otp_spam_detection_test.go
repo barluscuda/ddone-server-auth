@@ -143,6 +143,33 @@ func TestOTPSpamDetectionReducesScoreAfterSuccessfulVerify(t *testing.T) {
 	}
 }
 
+func TestOTPSpamDetectionNormalizesPhoneKeyAcrossFormats(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := &fakeOTPSpamStore{}
+	router := gin.New()
+	router.Use(OTPSpamDetection(store, testOTPSpamConfig()))
+	router.POST("/registrations", func(c *gin.Context) {
+		c.JSON(http.StatusAccepted, dto.ResMessage{Success: true})
+	})
+
+	first := performOTPSpamRequest(router, http.MethodPost, "/registrations", `{"phoneNumber":"02012345678"}`, browserUserAgent)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("expected first request accepted, got %d", first.Code)
+	}
+	second := performOTPSpamRequest(router, http.MethodPost, "/registrations", `{"phoneNumber":"+856 20 1234 5678"}`, browserUserAgent)
+	if second.Code != http.StatusAccepted {
+		t.Fatalf("expected second request accepted, got %d", second.Code)
+	}
+	if len(store.counters) != 1 {
+		t.Fatalf("expected one normalized phone counter, got %d", len(store.counters))
+	}
+	for _, count := range store.counters {
+		if count != 2 {
+			t.Fatalf("expected normalized phone counter to be incremented twice, got %d", count)
+		}
+	}
+}
+
 func testOTPSpamConfig() OTPSpamDetectionConfig {
 	flow := OTPSpamFlowConfig{
 		IPWindow:             10 * time.Minute,

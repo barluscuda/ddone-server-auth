@@ -110,14 +110,6 @@ func (s *Service) ForgotPassword(
 		return nil, err
 	}
 
-	userModel, err := s.users.GetByPhoneNumber(ctx, globalPhoneNumber)
-	if err != nil {
-		return nil, err
-	}
-	if s.passwordCooldownActive(userModel, s.now()) {
-		return nil, ErrPasswordCooldownActive
-	}
-
 	otpCode, err := s.otpGenerator(resetOTPLength)
 	if err != nil {
 		return nil, err
@@ -128,6 +120,17 @@ func (s *Service) ForgotPassword(
 	}
 
 	now := s.now()
+	userModel, err := s.users.GetByPhoneNumber(ctx, globalPhoneNumber)
+	if err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
+			return newResetTicketResult(ticketID, now.Add(s.otpPolicy.TTL), s.otpPolicy), nil
+		}
+		return nil, err
+	}
+	if s.passwordCooldownActive(userModel, now) {
+		return nil, ErrPasswordCooldownActive
+	}
+
 	state := &ResetTicketState{
 		TicketID:      ticketID,
 		UserID:        userModel.ID,
@@ -148,12 +151,7 @@ func (s *Service) ForgotPassword(
 		return nil, err
 	}
 
-	return &ResetTicketResult{
-		TicketID:             ticketID,
-		ExpiresAt:            state.OTPExpiresAt,
-		ResendCooldown:       s.otpPolicy.ResendCooldown,
-		RemainingResendCount: s.otpPolicy.MaxResends,
-	}, nil
+	return newResetTicketResult(ticketID, state.OTPExpiresAt, s.otpPolicy), nil
 }
 
 func (s *Service) ResendForgotPasswordOTP(
@@ -392,6 +390,15 @@ func generateResetTicket() (string, error) {
 	}
 
 	return resetTicketPrefix + hex.EncodeToString(randomBytes), nil
+}
+
+func newResetTicketResult(ticketID string, expiresAt time.Time, policy otp.Policy) *ResetTicketResult {
+	return &ResetTicketResult{
+		TicketID:             ticketID,
+		ExpiresAt:            expiresAt,
+		ResendCooldown:       policy.ResendCooldown,
+		RemainingResendCount: policy.MaxResends,
+	}
 }
 
 func hashPassword(password string) (string, error) {

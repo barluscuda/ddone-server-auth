@@ -154,11 +154,13 @@ func (s *Service) Register(
 		LastOTPSentAt: now,
 		CreatedAt:     now,
 	}
-	message := RegisterOTPMessage(otpCode, s.otpPolicy.TTL)
-	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
+	if err := s.store.Save(ctx, pendingRegistration, s.otpPolicy.TTL); err != nil {
 		return nil, err
 	}
-	if err := s.store.Save(ctx, pendingRegistration, s.otpPolicy.TTL); err != nil {
+
+	message := RegisterOTPMessage(otpCode, s.otpPolicy.TTL)
+	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
+		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
 	}
 

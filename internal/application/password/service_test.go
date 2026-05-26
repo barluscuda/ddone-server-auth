@@ -234,6 +234,39 @@ func TestForgotPasswordRateLimitsByPhoneNumber(t *testing.T) {
 	}
 }
 
+func TestForgotPasswordReturnsGenericSuccessForUnknownPhone(t *testing.T) {
+	users := &fakeUserStore{
+		byID:    map[string]*user.User{},
+		byPhone: map[string]*user.User{},
+	}
+	store := &fakeResetStore{states: map[string]*ResetTicketState{}, counters: map[string]int64{}}
+	sender := &fakeSender{}
+	service := NewService(users, store, sender, &fakeRevoker{}, &fakeRevoker{})
+	now := time.Date(2026, 5, 24, 0, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	service.ticketGenerator = func() (string, error) { return "pwd_masked123", nil }
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+
+	result, err := service.ForgotPassword(context.Background(), ForgotPasswordInput{
+		PhoneNumber: "+8562012345678",
+	})
+	if err != nil {
+		t.Fatalf("forgot password should not reveal missing account: %v", err)
+	}
+	if result.TicketID != "pwd_masked123" {
+		t.Fatalf("expected generic ticket id %q, got %q", "pwd_masked123", result.TicketID)
+	}
+	if !result.ExpiresAt.Equal(now.Add(defaultOTPPolicy.TTL)) {
+		t.Fatalf("expected generic expiry %v, got %v", now.Add(defaultOTPPolicy.TTL), result.ExpiresAt)
+	}
+	if len(store.states) != 0 {
+		t.Fatal("expected no reset state to be saved for unknown phone")
+	}
+	if sender.phoneNumber != "" || sender.telCode != "" {
+		t.Fatal("expected no otp send for unknown phone")
+	}
+}
+
 func TestVerifyForgotPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
 	currentHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
 	if err != nil {

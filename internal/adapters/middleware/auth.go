@@ -157,7 +157,7 @@ func sessionRequestOriginAllowed(req *http.Request, trustedOrigins []string) boo
 		origin = refererOrigin(req.Header.Get("Referer"))
 	}
 	if origin == "" {
-		return true
+		return false
 	}
 
 	if originHostMatchesRequestHost(origin, req.Host) {

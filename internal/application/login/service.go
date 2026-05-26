@@ -73,7 +73,7 @@ func NewService(
 }
 
 func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) {
-	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password)
+	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password, input.ClientIP)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*Result, error) 
 }
 
 func (s *Service) LoginSession(ctx context.Context, input LoginInput) (*SessionResult, error) {
-	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password)
+	userModel, err := s.authenticateUser(ctx, input.PhoneNumber, input.Password, input.ClientIP)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +167,10 @@ func (s *Service) refresh(ctx context.Context, input RefreshInput) (*Result, err
 	}
 	if tokenRecord.IsExpired(now) {
 		return nil, auth.ErrTokenExpired
+	}
+	if refreshTokenUserAgentMismatch(tokenRecord.UserAgent, input.UserAgent) {
+		_ = s.tokenRecords.RevokeLineage(ctx, rootTokenID, "refresh_token_device_mismatch", now)
+		return nil, auth.ErrTokenRevoked
 	}
 
 	userModel, err := s.users.GetByID(ctx, tokenRecord.UserID)
@@ -277,6 +281,7 @@ func (s *Service) authenticateUser(
 	ctx context.Context,
 	rawPhoneNumber string,
 	password string,
+	clientIP string,
 ) (*user.User, error) {
 	phoneNumber, err := user.NormalizePhoneNumber(rawPhoneNumber)
 	if err != nil {
@@ -288,71 +293,81 @@ func (s *Service) authenticateUser(
 	if strings.TrimSpace(password) == "" {
 		return nil, ErrPasswordRequired
 	}
-	if err := s.enforceLoginRateLimit(ctx, phoneNumber); err != nil {
+	if err := s.enforceLoginRateLimit(ctx, phoneNumber, clientIP); err != nil {
 		return nil, err
 	}
 
 	userModel, err := s.users.GetByPhoneNumber(ctx, phoneNumber)
 	if err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
-			return nil, s.recordFailedLogin(ctx, phoneNumber)
+			return nil, s.recordFailedLogin(ctx, phoneNumber, clientIP)
 		}
 		return nil, err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(password)); err != nil {
-		return nil, s.recordFailedLogin(ctx, phoneNumber)
+		return nil, s.recordFailedLogin(ctx, phoneNumber, clientIP)
 	}
-	if err := s.clearFailedLogins(ctx, phoneNumber); err != nil {
+	if err := s.clearFailedLogins(ctx, phoneNumber, clientIP); err != nil {
 		return nil, err
 	}
 
 	return userModel, nil
 }
 
-func (s *Service) enforceLoginRateLimit(ctx context.Context, phoneNumber string) error {
+func (s *Service) enforceLoginRateLimit(ctx context.Context, phoneNumber string, clientIP string) error {
 	if s.rateLimiter == nil {
 		return nil
 	}
 
-	locked, err := s.rateLimiter.IsLocked(ctx, loginLockKey(phoneNumber))
-	if err != nil {
-		return err
-	}
-	if locked {
-		return ErrLoginRateLimited
+	for _, scope := range loginRateLimitScopes(phoneNumber, clientIP) {
+		locked, err := s.rateLimiter.IsLocked(ctx, scope.lockKey)
+		if err != nil {
+			return err
+		}
+		if locked {
+			return ErrLoginRateLimited
+		}
 	}
 
 	return nil
 }
 
-func (s *Service) recordFailedLogin(ctx context.Context, phoneNumber string) error {
+func (s *Service) recordFailedLogin(ctx context.Context, phoneNumber string, clientIP string) error {
 	if s.rateLimiter == nil {
 		return auth.ErrInvalidCredentials
 	}
 
-	attempts, err := s.rateLimiter.IncrementCounter(ctx, loginRateKey(phoneNumber), s.settings.FailedAttemptWindow)
-	if err != nil {
-		return err
-	}
-	if attempts >= int64(s.settings.MaxAttempts) {
-		if err := s.rateLimiter.Lock(ctx, loginLockKey(phoneNumber), s.settings.LockoutDuration); err != nil {
+	for _, scope := range loginRateLimitScopes(phoneNumber, clientIP) {
+		attempts, err := s.rateLimiter.IncrementCounter(ctx, scope.rateKey, s.settings.FailedAttemptWindow)
+		if err != nil {
 			return err
 		}
-		if err := s.rateLimiter.DeleteCounter(ctx, loginRateKey(phoneNumber)); err != nil {
-			return err
+		if attempts >= int64(s.settings.MaxAttempts) {
+			if err := s.rateLimiter.Lock(ctx, scope.lockKey, s.settings.LockoutDuration); err != nil {
+				return err
+			}
+			if err := s.rateLimiter.DeleteCounter(ctx, scope.rateKey); err != nil {
+				return err
+			}
+			return ErrLoginRateLimited
 		}
-		return ErrLoginRateLimited
 	}
 
 	return auth.ErrInvalidCredentials
 }
 
-func (s *Service) clearFailedLogins(ctx context.Context, phoneNumber string) error {
+func (s *Service) clearFailedLogins(ctx context.Context, phoneNumber string, clientIP string) error {
 	if s.rateLimiter == nil {
 		return nil
 	}
 
-	return s.rateLimiter.DeleteCounter(ctx, loginRateKey(phoneNumber))
+	for _, scope := range loginRateLimitScopes(phoneNumber, clientIP) {
+		if err := s.rateLimiter.DeleteCounter(ctx, scope.rateKey); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func randomOpaqueToken() (string, error) {
@@ -389,10 +404,61 @@ func hashOpaqueToken(tokenValue string) string {
 	return auth.HashOpaqueToken(tokenValue)
 }
 
+func refreshTokenUserAgentMismatch(storedUserAgent string, currentUserAgent string) bool {
+	storedUserAgent = strings.TrimSpace(storedUserAgent)
+	if storedUserAgent == "" {
+		return false
+	}
+
+	return storedUserAgent != strings.TrimSpace(currentUserAgent)
+}
+
+type loginRateLimitScope struct {
+	rateKey string
+	lockKey string
+}
+
+func loginRateLimitScopes(phoneNumber string, clientIP string) []loginRateLimitScope {
+	clientIP = strings.TrimSpace(clientIP)
+	if clientIP == "" {
+		return []loginRateLimitScope{{
+			rateKey: loginRateKey(phoneNumber),
+			lockKey: loginLockKey(phoneNumber),
+		}}
+	}
+
+	return []loginRateLimitScope{
+		{
+			rateKey: loginIPRateKey(clientIP),
+			lockKey: loginIPLockKey(clientIP),
+		},
+		{
+			rateKey: loginPhoneIPRateKey(phoneNumber, clientIP),
+			lockKey: loginPhoneIPLockKey(phoneNumber, clientIP),
+		},
+	}
+}
+
 func loginRateKey(phoneNumber string) string {
 	return "login:attempts:" + phoneNumber
 }
 
 func loginLockKey(phoneNumber string) string {
 	return "login:lock:" + phoneNumber
+}
+
+func loginIPRateKey(clientIP string) string {
+	return "login:attempts:ip:" + clientIP
+}
+
+func loginIPLockKey(clientIP string) string {
+	return "login:lock:ip:" + clientIP
+}
+
+func loginPhoneIPRateKey(phoneNumber string, clientIP string) string {
+	return "login:attempts:phone_ip:" + phoneNumber + ":" + clientIP
+}
+
+func loginPhoneIPLockKey(phoneNumber string, clientIP string) string {
+	return "login:lock:phone_ip:" + phoneNumber + ":" + clientIP
 }

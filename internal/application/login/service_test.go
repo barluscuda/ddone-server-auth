@@ -299,6 +299,50 @@ func TestRefreshRotatesTokenWithLineage(t *testing.T) {
 	}
 }
 
+func TestRefreshRevokesLineageOnUserAgentMismatch(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	userModel := &user.User{
+		ID:           "user-1",
+		PhoneNumber:  "+8562012345678",
+		PasswordHash: string(passwordHash),
+	}
+	users := &fakeUserLookup{
+		byID: map[string]*user.User{"user-1": userModel},
+	}
+	tokenRecords := &fakeTokenStore{
+		tokensByHash: map[string]*auth.TokenRecord{
+			hashRefreshToken("refresh-token"): {
+				ID:          "token-1",
+				UserID:      "user-1",
+				RootTokenID: "root-token",
+				TokenHash:   hashRefreshToken("refresh-token"),
+				UserAgent:   "known-agent",
+				ExpiresAt:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	service := NewService(users, tokenRecords, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, &fakeLoginRateLimiter{}, Settings{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+		LoginSessionTTL: 30 * 24 * time.Hour,
+	})
+	service.now = func() time.Time { return time.Date(2026, 5, 23, 10, 0, 0, 0, time.UTC) }
+
+	_, err = service.Refresh(context.Background(), RefreshInput{
+		RefreshToken: "refresh-token",
+		UserAgent:    "different-agent",
+	})
+	if !errors.Is(err, auth.ErrTokenRevoked) {
+		t.Fatalf("expected revoked token error, got %v", err)
+	}
+	if tokenRecords.revokedRootID != "root-token" {
+		t.Fatalf("expected root lineage %q to be revoked, got %q", "root-token", tokenRecords.revokedRootID)
+	}
+}
+
 func TestLoginSessionCreatesPersistentSession(t *testing.T) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
 	if err != nil {
@@ -382,6 +426,96 @@ func TestLoginRateLimitsRepeatedInvalidCredentials(t *testing.T) {
 	}
 	if !limiter.locks[loginLockKey("+8562012345678")] {
 		t.Fatal("expected login failures to lock the account")
+	}
+}
+
+func TestLoginRateLimitsByIPAcrossDifferentPhones(t *testing.T) {
+	users := &fakeUserLookup{}
+	limiter := &fakeLoginRateLimiter{}
+	service := NewService(users, &fakeTokenStore{}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, limiter, Settings{
+		RefreshTokenTTL:     30 * 24 * time.Hour,
+		LoginSessionTTL:     30 * 24 * time.Hour,
+		FailedAttemptWindow: 5 * time.Minute,
+		MaxAttempts:         2,
+		LockoutDuration:     15 * time.Minute,
+	})
+
+	_, err := service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+		ClientIP:    "192.0.2.10",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("expected invalid credentials on first failure, got %v", err)
+	}
+
+	_, err = service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562011111111",
+		Password:    "wrong-pass",
+		ClientIP:    "192.0.2.10",
+	})
+	if !errors.Is(err, ErrLoginRateLimited) {
+		t.Fatalf("expected ip-based rate limit on second failure, got %v", err)
+	}
+	if !limiter.locks[loginIPLockKey("192.0.2.10")] {
+		t.Fatal("expected repeated failures from one ip to trigger ip lock")
+	}
+}
+
+func TestLoginDoesNotLockSamePhoneAcrossDifferentIPs(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("secretpass"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	userModel := &user.User{
+		ID:           "user-1",
+		PhoneNumber:  "+8562012345678",
+		PasswordHash: string(passwordHash),
+	}
+	users := &fakeUserLookup{
+		byPhone: map[string]*user.User{"+8562012345678": userModel},
+		byID:    map[string]*user.User{"user-1": userModel},
+	}
+	limiter := &fakeLoginRateLimiter{}
+	service := NewService(users, &fakeTokenStore{}, &fakeLoginSessionStore{}, &fakeAccessTokenIssuer{}, limiter, Settings{
+		RefreshTokenTTL:     30 * 24 * time.Hour,
+		LoginSessionTTL:     30 * 24 * time.Hour,
+		FailedAttemptWindow: 5 * time.Minute,
+		MaxAttempts:         2,
+		LockoutDuration:     15 * time.Minute,
+	})
+
+	_, err = service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+		ClientIP:    "192.0.2.10",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("expected invalid credentials on first failure, got %v", err)
+	}
+	_, err = service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "wrong-pass",
+		ClientIP:    "192.0.2.11",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("expected second failure from another ip to remain invalid credentials, got %v", err)
+	}
+
+	result, err := service.Login(context.Background(), LoginInput{
+		PhoneNumber: "+8562012345678",
+		Password:    "secretpass",
+		ClientIP:    "192.0.2.12",
+	})
+	if err != nil {
+		t.Fatalf("expected clean ip login to succeed, got %v", err)
+	}
+	if result == nil || result.AccessToken == nil {
+		t.Fatal("expected successful login result")
+	}
+	if limiter.locks[loginLockKey("+8562012345678")] {
+		t.Fatal("expected no phone-only lock when client ip is available")
 	}
 }
 
