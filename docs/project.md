@@ -29,7 +29,7 @@ The service is moving toward hexagonal architecture:
 - Change authenticated-user passwords.
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
-- Run request body limits, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
+- Run request body limits, CORS, request logging, user-agent enforcement, panic recovery, auth, session, no-route, and no-method middleware.
 - Optionally run DexBotKiller client-context extraction, registration risk decisions, and abuse signal recording.
 
 ## 3. Main Dependencies
@@ -72,7 +72,7 @@ internal/application/jwks/       Signing-key lifecycle and public JWKS orchestra
 internal/application/otp/        Shared OTP policy values
 
 internal/adapters/handler/       Gin HTTP handlers
-internal/adapters/middleware/    Body limits, CORS, auth, session, client context, logging, recovery, 404/405
+internal/adapters/middleware/    Body limits, CORS, user-agent checks, auth, session, client context, logging, recovery, 404/405
 internal/adapters/dto/           HTTP request/response DTOs
 internal/adapters/repository/    GORM repositories and table row types
 internal/adapters/cache/         Redis stores, DexBotKiller store, and read-through cache decorators
@@ -214,7 +214,7 @@ Errors use the same envelope without `data`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/healthz` | Process health |
-| `GET` | `/robots.txt` | Restrictive robots policy |
+| `GET` | `/robots.txt` | Restrictive robots policy with explicit AI/data crawler deny rules |
 | `GET` | `/.well-known/jwks.json` | Public ES256 JWK set |
 | `POST` | `/registrations` | Start phone registration and send OTP |
 | `POST` | `/registrations/resend` | Resend registration OTP |
@@ -585,7 +585,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 15. Start the HTTP server.
 16. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` or a proxy preset is explicitly configured. `app.proxy_preset=cloudflare` merges Cloudflare edge CIDRs into the trusted proxy list and makes Gin prefer `CF-Connecting-IP` before generic forwarded-IP headers for `ClientIP()`. In `client -> Cloudflare -> load balancer -> server` deployments, `app.trusted_proxies` must also include the load balancer private IP/CIDR because the load balancer is the server's direct peer. It applies request body limits, CORS, recovery, and request logging before route handlers. When DexBotKiller is enabled, it also applies client-context middleware that issues or verifies the signed device cookie before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` or a proxy preset is explicitly configured. `app.proxy_preset=cloudflare` merges Cloudflare edge CIDRs into the trusted proxy list and makes Gin prefer `CF-Connecting-IP` before generic forwarded-IP headers for `ClientIP()`. In `client -> Cloudflare -> load balancer -> server` deployments, `app.trusted_proxies` must also include the load balancer private IP/CIDR because the load balancer is the server's direct peer. It applies request body limits, CORS, recovery, request logging, and user-agent enforcement before route handlers. Requests without a non-empty `User-Agent` header return `403 user_agent_required`, so load balancer health checks must send one. When DexBotKiller is enabled, it also applies client-context middleware that issues or verifies the signed device cookie before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 
@@ -738,7 +738,7 @@ Current coverage includes:
 - Config validation
 - DTO JSON field casing
 - HTTP handler behavior
-- Middleware auth, session-origin checks, request body limits, CORS, and recovery behavior
+- Middleware auth, session-origin checks, user-agent checks, request body limits, CORS, and recovery behavior
 - Redis signing-key cache behavior
 - ES256 signing, verification, and JWK behavior
 - JWT application orchestration

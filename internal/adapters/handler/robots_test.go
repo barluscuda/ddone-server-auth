@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -27,5 +28,11 @@ func TestRobotsTXTReturnsDisallowAllPolicy(t *testing.T) {
 	}
 	if got := recorder.Body.String(); got != robotsTXT {
 		t.Fatalf("expected robots.txt body %q, got %q", robotsTXT, got)
+	}
+	if got := recorder.Body.String(); !strings.Contains(got, "User-agent: GPTBot\nDisallow: /") {
+		t.Fatal("expected robots.txt to include explicit GPTBot deny rule")
+	}
+	if got := recorder.Body.String(); !strings.Contains(got, "User-agent: *\nDisallow: /") {
+		t.Fatal("expected robots.txt to include wildcard deny rule")
 	}
 }

@@ -61,6 +61,7 @@ func newHTTPServer(
 		}),
 		middleware.Recovery(logger),
 		middleware.RequestLogger(logger),
+		middleware.RequireUserAgent(),
 	)
 	if cfg.DexBotKiller.Enabled && dexBotKillerHasher != nil {
 		app.Use(middleware.ClientContext(middleware.ClientContextConfig{

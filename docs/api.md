@@ -13,6 +13,7 @@ Base URL examples use `http://localhost:3000`. All JSON field names are camelCas
 ```
 
 Requests with a `Content-Length` above the configured request body limit return `413 request_body_too_large`.
+Requests without a non-empty `User-Agent` header return `403 user_agent_required`.
 
 ## Authentication
 
@@ -47,8 +48,31 @@ Success `200 OK`:
 Success `200 OK`:
 
 ```text
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
 User-agent: *
 Disallow: /
+Noindex: /
+Crawl-delay: 10
 ```
 
 ## Registration

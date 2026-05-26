@@ -379,6 +379,8 @@ DDONE_DEXBOTKILLER_DEVICE_COOKIE_SECURE=true
 
 Use the actual private IP or CIDR of the load balancer for `DDONE_APP_TRUSTED_PROXIES`. Configure the load balancer to pass `CF-Connecting-IP` through from Cloudflare or preserve the full `X-Forwarded-For` chain. At the network layer, restrict load balancer ingress to Cloudflare IP ranges plus any admin networks, and restrict server ingress to the load balancer.
 
+The server rejects requests without a non-empty `User-Agent` header with `403 user_agent_required`. Configure load balancer health checks to send a stable value such as `DDONE-HealthCheck/1.0`.
+
 ## API
 
 ### `GET /healthz`
@@ -392,8 +394,31 @@ Returns a restrictive robots policy for this API service.
 Response:
 
 ```text
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
 User-agent: *
 Disallow: /
+Noindex: /
+Crawl-delay: 10
 ```
 
 ### `POST /registrations`
