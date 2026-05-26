@@ -439,11 +439,12 @@ DexBotKiller keys use the configured prefix, default `dbk:v1`, and HMAC-hashed i
 
 Config load order:
 
-1. `config/config.yaml`
-2. environment variables prefixed with `DDONE_`
-3. optional `.env`
+1. `config/config.yaml` for service defaults
+2. environment variables prefixed with `DDONE_` for custom overrides
+3. optional `.env` for local custom overrides
 
-The local `config/config.yaml` is for development. Deployed environments should override values with environment variables.
+`config/config.yaml` is the default config. Custom per-environment config belongs in `.env` or process environment variables.
+The root `.env.example` mirrors the current local custom config surface; `deploy/systemd/ddone-server-auth.env.example` mirrors the same surface for systemd deployments.
 
 Important config groups:
 

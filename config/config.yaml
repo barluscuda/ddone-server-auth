@@ -1,12 +1,17 @@
-# Local development defaults only.
-# Override these values for deployed environments.
+# Default configuration for the service.
+# Put custom per-environment overrides in .env or process environment variables.
 app:
+  # Enables Gin debug mode and development-oriented logging behavior.
   debug: false
+  # HTTP listen port.
   port: 3000
+  # CIDRs for trusted reverse proxies. Leave empty unless the app is behind a known proxy.
   trusted_proxies: []
+  # Maximum request body size in bytes. Set 0 to disable this middleware limit.
   max_request_body_bytes: 1048576
 
 database:
+  # Default local connection values match docker-infra.yml.
   host: localhost
   port: 5432
   name: ddone_auth
@@ -14,14 +19,18 @@ database:
   password: postgres
   sslmode: disable
   timezone: UTC
+  # PostgreSQL connection timeout in seconds.
   connect_timeout: 10
+  # Database connection pool sizing.
   max_open_conns: 25
   max_idle_conns: 5
   conn_max_lifetime: 30m
   conn_max_idle_time: 15m
+  # Keep false outside short local debugging sessions; SQL logs may expose sensitive values.
   log_sql: false
 
 redis:
+  # Default local Redis is exposed on host port 6380.
   host: localhost
   port: 6380
   username: ""
@@ -34,42 +43,65 @@ redis:
   min_idle_conns: 2
 
 cache:
+  # Read-through cache TTLs for user/session/signing-key lookups.
   user_ttl: 5m
   user_session_list_ttl: 1m
   signing_keys_ttl: 1m
 
 dexbotkiller:
+  # Disabled by default. Enable after setting a strong pepper.
   enabled: false
+  # Rollout modes: passive, delay, challenge, enforce.
   mode: passive
+  # Redis key namespace for bot-risk counters, unique sets, and scores.
   redis_prefix: dbk:v1
+  # HMAC secret for hashing phone/IP/device identifiers in Redis keys.
   pepper: ""
+  # Short velocity counter window.
   counter_window: 1m
+  # Window for unique target tracking, such as many phones by one IP.
   unique_window: 15m
+  # TTL for accumulated risk scores.
   score_ttl: 24h
+  # Artificial delay used by delay mode.
   delay: 500ms
   thresholds:
+    # Risk score at or above this value can delay requests outside passive mode.
     delay_score: 3
+    # Risk score at or above this value can require Cloudflare Turnstile.
     challenge_score: 6
+    # Risk score at or above this value can block in enforce mode.
     block_score: 10
   cloudflare_turnstile:
+    # Public site key returned to clients in challenge_required responses.
     site_key: ""
+    # Private secret key used only by the server to validate Turnstile tokens.
     secret_key: ""
+    # Cloudflare Siteverify endpoint.
     verify_url: https://challenges.cloudflare.com/turnstile/v0/siteverify
+    # Outbound validation request timeout.
     timeout: 3s
+  # Signed unauthenticated device cookie used as one bot-risk signal.
   device_cookie_name: ddone_device
   device_cookie_max_age: 720h
+  # Local HTTP development uses false; production HTTPS should use true.
   device_cookie_secure: false
   device_cookie_same_site: lax
 
 security:
   login:
+    # Failed password-login attempts are counted in this rolling window.
     failed_attempt_window: 5m
     max_attempts: 5
+    # Lock duration after max attempts is reached.
     lockout_duration: 15m
   otp:
     register:
+      # Registration OTP lifetime.
       ttl: 5m
+      # Per-phone registration start rate-limit window.
       phone_window: 5m
+      # System-wide registration start rate-limit window.
       system_window: 10m
       resend_cooldown: 60s
       verify_attempt_window: 5m
@@ -78,6 +110,7 @@ security:
       max_resends: 3
       max_verify_attempts: 5
     password_reset:
+      # Password-reset OTP lifetime and flow limits.
       ttl: 5m
       phone_window: 5m
       resend_cooldown: 60s
@@ -86,19 +119,24 @@ security:
       max_resends: 3
       max_verify_attempts: 5
   auth:
+    # JWT issuer and audience expected by this service and downstream verifiers.
     issuer: ddone-server-auth
     audience: ddone-clients
     access_token_ttl: 5m
     refresh_token_ttl: 720h
     login_session_ttl: 720h
+    # ES256 signing-key rotation and retention windows.
     signing_key_rotation: 2160h
     signing_key_retention: 4320h
     session_cookie_name: ddone_session
+    # Local HTTP development uses false; production HTTPS should use true.
     session_cookie_secure: false
     session_cookie_same_site: lax
+    # If set to 0, the app derives cookie max age from login_session_ttl.
     session_cookie_max_age: 720h
 
 cors:
+  # Wildcard is fine without credentials. Use explicit origins when cookies are enabled.
   allowed_origins:
     - "*"
   allowed_methods:

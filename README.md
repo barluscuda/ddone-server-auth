@@ -247,11 +247,12 @@ make systemd-install SERVICE_USER=authsvc SERVICE_GROUP=authsvc APP_DIR=/srv/ddo
 
 Configuration is loaded from:
 
-1. `config/config.yaml`
-2. environment variables with the `DDONE_` prefix
-3. optional `.env`
+1. `config/config.yaml` for service defaults
+2. environment variables with the `DDONE_` prefix for custom overrides
+3. optional `.env` for local custom overrides
 
 In `config/config.yaml`, most security-related settings are grouped under `security:`. DexBotKiller uses its own top-level `dexbotkiller:` section because it has separate rollout and cookie settings.
+Use `.env.example` as the local custom config template; deployed systemd installs can use `deploy/systemd/ddone-server-auth.env.example`.
 
 Common environment variables:
 
