@@ -51,7 +51,7 @@ cmd/app/                         Process entrypoint, dependency wiring, HTTP ser
 config/                          Config loading, defaults, validation
 db/init/                         PostgreSQL init SQL for local Docker volumes
 deploy/release/                  Release helper scripts included in zip bundles
-deploy/systemd/                  systemd unit and environment template
+deploy/systemd/                  systemd unit
 docs/                            Project, API, JWT, and Postman docs
 postman/                         Postman collection and local environment
 scripts/                         Release build automation
@@ -444,7 +444,7 @@ Config load order:
 3. optional `.env` for local custom overrides
 
 `config/config.yaml` is the default config. Custom per-environment config belongs in `.env` or process environment variables.
-The root `.env.example` mirrors the current local custom config surface; `deploy/systemd/ddone-server-auth.env.example` mirrors the same surface for systemd deployments.
+The root `.env.example` is the custom config template. Systemd install flows copy it to `/etc/ddone-server-auth/ddone-server-auth.env` when that file does not already exist.
 
 Important config groups:
 
@@ -653,15 +653,33 @@ make release
 make release RELEASE_VERSION=v1.0.0
 ```
 
-Release artifacts are written to `dist/` and include:
+Release artifacts are written to `dist/`.
+
+Binary release bundles are created for Linux `amd64` and Linux `arm64` and include:
 
 - compiled binary
 - `config/config.yaml`
+- `.env.example`
 - `deploy/systemd/`
 - `start.sh`
 - `systemctl.sh`
 - `README.md`
 - `RUN.txt`
+
+The Docker release bundle is named `ddone-server-auth_<version>_docker.zip` and includes:
+
+- `docker-image/ddone-server-auth_<version>.tar`
+- `docker-compose.yml`
+- `.env.example`
+- `config/config.yaml`
+- `db/init/`
+- `docker-load.sh`
+- `docker-up.sh`
+- `docker-down.sh`
+- `RUN.txt`
+
+The Docker compose file runs the app from the loaded local image with `pull_policy: never` and does not build from source.
+Set `DOCKER_RELEASE=0` to skip the Docker zip.
 
 Supported release architectures default to Linux `amd64` and Linux `arm64`.
 
@@ -674,7 +692,7 @@ docker build -t barluscuda/ddone-server-auth .
 systemd assets:
 
 - `deploy/systemd/ddone-server-auth.service`
-- `deploy/systemd/ddone-server-auth.env.example`
+- `.env.example`
 
 Makefile systemd helpers:
 

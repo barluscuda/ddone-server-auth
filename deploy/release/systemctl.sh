@@ -13,7 +13,7 @@ SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 BIN_SRC="${BIN_SRC:-${SCRIPT_DIR}/${APP_NAME}}"
 CONFIG_SRC="${CONFIG_SRC:-${SCRIPT_DIR}/config/config.yaml}"
-ENV_SRC="${ENV_SRC:-${SCRIPT_DIR}/deploy/systemd/${APP_NAME}.env.example}"
+ENV_SRC="${ENV_SRC:-${SCRIPT_DIR}/.env.example}"
 UNIT_SRC="${UNIT_SRC:-${SCRIPT_DIR}/deploy/systemd/${APP_NAME}.service}"
 
 BIN_DEST="${BIN_DIR}/${APP_NAME}"

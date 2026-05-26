@@ -138,7 +138,7 @@ Build the production binary:
 make build
 ```
 
-Build release zip bundles for Linux `amd64` and Linux `arm64`:
+Build release zip bundles for Linux `amd64`, Linux `arm64`, and Docker:
 
 ```bash
 make release
@@ -154,13 +154,19 @@ Release artifacts are written to `dist/`:
 
 - `ddone-server-auth_<version>_linux-x86_64.zip`
 - `ddone-server-auth_<version>_linux-arm64.zip`
+- `ddone-server-auth_<version>_docker.zip`
 
-Each release bundle includes:
+The binary release bundles include:
 
+- `.env.example` for custom environment overrides
 - `start.sh` to run the service directly from the extracted release directory
 - `systemctl.sh install` to install and start the systemd service
 - `systemctl.sh remove` to stop and remove the systemd service files
 - `REMOVE_DATA=1 ./systemctl.sh remove` to also remove app and environment directories
+
+The Docker release bundle includes a saved local Docker image, `docker-compose.yml`, `.env.example`, `config/config.yaml`, `db/init/`, and `docker-load.sh`, `docker-up.sh`, and `docker-down.sh`. Its compose file runs the app from the local loaded image with `pull_policy: never`; it does not build from source.
+
+Set `DOCKER_RELEASE=0` for binary-only release builds.
 
 Build the Docker image:
 
@@ -192,7 +198,7 @@ Postman assets:
 Repo-provided systemd assets:
 
 - Unit file: [deploy/systemd/ddone-server-auth.service](https://github.com/barluscuda/ddone-server-auth/blob/main/deploy/systemd/ddone-server-auth.service)
-- Environment template: [deploy/systemd/ddone-server-auth.env.example](https://github.com/barluscuda/ddone-server-auth/blob/main/deploy/systemd/ddone-server-auth.env.example)
+- Environment template: [.env.example](https://github.com/barluscuda/ddone-server-auth/blob/main/.env.example)
 
 Expected install layout:
 
@@ -209,7 +215,7 @@ make build
 sudo install -m 0755 ./ddone-server-auth /usr/local/bin/ddone-server-auth
 sudo cp -R ./config/. /opt/ddone-server-auth/config/
 sudo install -m 0644 ./deploy/systemd/ddone-server-auth.service /etc/systemd/system/ddone-server-auth.service
-sudo install -m 0640 ./deploy/systemd/ddone-server-auth.env.example /etc/ddone-server-auth/ddone-server-auth.env
+sudo install -m 0640 ./.env.example /etc/ddone-server-auth/ddone-server-auth.env
 sudo chown -R ddone:ddone /opt/ddone-server-auth /etc/ddone-server-auth
 sudo systemctl daemon-reload
 sudo systemctl enable --now ddone-server-auth
@@ -252,7 +258,7 @@ Configuration is loaded from:
 3. optional `.env` for local custom overrides
 
 In `config/config.yaml`, most security-related settings are grouped under `security:`. DexBotKiller uses its own top-level `dexbotkiller:` section because it has separate rollout and cookie settings.
-Use `.env.example` as the local custom config template; deployed systemd installs can use `deploy/systemd/ddone-server-auth.env.example`.
+Use `.env.example` as the custom config template. Systemd installs copy this file to `/etc/ddone-server-auth/ddone-server-auth.env` when that file does not already exist.
 
 Common environment variables:
 

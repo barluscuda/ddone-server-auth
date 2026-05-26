@@ -18,6 +18,8 @@ JOURNALCTL ?= journalctl
 DOCKER ?= docker
 COMPOSE_FILE ?= docker-compose.yml
 INFRA_COMPOSE_FILE ?= docker-infra.yml
+DOCKER_RELEASE ?= 1
+DOCKER_PLATFORM ?= linux/amd64
 
 APP := ./cmd/app
 BIN := ddone-server-auth
@@ -39,7 +41,7 @@ BIN_DIR ?= /usr/local/bin
 BIN_INSTALL_PATH := $(BIN_DIR)/$(BIN)
 
 ENV_DIR ?= /etc/$(SERVICE_NAME)
-ENV_SRC := deploy/systemd/$(SERVICE_NAME).env.example
+ENV_SRC := .env.example
 ENV_DEST := $(ENV_DIR)/$(SERVICE_NAME).env
 
 SYSTEMD_DIR ?= /etc/systemd/system
@@ -54,7 +56,7 @@ help:
 	@echo "  make fmt               - Format Go files"
 	@echo "  make tidy              - Tidy Go modules"
 	@echo "  make clean             - Remove the built binary"
-	@echo "  make release           - Build zip release bundles for linux amd64 and linux arm64"
+	@echo "  make release           - Build binary zips and the Docker release zip"
 	@echo "  make compose-build     - Build the full Docker Compose app image"
 	@echo "  make compose-up        - Start the full Docker Compose stack without rebuilding"
 	@echo "  make compose-up-build  - Build and start the full Docker Compose stack"
@@ -79,6 +81,8 @@ help:
 	@echo "  BUILD_DIR=$(BUILD_DIR)"
 	@echo "  RELEASE_OUT_DIR=$(RELEASE_OUT_DIR)"
 	@echo "  RELEASE_VERSION=$(RELEASE_VERSION)"
+	@echo "  DOCKER_RELEASE=$(DOCKER_RELEASE)"
+	@echo "  DOCKER_PLATFORM=$(DOCKER_PLATFORM)"
 	@echo "  SERVICE_NAME=$(SERVICE_NAME)"
 	@echo "  SERVICE_USER=$(SERVICE_USER)"
 	@echo "  SERVICE_GROUP=$(SERVICE_GROUP)"
@@ -108,7 +112,7 @@ clean:
 	rm -f $(BIN_PATH)
 
 release:
-	VERSION="$(RELEASE_VERSION)" OUT_DIR="$(RELEASE_OUT_DIR)" ./scripts/release.sh
+	VERSION="$(RELEASE_VERSION)" OUT_DIR="$(RELEASE_OUT_DIR)" DOCKER_RELEASE="$(DOCKER_RELEASE)" DOCKER_PLATFORM="$(DOCKER_PLATFORM)" DOCKER_CMD="$(DOCKER)" ./scripts/release.sh
 
 compose-build:
 	$(DOCKER) compose -f $(COMPOSE_FILE) build
