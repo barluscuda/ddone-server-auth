@@ -14,6 +14,7 @@ type Config struct {
 	App struct {
 		Debug               bool
 		Port                int
+		ProxyPreset         string   `mapstructure:"proxy_preset"`
 		TrustedProxies      []string `mapstructure:"trusted_proxies"`
 		MaxRequestBodyBytes int64    `mapstructure:"max_request_body_bytes"`
 	}
@@ -162,6 +163,7 @@ func Load() (*Config, error) {
 
 	viper.SetDefault("app.debug", false)
 	viper.SetDefault("app.port", 3000)
+	viper.SetDefault("app.proxy_preset", "")
 	viper.SetDefault("app.trusted_proxies", []string{})
 	viper.SetDefault("app.max_request_body_bytes", int64(1<<20))
 	viper.SetDefault("database.port", 5432)
@@ -219,7 +221,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("security.otp.password_reset.max_resends", 3)
 	viper.SetDefault("security.otp.password_reset.max_verify_attempts", 5)
 	viper.SetDefault("cors.allowed_origins", []string{"*"})
-	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS"})
+	viper.SetDefault("cors.allowed_methods", []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"})
 	viper.SetDefault("cors.allowed_headers", []string{"Origin", "Content-Type", "Accept", "Authorization"})
 	viper.SetDefault("cors.exposed_headers", []string{})
 	viper.SetDefault("cors.allow_credentials", false)
@@ -244,6 +246,7 @@ func Load() (*Config, error) {
 
 	viper.BindEnv("app.port", "DDONE_APP_PORT")
 	viper.BindEnv("app.debug", "DDONE_APP_DEBUG")
+	viper.BindEnv("app.proxy_preset", "DDONE_APP_PROXY_PRESET")
 	viper.BindEnv("app.trusted_proxies", "DDONE_APP_TRUSTED_PROXIES")
 	viper.BindEnv("app.max_request_body_bytes", "DDONE_APP_MAX_REQUEST_BODY_BYTES")
 	viper.BindEnv("database.host", "DDONE_DATABASE_HOST")
@@ -345,6 +348,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg.App.TrustedProxies = viper.GetStringSlice("app.trusted_proxies")
+	cfg.App.TrustedProxies = trustedProxiesForPreset(cfg.App.ProxyPreset, cfg.App.TrustedProxies)
 	cfg.App.MaxRequestBodyBytes = viper.GetInt64("app.max_request_body_bytes")
 	cfg.CORS.AllowedOrigins = viper.GetStringSlice("cors.allowed_origins")
 	cfg.CORS.AllowedMethods = viper.GetStringSlice("cors.allowed_methods")
@@ -363,6 +367,12 @@ func Load() (*Config, error) {
 func (c *Config) validate() error {
 	if c.App.Port <= 0 {
 		return fmt.Errorf("app.port must be greater than 0")
+	}
+	c.App.ProxyPreset = strings.ToLower(strings.TrimSpace(c.App.ProxyPreset))
+	switch c.App.ProxyPreset {
+	case "", "none", "cloudflare":
+	default:
+		return fmt.Errorf("app.proxy_preset must be empty, none, or cloudflare")
 	}
 	c.App.TrustedProxies = cleanStringSlice(c.App.TrustedProxies)
 	for _, proxy := range c.App.TrustedProxies {
@@ -499,6 +509,57 @@ func (c *Config) validate() error {
 	}
 
 	return nil
+}
+
+func trustedProxiesForPreset(preset string, configured []string) []string {
+	proxies := cleanStringSlice(configured)
+	switch strings.ToLower(strings.TrimSpace(preset)) {
+	case "cloudflare":
+		proxies = append(proxies, cloudflareTrustedProxies()...)
+	}
+
+	return uniqueStrings(proxies)
+}
+
+func cloudflareTrustedProxies() []string {
+	return []string{
+		"173.245.48.0/20",
+		"103.21.244.0/22",
+		"103.22.200.0/22",
+		"103.31.4.0/22",
+		"141.101.64.0/18",
+		"108.162.192.0/18",
+		"190.93.240.0/20",
+		"188.114.96.0/20",
+		"197.234.240.0/22",
+		"198.41.128.0/17",
+		"162.158.0.0/15",
+		"104.16.0.0/13",
+		"104.24.0.0/14",
+		"172.64.0.0/13",
+		"131.0.72.0/22",
+		"2400:cb00::/32",
+		"2606:4700::/32",
+		"2803:f800::/32",
+		"2405:b500::/32",
+		"2405:8100::/32",
+		"2a06:98c0::/29",
+		"2c0f:f248::/32",
+	}
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+
+	return unique
 }
 
 func validateDexBotKiller(cfg DexBotKillerConfig) error {

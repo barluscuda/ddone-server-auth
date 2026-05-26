@@ -146,6 +146,30 @@ func TestValidateRejectsTrustAllProxyCIDR(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInvalidProxyPreset(t *testing.T) {
+	cfg := validConfig()
+	cfg.App.ProxyPreset = "unknown"
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject invalid proxy preset")
+	}
+}
+
+func TestTrustedProxiesForCloudflarePreset(t *testing.T) {
+	proxies := trustedProxiesForPreset("cloudflare", []string{"10.0.0.1"})
+
+	if !containsForTest(proxies, "10.0.0.1") {
+		t.Fatal("expected configured proxy to be preserved")
+	}
+	if !containsForTest(proxies, "173.245.48.0/20") {
+		t.Fatal("expected cloudflare ipv4 proxy range")
+	}
+	if !containsForTest(proxies, "2606:4700::/32") {
+		t.Fatal("expected cloudflare ipv6 proxy range")
+	}
+}
+
 func TestValidateRejectsNonPositiveLoginRateLimitWindow(t *testing.T) {
 	cfg := validConfig()
 	cfg.Security.Login.FailedAttemptWindow = 0
@@ -247,4 +271,14 @@ func validConfig() Config {
 	cfg.Security.Auth.SessionCookieSameSite = "lax"
 	cfg.Security.Auth.SessionCookieMaxAge = 0
 	return cfg
+}
+
+func containsForTest(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+
+	return false
 }

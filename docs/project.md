@@ -448,7 +448,7 @@ The root `.env.example` is the custom config template. Systemd install flows cop
 
 Important config groups:
 
-- `app`: debug mode, port, trusted proxies, request body limit
+- `app`: debug mode, port, proxy preset, trusted proxies, request body limit
 - `database`: PostgreSQL connection, pool, timeout, timezone, SQL logging
 - `redis`: Redis address, auth, DB, timeout, pool settings
 - `cache`: user cache, user-session-list cache, public signing-key cache TTLs
@@ -465,6 +465,7 @@ Common environment variables:
 ```bash
 DDONE_APP_PORT=3000
 DDONE_APP_DEBUG=true
+DDONE_APP_PROXY_PRESET=
 DDONE_APP_TRUSTED_PROXIES=
 DDONE_APP_MAX_REQUEST_BODY_BYTES=1048576
 
@@ -552,7 +553,7 @@ DDONE_SECURITY_AUTH_SESSION_COOKIE_SAME_SITE=lax
 DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE=720h
 
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
-DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
+DDONE_CORS_ALLOWED_METHODS=GET,POST,PATCH,DELETE,OPTIONS
 DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
 DDONE_CORS_EXPOSED_HEADERS=
 DDONE_CORS_ALLOW_CREDENTIALS=false
@@ -584,7 +585,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 15. Start the HTTP server.
 16. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits, CORS, recovery, and request logging before route handlers. When DexBotKiller is enabled, it also applies client-context middleware that issues or verifies the signed device cookie before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` or a proxy preset is explicitly configured. `app.proxy_preset=cloudflare` merges Cloudflare edge CIDRs into the trusted proxy list and makes Gin prefer `CF-Connecting-IP` before generic forwarded-IP headers for `ClientIP()`. In `client -> Cloudflare -> load balancer -> server` deployments, `app.trusted_proxies` must also include the load balancer private IP/CIDR because the load balancer is the server's direct peer. It applies request body limits, CORS, recovery, and request logging before route handlers. When DexBotKiller is enabled, it also applies client-context middleware that issues or verifies the signed device cookie before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 

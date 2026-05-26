@@ -5,7 +5,11 @@ app:
   debug: false
   # HTTP listen port.
   port: 3000
-  # CIDRs for trusted reverse proxies. Leave empty unless the app is behind a known proxy.
+  # Optional reverse proxy preset. Use cloudflare when the public domain is proxied by Cloudflare.
+  proxy_preset: ""
+  # CIDRs for direct trusted reverse proxies. In Cloudflare -> load balancer -> server
+  # deployments, put the load balancer private IP/CIDR here. These are merged with
+  # proxy_preset ranges.
   trusted_proxies: []
   # Maximum request body size in bytes. Set 0 to disable this middleware limit.
   max_request_body_bytes: 1048576
@@ -142,6 +146,8 @@ cors:
   allowed_methods:
     - GET
     - POST
+    - PATCH
+    - DELETE
     - OPTIONS
   allowed_headers:
     - Origin

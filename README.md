@@ -265,6 +265,7 @@ Common environment variables:
 ```bash
 DDONE_APP_PORT=3000
 DDONE_APP_DEBUG=true
+DDONE_APP_PROXY_PRESET=
 DDONE_APP_TRUSTED_PROXIES=
 DDONE_APP_MAX_REQUEST_BODY_BYTES=1048576
 
@@ -326,7 +327,7 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
 
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
-DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
+DDONE_CORS_ALLOWED_METHODS=GET,POST,PATCH,DELETE,OPTIONS
 DDONE_CORS_ALLOWED_HEADERS=Origin,Content-Type,Accept,Authorization
 DDONE_CORS_EXPOSED_HEADERS=
 DDONE_CORS_ALLOW_CREDENTIALS=false
@@ -352,7 +353,7 @@ Safe defaults:
 - `database.log_sql` defaults to `false`
 - `security.auth.session_cookie_secure` defaults to `true`
 - `security.auth.login_session_ttl` defaults to `720h`
-- `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured
+- `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured; for `client -> Cloudflare -> load balancer -> server`, set `app.proxy_preset=cloudflare` and put the load balancer private IP/CIDR in `app.trusted_proxies`
 - `app.max_request_body_bytes` defaults to `1048576`
 - `dexbotkiller.enabled` defaults to `false`; when enabled, `DDONE_DEXBOTKILLER_PEPPER` is required and passive mode records registration abuse signals without changing responses
 - DexBotKiller `delay` mode holds risky registration start/resend requests before continuing; `challenge` and `enforce` modes require Cloudflare Turnstile site and secret keys; `enforce` mode can block high-risk registration requests
@@ -364,6 +365,19 @@ Safe defaults:
 `DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_SECURITY_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.
 
 For local HTTP development, set `DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=false` and `DDONE_DATABASE_LOG_SQL=true` if useful. For list-based CORS and trusted proxy environment variables, use comma-separated values. Browser clients using the session-login flow need `DDONE_CORS_ALLOW_CREDENTIALS=true` and explicit origins instead of `*`; unsafe session-cookie requests also reject untrusted `Origin` or `Referer` values.
+
+For `client -> Cloudflare -> load balancer -> server`, configure:
+
+```bash
+DDONE_APP_PROXY_PRESET=cloudflare
+DDONE_APP_TRUSTED_PROXIES=10.0.0.0/8
+DDONE_CORS_ALLOWED_ORIGINS=https://app.example.com
+DDONE_CORS_ALLOW_CREDENTIALS=true
+DDONE_SECURITY_AUTH_SESSION_COOKIE_SECURE=true
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_SECURE=true
+```
+
+Use the actual private IP or CIDR of the load balancer for `DDONE_APP_TRUSTED_PROXIES`. Configure the load balancer to pass `CF-Connecting-IP` through from Cloudflare or preserve the full `X-Forwarded-For` chain. At the network layer, restrict load balancer ingress to Cloudflare IP ranges plus any admin networks, and restrict server ingress to the load balancer.
 
 ## API
 

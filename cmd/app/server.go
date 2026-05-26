@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,6 +40,9 @@ func newHTTPServer(
 	}
 
 	app := gin.New()
+	if strings.EqualFold(cfg.App.ProxyPreset, "cloudflare") {
+		app.RemoteIPHeaders = []string{"CF-Connecting-IP", "X-Forwarded-For", "X-Real-IP"}
+	}
 	if err := app.SetTrustedProxies(cfg.App.TrustedProxies); err != nil {
 		logger.Fatal("invalid trusted proxy configuration", zap.Error(err), zap.Strings("trusted_proxies", cfg.App.TrustedProxies))
 	}
