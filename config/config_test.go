@@ -1,7 +1,6 @@
 package config
 
 import (
-	"math"
 	"testing"
 	"time"
 )
@@ -109,28 +108,6 @@ func TestValidateRejectsNonPositiveLoginRateLimitWindow(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsNonPositiveBotProtectionLimitWhenEnabled(t *testing.T) {
-	cfg := validConfig()
-	cfg.Security.Bot.MaxRequests = 0
-
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("expected validate to reject non-positive bot protection limit")
-	}
-}
-
-func TestValidateAllowsDisabledBotProtectionWithZeroValues(t *testing.T) {
-	cfg := validConfig()
-	cfg.Security.Bot.Enabled = false
-	cfg.Security.Bot.Window = 0
-	cfg.Security.Bot.MaxRequests = 0
-	cfg.Security.Bot.BlockDuration = 0
-
-	if err := cfg.validate(); err != nil {
-		t.Fatalf("expected validate to allow disabled bot protection zero values, got %v", err)
-	}
-}
-
 func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
 	cfg := validConfig()
 	cfg.Security.OTP.Register.TTL = 0
@@ -138,16 +115,6 @@ func TestValidateRejectsNonPositiveOTPRegisterTTL(t *testing.T) {
 	err := cfg.validate()
 	if err == nil {
 		t.Fatal("expected validate to reject non-positive register otp ttl")
-	}
-}
-
-func TestValidateRejectsNonPositiveOTPIPLimit(t *testing.T) {
-	cfg := validConfig()
-	cfg.Security.OTPSpam.Register.MaxIPScore = 0
-
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("expected validate to reject non-positive register otp spam ip score limit")
 	}
 }
 
@@ -171,26 +138,6 @@ func TestValidateRejectsNonPositiveOTPRegisterSystemLimit(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsInfiniteOTPRegisterIPScore(t *testing.T) {
-	cfg := validConfig()
-	cfg.Security.OTPSpam.Register.PendingIPScore = math.Inf(1)
-
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("expected validate to reject infinite register otp spam ip score")
-	}
-}
-
-func TestValidateRejectsInfiniteOTPPasswordResetIPScore(t *testing.T) {
-	cfg := validConfig()
-	cfg.Security.OTPSpam.PasswordReset.InvalidVerifyIPScore = math.Inf(1)
-
-	err := cfg.validate()
-	if err == nil {
-		t.Fatal("expected validate to reject infinite password reset otp spam ip score")
-	}
-}
-
 func validConfig() Config {
 	var cfg Config
 	cfg.App.Port = 3000
@@ -209,11 +156,6 @@ func validConfig() Config {
 	cfg.Security.Login.FailedAttemptWindow = time.Minute
 	cfg.Security.Login.MaxAttempts = 1
 	cfg.Security.Login.LockoutDuration = time.Minute
-	cfg.Security.Bot.Enabled = true
-	cfg.Security.Bot.Window = time.Minute
-	cfg.Security.Bot.MaxRequests = 10
-	cfg.Security.Bot.BlockDuration = time.Minute
-	cfg.Security.OTPSpam.Enabled = true
 	cfg.Security.OTP.Register.TTL = time.Minute
 	cfg.Security.OTP.Register.PhoneWindow = time.Minute
 	cfg.Security.OTP.Register.SystemWindow = time.Minute
@@ -230,14 +172,6 @@ func validConfig() Config {
 	cfg.Security.OTP.PasswordReset.MaxPhoneRequests = 1
 	cfg.Security.OTP.PasswordReset.MaxResends = 1
 	cfg.Security.OTP.PasswordReset.MaxVerifyAttempts = 1
-	cfg.Security.OTPSpam.Register.PhoneWindow = time.Minute
-	cfg.Security.OTPSpam.Register.IPWindow = time.Minute
-	cfg.Security.OTPSpam.Register.MaxPhoneRequests = 1
-	cfg.Security.OTPSpam.Register.MaxIPScore = 1
-	cfg.Security.OTPSpam.PasswordReset.PhoneWindow = time.Minute
-	cfg.Security.OTPSpam.PasswordReset.IPWindow = time.Minute
-	cfg.Security.OTPSpam.PasswordReset.MaxPhoneRequests = 1
-	cfg.Security.OTPSpam.PasswordReset.MaxIPScore = 1
 	cfg.Security.Auth.Issuer = "issuer"
 	cfg.Security.Auth.Audience = "audience"
 	cfg.Security.Auth.AccessTokenTTL = 1

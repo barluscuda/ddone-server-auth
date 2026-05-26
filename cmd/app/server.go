@@ -28,7 +28,6 @@ func newHTTPServer(
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	requireSession gin.HandlerFunc,
-	otpSpamDetection gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) *http.Server {
 	if cfg.App.Debug {
@@ -63,13 +62,6 @@ func newHTTPServer(
 		c.Status(http.StatusNoContent)
 	})
 	registerHandler := handler.NewRegisterHandler(registerService)
-	botProtection := middleware.BotProtection(middleware.BotProtectionConfig{
-		Enabled:       cfg.Security.Bot.Enabled,
-		Window:        cfg.Security.Bot.Window,
-		MaxRequests:   cfg.Security.Bot.MaxRequests,
-		BlockDuration: cfg.Security.Bot.BlockDuration,
-	})
-
 	registerRoutes(
 		app,
 		registerHandler,
@@ -80,8 +72,6 @@ func newHTTPServer(
 		passwordHandler,
 		requireAccessToken,
 		requireSession,
-		botProtection,
-		otpSpamDetection,
 		jwksHandler,
 	)
 
@@ -135,8 +125,6 @@ func registerRoutes(
 	passwordHandler *handler.PasswordHandler,
 	requireAccessToken gin.HandlerFunc,
 	requireSession gin.HandlerFunc,
-	botProtection gin.HandlerFunc,
-	otpSpamDetection gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
 ) {
 	router.GET("/healthz", handler.Healthz)
@@ -144,16 +132,15 @@ func registerRoutes(
 	router.GET("/.well-known/jwks.json", jwksHandler.PublicJWKS)
 
 	publicAuthRoutes := router.Group("")
-	publicAuthRoutes.Use(botProtection)
-	publicAuthRoutes.POST("/registrations", otpSpamDetection, registerHandler.Register)
-	publicAuthRoutes.POST("/registrations/resend", otpSpamDetection, registerHandler.ResendOTP)
-	publicAuthRoutes.POST("/registrations/verify", otpSpamDetection, registerHandler.VerifyRegister)
+	publicAuthRoutes.POST("/registrations", registerHandler.Register)
+	publicAuthRoutes.POST("/registrations/resend", registerHandler.ResendOTP)
+	publicAuthRoutes.POST("/registrations/verify", registerHandler.VerifyRegister)
 	publicAuthRoutes.POST("/tokens", loginHandler.Login)
 	publicAuthRoutes.POST("/tokens/refresh", loginHandler.Refresh)
 	publicAuthRoutes.POST("/sessions", loginHandler.LoginSession)
-	publicAuthRoutes.POST("/password-resets", otpSpamDetection, passwordHandler.ForgotPassword)
-	publicAuthRoutes.POST("/password-resets/resend", otpSpamDetection, passwordHandler.ResendForgotPassword)
-	publicAuthRoutes.POST("/password-resets/verify", otpSpamDetection, passwordHandler.VerifyForgotPassword)
+	publicAuthRoutes.POST("/password-resets", passwordHandler.ForgotPassword)
+	publicAuthRoutes.POST("/password-resets/resend", passwordHandler.ResendForgotPassword)
+	publicAuthRoutes.POST("/password-resets/verify", passwordHandler.VerifyForgotPassword)
 
 	settingsRoutes := router.Group("/settings")
 	settingsRoutes.Use(requireAccessToken)

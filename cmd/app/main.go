@@ -76,7 +76,6 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		SystemRateLimitPolicy: registerSystemRateLimitPolicyFromConfig(cfg.Security.OTP.Register),
 	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
-	otpSpamStore := cache.NewOTPSpamStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
 		redisClient,
 		repository.NewSigningKeyRepository(db),
@@ -156,7 +155,6 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		passwordHandler,
 		middleware.RequireAccessToken(jwtService),
 		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository, cfg.CORS.AllowedOrigins),
-		middleware.OTPSpamDetection(otpSpamStore, otpSpamDetectionConfigFromConfig(cfg)),
 		jwksHandler,
 	)
 
@@ -198,26 +196,5 @@ func registerSystemRateLimitPolicyFromConfig(cfg config.RegisterOTPPolicyConfig)
 	return &appregister.SystemRateLimitPolicy{
 		Window:      cfg.SystemWindow,
 		MaxRequests: cfg.MaxSystemRequests,
-	}
-}
-
-func otpSpamDetectionConfigFromConfig(cfg *config.Config) middleware.OTPSpamDetectionConfig {
-	return middleware.OTPSpamDetectionConfig{
-		Enabled:       cfg.Security.OTPSpam.Enabled,
-		Register:      otpSpamFlowConfigFromConfig(cfg.Security.OTPSpam.Register),
-		PasswordReset: otpSpamFlowConfigFromConfig(cfg.Security.OTPSpam.PasswordReset),
-	}
-}
-
-func otpSpamFlowConfigFromConfig(cfg config.OTPSpamFlowConfig) middleware.OTPSpamFlowConfig {
-	return middleware.OTPSpamFlowConfig{
-		IPWindow:             cfg.IPWindow,
-		PhoneWindow:          cfg.PhoneWindow,
-		MaxIPScore:           cfg.MaxIPScore,
-		MaxPhoneRequests:     cfg.MaxPhoneRequests,
-		PendingIPScore:       cfg.PendingIPScore,
-		ResendIPScore:        cfg.ResendIPScore,
-		InvalidVerifyIPScore: cfg.InvalidVerifyIPScore,
-		SuccessVerifyIPScore: cfg.SuccessVerifyIPScore,
 	}
 }

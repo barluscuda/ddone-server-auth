@@ -32,7 +32,7 @@ The service uses:
 
 - `gin` for HTTP delivery
 - `gorm` + PostgreSQL for persistent user storage
-- `redis` for pending registration state, password-reset state, OTP counters, middleware spam scores, and read-through caches
+- `redis` for pending registration state, password-reset state, OTP counters, login rate-limit counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
 
@@ -347,9 +347,8 @@ Safe defaults:
 - `security.auth.login_session_ttl` defaults to `720h`
 - `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured
 - `app.max_request_body_bytes` defaults to `1048576`
-- bot protection defaults to `60` public auth requests per IP per `1m`, followed by a `5m` temporary block
 - login rate limiting defaults to `5` failed attempts per `5m` window, followed by a `15m` account lock
-- OTP flow limits and middleware spam-score rules default to the values shown in `config/config.yaml`
+- OTP flow limits default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
 
 `DDONE_SECURITY_AUTH_SESSION_COOKIE_MAX_AGE` is optional. If omitted or set to `0`, the cookie lifetime is derived from `DDONE_SECURITY_AUTH_LOGIN_SESSION_TTL`. If provided, it must not exceed the login-session TTL.

@@ -14,8 +14,6 @@ Base URL examples use `http://localhost:3000`. All JSON field names are camelCas
 
 Requests with a `Content-Length` above the configured request body limit return `413 request_body_too_large`.
 
-Public auth endpoints can return `429 bot_protection_rate_limited` when the same IP exceeds the configured bot-protection window. Those responses include `Retry-After`.
-
 ## Authentication
 
 Bearer-token routes require:

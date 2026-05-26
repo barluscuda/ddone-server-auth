@@ -43,11 +43,6 @@ security:
     failed_attempt_window: 5m
     max_attempts: 5
     lockout_duration: 15m
-  bot:
-    enabled: true
-    window: 1m
-    max_requests: 60
-    block_duration: 5m
   otp:
     register:
       ttl: 5m
@@ -67,26 +62,6 @@ security:
       max_phone_requests: 1
       max_resends: 3
       max_verify_attempts: 5
-  otp_spam:
-    enabled: true
-    register:
-      phone_window: 5m
-      ip_window: 10m
-      max_phone_requests: 1
-      max_ip_score: 20
-      pending_ip_score: 1
-      resend_ip_score: 1
-      invalid_verify_ip_score: 1
-      success_verify_ip_score: -1.5
-    password_reset:
-      phone_window: 5m
-      ip_window: 5m
-      max_phone_requests: 1
-      max_ip_score: 20
-      pending_ip_score: 1
-      resend_ip_score: 1
-      invalid_verify_ip_score: 1
-      success_verify_ip_score: -1.5
   auth:
     issuer: ddone-server-auth
     audience: ddone-clients

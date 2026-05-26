@@ -28,7 +28,7 @@ The service is moving toward hexagonal architecture:
 - Change authenticated-user passwords.
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
-- Run request body limits, bot protection, OTP spam detection, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
+- Run request body limits, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
 
 ## 3. Main Dependencies
 
@@ -36,7 +36,7 @@ The service is moving toward hexagonal architecture:
 - Gin for HTTP delivery
 - GORM for PostgreSQL persistence
 - PostgreSQL 17 in local Docker, with `pgcrypto` for UUID generation
-- Redis 7 for pending OTP state, counters, scores, and read-through caches
+- Redis 7 for pending OTP state, counters, login rate-limit state, and read-through caches
 - Wenova SMS API for OTP delivery
 - Zap for structured logging
 - Viper and godotenv for config
@@ -69,7 +69,7 @@ internal/application/jwks/       Signing-key lifecycle and public JWKS orchestra
 internal/application/otp/        Shared OTP policy values
 
 internal/adapters/handler/       Gin HTTP handlers
-internal/adapters/middleware/    Body limits, bot protection, OTP spam detection, CORS, auth, session, logging, recovery, 404/405
+internal/adapters/middleware/    Body limits, CORS, auth, session, logging, recovery, 404/405
 internal/adapters/dto/           HTTP request/response DTOs
 internal/adapters/repository/    GORM repositories and table row types
 internal/adapters/cache/         Redis stores and read-through cache decorators
@@ -289,36 +289,11 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Registration and password reset use separate OTP policies.
 - Default OTP TTL is `5m`.
 - Default system-wide registration start limit is `30` requests per `10m`.
-- OTP spam detection runs in middleware before OTP handlers.
-- OTP spam phone counters normalize phone numbers before hashing the phone key so equivalent input formats share the same counter.
-- The middleware classifies OTP clients as likely user, suspicious, or likely bot from request metadata and body shape without storing raw request bodies.
-- Bot-like signals such as automation user agents, missing user agents, malformed OTP fields, and unexpected content types add risk to the request's IP score.
-- Likely browser traffic with normal JSON headers gets a lower request score.
-- Default registration IP score budget is `20` points per `10m`.
-- Pending registration and registration resend requests add `1` base IP score point before classifier risk is applied.
-- Successful registration verification subtracts `1.5` IP score points, clamped at `0`.
-- Invalid registration OTP verification adds `1` IP score point after the handler returns `invalid_otp_code`.
-- Registration IP scores over `20` are rate-limited by middleware until the score key expires.
-- Default password-reset IP score budget is `20` points per `5m`.
-- Password-reset start and resend requests add `1` base IP score point before classifier risk is applied.
-- Invalid password-reset OTP verification adds `1` IP score point after the handler returns `invalid_otp_code`.
-- Successful password-reset verification subtracts `1.5` IP score points, clamped at `0`.
-- Password-reset IP scores over `20` are rate-limited by middleware until the score key expires.
 - System-wide registration start limits are configurable with `DDONE_SECURITY_OTP_REGISTER_SYSTEM_WINDOW` and `DDONE_SECURITY_OTP_REGISTER_MAX_SYSTEM_REQUESTS`.
-- Registration IP score deltas are configurable with `DDONE_SECURITY_OTP_SPAM_REGISTER_PENDING_IP_SCORE`, `DDONE_SECURITY_OTP_SPAM_REGISTER_RESEND_IP_SCORE`, `DDONE_SECURITY_OTP_SPAM_REGISTER_INVALID_VERIFY_IP_SCORE`, and `DDONE_SECURITY_OTP_SPAM_REGISTER_SUCCESS_VERIFY_IP_SCORE`.
-- Password-reset IP score deltas are configurable with `DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PENDING_IP_SCORE`, `DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_RESEND_IP_SCORE`, `DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE`, and `DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE`.
 - Default resend cooldown is `60s`.
 - Default maximum resends is `3`.
 - Default maximum verification attempts is `5`.
-- OTP rate-limit counters and score state live in Redis.
-
-### Bot Protection
-
-- Public auth endpoints use an in-process per-IP fixed-window throttle before handlers run.
-- Default bot protection allows `60` public auth requests per IP per `1m`.
-- Exceeding the limit returns `429 bot_protection_rate_limited` with `Retry-After`.
-- The default temporary block duration is `5m`.
-- Bot protection is process-local. Multi-instance deployments should still keep edge or load-balancer rate limits.
+- OTP rate-limit counters live in Redis.
 
 ### Phone Numbers
 
@@ -409,21 +384,17 @@ Local Docker initializes this through `db/init/001_pgcrypto.sql` only when the P
 
 ### Redis Data
 
-Redis is used for pending state, counters, OTP risk scores, and read-through caches.
+Redis is used for pending state, counters, login rate-limit state, and read-through caches.
 
 Known key families:
 
 - `register:ticket:<ticketId>`
 - `register:rate:phone:<phoneNumber>`
 - `register:rate:system`
-- `register:score:ip:<clientIp>`
 - `register:verify:attempts:<ticketId>`
-- `otp_spam:register:phone:<phoneHash>`
 - `password_reset:ticket:<ticketId>`
 - `password_reset:phone:<phoneNumber>`
-- `password_reset:ip:<clientIp>`
 - `password_reset:verify:<ticketId>`
-- `otp_spam:password_reset:phone:<phoneHash>`
 - `cache:user:id:<userId>`
 - `cache:user:phone:<phoneNumber>`
 - `cache:user:username:<username>`
@@ -435,7 +406,7 @@ Known key families:
 - `cache:login_sessions:user:<userId>`
 - `cache:signing_keys:public:v1`
 
-Login and OTP flow-limit keys are generated by the corresponding application services and stored through Redis-backed ports. OTP spam score keys are generated by HTTP middleware and stored through the Redis OTP spam adapter.
+Login and OTP flow-limit keys are generated by the corresponding application services and stored through Redis-backed ports.
 
 ## 11. Configuration
 
@@ -454,10 +425,8 @@ Important config groups:
 - `redis`: Redis address, auth, DB, timeout, pool settings
 - `cache`: user cache, user-session-list cache, public signing-key cache TTLs
 - `security.login`: failed-attempt window, max attempts, lockout duration
-- `security.bot`: public auth endpoint bot-protection window, limit, and block duration
 - `security.otp.register`: registration OTP flow policy
 - `security.otp.password_reset`: password-reset OTP flow policy
-- `security.otp_spam`: OTP middleware score policy
 - `security.auth`: JWT issuer/audience, token TTLs, signing-key rotation/retention, session-cookie settings
 - `cors`: allowed origins, methods, headers, exposed headers, credential mode, max age
 - `wenovaapi.token`: Wenova token
@@ -587,7 +556,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 14. Start the HTTP server.
 15. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits and bot protection before public auth handlers, and applies OTP spam detection middleware on registration and password-reset OTP routes. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits, CORS, recovery, and request logging before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 
@@ -722,7 +691,7 @@ Current coverage includes:
 - Config validation
 - DTO JSON field casing
 - HTTP handler behavior
-- Middleware auth, session-origin checks, request body limits, bot protection, CORS, and recovery behavior
+- Middleware auth, session-origin checks, request body limits, CORS, and recovery behavior
 - Redis signing-key cache behavior
 - ES256 signing, verification, and JWK behavior
 - JWT application orchestration
