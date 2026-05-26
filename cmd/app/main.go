@@ -4,12 +4,14 @@ import (
 	"context"
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/cache"
+	"ddone-server-auth/internal/adapters/challenge"
 	"ddone-server-auth/internal/adapters/database"
 	"ddone-server-auth/internal/adapters/handler"
 	"ddone-server-auth/internal/adapters/middleware"
 	"ddone-server-auth/internal/adapters/repository"
 	"ddone-server-auth/internal/adapters/sms"
 	"ddone-server-auth/internal/adapters/token"
+	appdexbotkiller "ddone-server-auth/internal/application/dexbotkiller"
 	appjwks "ddone-server-auth/internal/application/jwks"
 	appjwt "ddone-server-auth/internal/application/jwt"
 	applogin "ddone-server-auth/internal/application/login"
@@ -70,10 +72,33 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		repository.NewUserRepository(db),
 		cfg.Cache.UserTTL,
 	)
+	var dexBotKillerHasher *appdexbotkiller.Hasher
+	var dexBotKillerEngine *appdexbotkiller.Engine
+	var challengeVerifier appdexbotkiller.ChallengeVerifier
+	if cfg.DexBotKiller.Enabled {
+		hasher, err := appdexbotkiller.NewHasher(cfg.DexBotKiller.Pepper)
+		if err != nil {
+			logger.Fatal("failed to configure dexbotkiller", zap.Error(err))
+		}
+		dexBotKillerHasher = &hasher
+		dexBotKillerEngine = appdexbotkiller.NewEngine(
+			cache.NewDexBotKillerStore(redisClient),
+			dexBotKillerPolicyFromConfig(cfg.DexBotKiller),
+			hasher,
+		)
+		challengeVerifier = challenge.NewCloudflareTurnstileVerifier(challenge.CloudflareTurnstileConfig{
+			SecretKey: cfg.DexBotKiller.CloudflareTurnstile.SecretKey,
+			VerifyURL: cfg.DexBotKiller.CloudflareTurnstile.VerifyURL,
+			Timeout:   cfg.DexBotKiller.CloudflareTurnstile.Timeout,
+		})
+		logger.Info("dexbotkiller enabled", zap.String("mode", cfg.DexBotKiller.Mode))
+	}
 	registerStore := cache.NewRegisterStore(redisClient)
 	registerService := appregister.NewServiceWithSettings(userRepository, registerStore, smsClient, appregister.Settings{
 		OTPPolicy:             otpPolicyFromConfig(cfg.Security.OTP.Register.OTPPolicyConfig),
 		SystemRateLimitPolicy: registerSystemRateLimitPolicyFromConfig(cfg.Security.OTP.Register),
+		DexBotKiller:          dexBotKillerEngine,
+		ChallengeVerifier:     challengeVerifier,
 	})
 	passwordResetStore := cache.NewPasswordResetStore(redisClient)
 	signingKeyRepository := cache.NewCachedSigningKeyStore(
@@ -156,6 +181,7 @@ func bootstrapApplication(cfg *config.Config, logger *zap.Logger) (*http.Server,
 		middleware.RequireAccessToken(jwtService),
 		middleware.RequireSession(cfg.Security.Auth.SessionCookieName, loginSessionRepository, cfg.CORS.AllowedOrigins),
 		jwksHandler,
+		dexBotKillerHasher,
 	)
 
 	return httpServer, func() {
@@ -177,6 +203,26 @@ func sameSiteMode(raw string) http.SameSite {
 		return http.SameSiteNoneMode
 	default:
 		return http.SameSiteLaxMode
+	}
+}
+
+func dexBotKillerPolicyFromConfig(cfg config.DexBotKillerConfig) appdexbotkiller.Policy {
+	return appdexbotkiller.Policy{
+		Mode:          appdexbotkiller.Mode(cfg.Mode),
+		Prefix:        cfg.RedisPrefix,
+		CounterWindow: cfg.CounterWindow,
+		UniqueWindow:  cfg.UniqueWindow,
+		ScoreTTL:      cfg.ScoreTTL,
+		Delay:         cfg.Delay,
+		Thresholds: appdexbotkiller.Thresholds{
+			DelayScore:     cfg.Thresholds.DelayScore,
+			ChallengeScore: cfg.Thresholds.ChallengeScore,
+			BlockScore:     cfg.Thresholds.BlockScore,
+		},
+		Challenge: appdexbotkiller.Challenge{
+			Provider: appdexbotkiller.ChallengeProviderCloudflareTurnstile,
+			SiteKey:  cfg.CloudflareTurnstile.SiteKey,
+		},
 	}
 }
 

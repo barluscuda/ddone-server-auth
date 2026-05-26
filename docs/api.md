@@ -62,7 +62,8 @@ Request:
 ```json
 {
   "phoneNumber": "+8562012345678",
-  "password": "secretpass"
+  "password": "secretpass",
+  "turnstileToken": "optional-cloudflare-turnstile-token"
 }
 ```
 
@@ -83,7 +84,21 @@ Success `202 Accepted`:
 }
 ```
 
-Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `400 password_required`, `409 phone_number_already_registered`, `429 register_rate_limited`.
+Challenge `403 Forbidden`:
+
+```json
+{
+  "success": false,
+  "code": "challenge_required",
+  "message": "verification challenge required",
+  "data": {
+    "provider": "cloudflare_turnstile",
+    "siteKey": "0x4AAAAAAA..."
+  }
+}
+```
+
+Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `400 password_required`, `403 challenge_required`, `403 challenge_invalid`, `409 phone_number_already_registered`, `429 register_rate_limited`.
 
 ### `POST /registrations/resend`
 
@@ -93,7 +108,8 @@ Request:
 
 ```json
 {
-  "ticketId": "reg_abc123"
+  "ticketId": "reg_abc123",
+  "turnstileToken": "optional-cloudflare-turnstile-token"
 }
 ```
 
@@ -114,7 +130,7 @@ Success `202 Accepted`:
 }
 ```
 
-Common errors: `400 ticket_id_required`, `400 pending_registration_not_found`, `400 pending_registration_invalid`, `409 phone_number_already_registered`, `429 resend_cooldown_active`, `429 resend_rate_limited`.
+Common errors: `400 ticket_id_required`, `400 pending_registration_not_found`, `400 pending_registration_invalid`, `403 challenge_required`, `403 challenge_invalid`, `409 phone_number_already_registered`, `429 resend_cooldown_active`, `429 resend_rate_limited`.
 
 ### `POST /registrations/verify`
 

@@ -2,6 +2,7 @@ package register
 
 import (
 	"context"
+	"ddone-server-auth/internal/application/dexbotkiller"
 	"ddone-server-auth/internal/domain/user"
 	"errors"
 	"fmt"
@@ -141,6 +142,20 @@ func (s *fakeOTPSender) SendOTP(_ context.Context, telCode string, number string
 	return s.err
 }
 
+type fakeChallengeVerifier struct {
+	token    string
+	remoteIP string
+	err      error
+	called   bool
+}
+
+func (v *fakeChallengeVerifier) Verify(_ context.Context, verification dexbotkiller.ChallengeVerification) error {
+	v.called = true
+	v.token = verification.Token
+	v.remoteIP = verification.RemoteIP
+	return v.err
+}
+
 func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	repo := &fakeUserRepository{}
 	store := &fakeRegistrationStore{}
@@ -208,6 +223,108 @@ func TestRegisterServiceRegisterSavesRegistrationAndSendsSMS(t *testing.T) {
 	if !strings.Contains(sender.message, "123456") {
 		t.Fatalf("expected sms message to contain otp code, got %q", sender.message)
 	}
+}
+
+func TestRegisterServiceReturnsCloudflareChallengeBeforeSendingSMS(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	verifier := &fakeChallengeVerifier{}
+	service := newChallengeRegisterService(t, repo, store, sender, verifier)
+
+	_, err := service.Register(clientContext(), RegisterInput{
+		PhoneNumber: "8562012345678",
+		Password:    "secretpass",
+	})
+	if !errors.Is(err, ErrChallengeRequired) {
+		t.Fatalf("expected challenge required, got %v", err)
+	}
+	challenge, ok := ChallengeFromError(err)
+	if !ok {
+		t.Fatal("expected challenge metadata")
+	}
+	if challenge.Provider != string(dexbotkiller.ChallengeProviderCloudflareTurnstile) {
+		t.Fatalf("expected cloudflare turnstile provider, got %q", challenge.Provider)
+	}
+	if challenge.SiteKey != "site-key" {
+		t.Fatalf("expected site key, got %q", challenge.SiteKey)
+	}
+	if sender.called {
+		t.Fatal("expected sms not to be sent until challenge is solved")
+	}
+	if verifier.called {
+		t.Fatal("expected verifier not to be called without challenge token")
+	}
+}
+
+func TestRegisterServiceVerifiesCloudflareChallengeBeforeSendingSMS(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	verifier := &fakeChallengeVerifier{}
+	service := newChallengeRegisterService(t, repo, store, sender, verifier)
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
+	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
+
+	_, err := service.Register(clientContext(), RegisterInput{
+		PhoneNumber:    "8562012345678",
+		Password:       "secretpass",
+		ChallengeToken: "turnstile-token",
+	})
+	if err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+	if !verifier.called {
+		t.Fatal("expected challenge verifier to be called")
+	}
+	if verifier.token != "turnstile-token" {
+		t.Fatalf("expected verifier token %q, got %q", "turnstile-token", verifier.token)
+	}
+	if verifier.remoteIP != "192.0.2.10" {
+		t.Fatalf("expected verifier remote ip %q, got %q", "192.0.2.10", verifier.remoteIP)
+	}
+	if !sender.called {
+		t.Fatal("expected sms to be sent after challenge verification")
+	}
+}
+
+func newChallengeRegisterService(
+	t *testing.T,
+	repo *fakeUserRepository,
+	store *fakeRegistrationStore,
+	sender *fakeOTPSender,
+	verifier *fakeChallengeVerifier,
+) *Service {
+	t.Helper()
+
+	hasher, err := dexbotkiller.NewHasher("test-pepper")
+	if err != nil {
+		t.Fatalf("new hasher: %v", err)
+	}
+	engine := dexbotkiller.NewEngine(dexbotkiller.NoopStore{}, dexbotkiller.Policy{
+		Mode: dexbotkiller.ModeChallenge,
+		Thresholds: dexbotkiller.Thresholds{
+			DelayScore:     1,
+			ChallengeScore: 1,
+			BlockScore:     2,
+		},
+		Challenge: dexbotkiller.Challenge{
+			Provider: dexbotkiller.ChallengeProviderCloudflareTurnstile,
+			SiteKey:  "site-key",
+		},
+	}, hasher)
+
+	return NewServiceWithSettings(repo, store, sender, Settings{
+		DexBotKiller:      engine,
+		ChallengeVerifier: verifier,
+	})
+}
+
+func clientContext() context.Context {
+	return dexbotkiller.ContextWithClientContext(context.Background(), dexbotkiller.ClientContext{
+		IP: "192.0.2.10",
+	})
 }
 
 func TestNormalizePhoneNumber(t *testing.T) {

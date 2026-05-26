@@ -1,6 +1,6 @@
 # ddone-server-auth Project Handbook
 
-Last reviewed against the repository on 2026-05-25.
+Last reviewed against the repository on 2026-05-26.
 
 This handbook is the source-of-truth engineering overview for `ddone-server-auth`. Keep it aligned with code changes that affect architecture, dependencies, routes, config, storage, security behavior, startup wiring, or business flows.
 
@@ -12,6 +12,7 @@ The service is moving toward hexagonal architecture:
 
 - `internal/domain` holds persistence-free business types and domain errors.
 - `internal/application` holds use cases, orchestration, and ports.
+- `internal/application/dexbotkiller` holds optional passive bot-risk scoring policy and keying.
 - `internal/adapters` holds HTTP, PostgreSQL, Redis, SMS, DTO, middleware, and token codec adapters.
 - `cmd/app` is the composition root and process entrypoint.
 
@@ -29,6 +30,7 @@ The service is moving toward hexagonal architecture:
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
 - Run request body limits, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
+- Optionally run DexBotKiller client-context extraction and registration abuse signal recording in passive mode.
 
 ## 3. Main Dependencies
 
@@ -59,6 +61,7 @@ internal/domain/user/            User model, phone normalization, user errors
 internal/domain/auth/            Access-token, refresh-token, session, signing-key, JWKS types
 
 internal/application/register/   Registration OTP use case
+internal/application/dexbotkiller/ Passive bot-risk scoring, HMAC keying, and engine policy
 internal/application/login/      Password login, refresh-token rotation, session login creation
 internal/application/password/   Password reset and authenticated password change
 internal/application/settings/   Current-user settings and username update
@@ -69,10 +72,10 @@ internal/application/jwks/       Signing-key lifecycle and public JWKS orchestra
 internal/application/otp/        Shared OTP policy values
 
 internal/adapters/handler/       Gin HTTP handlers
-internal/adapters/middleware/    Body limits, CORS, auth, session, logging, recovery, 404/405
+internal/adapters/middleware/    Body limits, CORS, auth, session, client context, logging, recovery, 404/405
 internal/adapters/dto/           HTTP request/response DTOs
 internal/adapters/repository/    GORM repositories and table row types
-internal/adapters/cache/         Redis stores and read-through cache decorators
+internal/adapters/cache/         Redis stores, DexBotKiller store, and read-through cache decorators
 internal/adapters/token/         ES256 JWT/JWK codec
 internal/adapters/sms/           Wenova SMS adapter
 internal/adapters/database/      PostgreSQL connection setup
@@ -105,6 +108,17 @@ Owns phone registration:
 - Store pending registrations in Redis through a port.
 - Send OTP through an SMS port.
 - Create users after successful OTP verification.
+- When configured, passively evaluates registration start/resend requests and records SMS and OTP outcomes through DexBotKiller without changing registration responses.
+
+### `internal/application/dexbotkiller`
+
+Owns optional application-layer bot-risk scoring:
+
+- Builds HMAC-SHA256 Redis keys and set members so raw phone numbers and device identifiers are not used as DexBotKiller Redis identifiers.
+- Scores client quality, request velocity, unique target behavior, and recorded outcomes.
+- Uses Cloudflare Turnstile for challenge responses and server-side token verification.
+- Supports allow, delay, challenge, and block decisions, with current startup wiring intended for passive mode first.
+- Defines a store port implemented by the Redis adapter.
 
 ### `internal/application/login`
 
@@ -295,6 +309,15 @@ Downstream verification guidance lives in `docs/jwt.md`.
 - Default maximum verification attempts is `5`.
 - OTP rate-limit counters live in Redis.
 
+### DexBotKiller
+
+- DexBotKiller is optional and disabled by default.
+- The current rollout is Phase 1 passive mode: registration requests are evaluated and SMS/OTP outcomes are recorded, but requests are not delayed, challenged, or blocked.
+- Enabling it requires `dexbotkiller.enabled=true` and a non-empty HMAC pepper through `DDONE_DEXBOTKILLER_PEPPER`.
+- HTTP middleware extracts client IP, subnet, normalized user-agent, accept-language, content-type, and a signed `HttpOnly` device cookie into request context.
+- DexBotKiller Redis keys use HMAC-SHA256 hashed identifiers instead of raw phone numbers, IP addresses, or device IDs.
+- In `challenge` or `enforce` mode, challenge responses use Cloudflare Turnstile. Registration start/resend requests return `403 challenge_required` with provider `cloudflare_turnstile` and the configured site key; clients resubmit with `turnstileToken`, which the server verifies against Cloudflare before sending SMS.
+
 ### Phone Numbers
 
 - Phone inputs are normalized by `internal/domain/user`.
@@ -405,8 +428,12 @@ Known key families:
 - `cache:login_session:id:<sessionId>`
 - `cache:login_sessions:user:<userId>`
 - `cache:signing_keys:public:v1`
+- `dbk:v1:counter:<flow>:<action>:<dimension>:<hash>:<window>`
+- `dbk:v1:uniq:<flow>:<action>:<target>_by_<dimension>:<hash>:<window>`
+- `dbk:v1:score:<dimension>:<hash>`
 
 Login and OTP flow-limit keys are generated by the corresponding application services and stored through Redis-backed ports.
+DexBotKiller keys use the configured prefix, default `dbk:v1`, and HMAC-hashed identifiers.
 
 ## 11. Configuration
 
@@ -424,6 +451,7 @@ Important config groups:
 - `database`: PostgreSQL connection, pool, timeout, timezone, SQL logging
 - `redis`: Redis address, auth, DB, timeout, pool settings
 - `cache`: user cache, user-session-list cache, public signing-key cache TTLs
+- `dexbotkiller`: optional abuse-risk engine, Redis key prefix, HMAC pepper, thresholds, Cloudflare Turnstile settings, and device-cookie settings
 - `security.login`: failed-attempt window, max attempts, lockout duration
 - `security.otp.register`: registration OTP flow policy
 - `security.otp.password_reset`: password-reset OTP flow policy
@@ -468,14 +496,29 @@ DDONE_CACHE_USER_TTL=5m
 DDONE_CACHE_USER_SESSION_LIST_TTL=1m
 DDONE_CACHE_SIGNING_KEYS_TTL=1m
 
+DDONE_DEXBOTKILLER_ENABLED=false
+DDONE_DEXBOTKILLER_MODE=passive
+DDONE_DEXBOTKILLER_REDIS_PREFIX=dbk:v1
+DDONE_DEXBOTKILLER_PEPPER=
+DDONE_DEXBOTKILLER_COUNTER_WINDOW=1m
+DDONE_DEXBOTKILLER_UNIQUE_WINDOW=15m
+DDONE_DEXBOTKILLER_SCORE_TTL=24h
+DDONE_DEXBOTKILLER_DELAY=500ms
+DDONE_DEXBOTKILLER_THRESHOLDS_DELAY_SCORE=3
+DDONE_DEXBOTKILLER_THRESHOLDS_CHALLENGE_SCORE=6
+DDONE_DEXBOTKILLER_THRESHOLDS_BLOCK_SCORE=10
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SITE_KEY=
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SECRET_KEY=
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_VERIFY_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_TIMEOUT=3s
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_NAME=ddone_device
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_MAX_AGE=720h
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_SECURE=false
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_SAME_SITE=lax
+
 DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_LOGIN_MAX_ATTEMPTS=5
 DDONE_SECURITY_LOGIN_LOCKOUT_DURATION=15m
-
-DDONE_SECURITY_BOT_ENABLED=true
-DDONE_SECURITY_BOT_WINDOW=1m
-DDONE_SECURITY_BOT_MAX_REQUESTS=60
-DDONE_SECURITY_BOT_BLOCK_DURATION=5m
 
 DDONE_SECURITY_OTP_REGISTER_TTL=5m
 DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW=5m
@@ -494,23 +537,6 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
-DDONE_SECURITY_OTP_SPAM_ENABLED=true
-DDONE_SECURITY_OTP_SPAM_REGISTER_PHONE_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_REGISTER_IP_WINDOW=10m
-DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_PHONE_REQUESTS=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_IP_SCORE=20
-DDONE_SECURITY_OTP_SPAM_REGISTER_PENDING_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_RESEND_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_INVALID_VERIFY_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_SUCCESS_VERIFY_IP_SCORE=-1.5
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PHONE_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_IP_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_IP_SCORE=20
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PENDING_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_RESEND_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE=-1.5
 
 DDONE_SECURITY_AUTH_ISSUER=ddone-server-auth
 DDONE_SECURITY_AUTH_AUDIENCE=ddone-clients
@@ -547,16 +573,17 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 5. Run GORM auto-migration.
 6. Create Wenova SMS client.
 7. Build repositories and Redis cache decorators.
-8. Build ES256 token codec.
-9. Build JWKS service and ensure an active signing key exists.
-10. Build JWT service.
-11. Build login, registration, password, settings, session, token-manager services.
-12. Build handlers and middleware.
-13. Register routes.
-14. Start the HTTP server.
-15. Gracefully shut down on `SIGINT` or `SIGTERM`.
+8. If enabled, build DexBotKiller HMAC hasher, Redis store, and passive engine.
+9. Build ES256 token codec.
+10. Build JWKS service and ensure an active signing key exists.
+11. Build JWT service.
+12. Build login, registration, password, settings, session, token-manager services.
+13. Build handlers and middleware.
+14. Register routes.
+15. Start the HTTP server.
+16. Gracefully shut down on `SIGINT` or `SIGTERM`.
 
-The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits, CORS, recovery, and request logging before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
+The HTTP server disables Gin's trust-all proxy default unless `app.trusted_proxies` is explicitly configured. It applies request body limits, CORS, recovery, and request logging before route handlers. When DexBotKiller is enabled, it also applies client-context middleware that issues or verifies the signed device cookie before route handlers. It uses a 5-second read-header timeout, 10-second read timeout, 15-second write timeout, 60-second idle timeout, default 1 MiB max header size, configured request body limit, and a 10-second graceful shutdown timeout.
 
 ## 13. Local Development
 

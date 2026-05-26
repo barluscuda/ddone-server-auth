@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"ddone-server-auth/internal/adapters/dto"
+	"ddone-server-auth/internal/application/dexbotkiller"
 	appregister "ddone-server-auth/internal/application/register"
 	"ddone-server-auth/internal/domain/user"
 	"errors"
@@ -418,6 +419,43 @@ func TestHandleRegisterErrorDoesNotLeakUnexpectedError(t *testing.T) {
 	}
 	if res.Message != "internal server error" {
 		t.Fatalf("expected safe message %q, got %q", "internal server error", res.Message)
+	}
+}
+
+func TestHandleRegisterErrorReturnsCloudflareChallenge(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	handleRegisterError(c, &appregister.ChallengeRequiredError{
+		Challenge: dexbotkiller.Challenge{
+			Provider: dexbotkiller.ChallengeProviderCloudflareTurnstile,
+			SiteKey:  "site-key",
+		},
+	})
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, recorder.Code)
+	}
+
+	var res dto.ResChallenge
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if res.Success {
+		t.Fatal("expected error response")
+	}
+	if res.Code != "challenge_required" {
+		t.Fatalf("expected code %q, got %q", "challenge_required", res.Code)
+	}
+	if res.Data.Provider != "cloudflare_turnstile" {
+		t.Fatalf("expected provider %q, got %q", "cloudflare_turnstile", res.Data.Provider)
+	}
+	if res.Data.SiteKey != "site-key" {
+		t.Fatalf("expected site key %q, got %q", "site-key", res.Data.SiteKey)
 	}
 }
 

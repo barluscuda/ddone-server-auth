@@ -5,6 +5,7 @@ import (
 	"ddone-server-auth/config"
 	"ddone-server-auth/internal/adapters/handler"
 	"ddone-server-auth/internal/adapters/middleware"
+	appdexbotkiller "ddone-server-auth/internal/application/dexbotkiller"
 	appregister "ddone-server-auth/internal/application/register"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ func newHTTPServer(
 	requireAccessToken gin.HandlerFunc,
 	requireSession gin.HandlerFunc,
 	jwksHandler *handler.JWKSHandler,
+	dexBotKillerHasher *appdexbotkiller.Hasher,
 ) *http.Server {
 	if cfg.App.Debug {
 		gin.SetMode(gin.DebugMode)
@@ -56,6 +58,14 @@ func newHTTPServer(
 		middleware.Recovery(logger),
 		middleware.RequestLogger(logger),
 	)
+	if cfg.DexBotKiller.Enabled && dexBotKillerHasher != nil {
+		app.Use(middleware.ClientContext(middleware.ClientContextConfig{
+			DeviceCookieName:     cfg.DexBotKiller.DeviceCookieName,
+			DeviceCookieMaxAge:   cfg.DexBotKiller.DeviceCookieMaxAge,
+			DeviceCookieSecure:   cfg.DexBotKiller.DeviceCookieSecure,
+			DeviceCookieSameSite: sameSiteMode(cfg.DexBotKiller.DeviceCookieSameSite),
+		}, *dexBotKillerHasher))
+	}
 	app.NoRoute(middleware.NoRoute())
 	app.NoMethod(middleware.NoMethod())
 	app.OPTIONS("/*path", func(c *gin.Context) {

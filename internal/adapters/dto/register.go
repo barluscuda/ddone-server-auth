@@ -3,8 +3,9 @@ package dto
 import "time"
 
 type ReqRegister struct {
-	PhoneNumber string `json:"phoneNumber" binding:"required,min=8,max=20"`
-	Password    string `json:"password" binding:"required,min=8,max=72"`
+	PhoneNumber    string `json:"phoneNumber" binding:"required,min=8,max=20"`
+	Password       string `json:"password" binding:"required,min=8,max=72"`
+	TurnstileToken string `json:"turnstileToken,omitempty"`
 }
 
 type ReqVerifyRegister struct {
@@ -13,7 +14,20 @@ type ReqVerifyRegister struct {
 }
 
 type ReqResendRegisterOTP struct {
-	TicketID string `json:"ticketId" binding:"required"`
+	TicketID       string `json:"ticketId" binding:"required"`
+	TurnstileToken string `json:"turnstileToken,omitempty"`
+}
+
+type ResChallengeData struct {
+	Provider string `json:"provider"`
+	SiteKey  string `json:"siteKey"`
+}
+
+type ResChallenge struct {
+	Success bool             `json:"success"`
+	Code    string           `json:"code"`
+	Message string           `json:"message"`
+	Data    ResChallengeData `json:"data"`
 }
 
 type ResRegisterTicketData struct {

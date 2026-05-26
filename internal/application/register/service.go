@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"ddone-server-auth/internal/application/dexbotkiller"
 	"ddone-server-auth/internal/application/otp"
 	"ddone-server-auth/internal/domain/user"
 	"encoding/hex"
@@ -35,6 +36,8 @@ var ErrRegisterRateLimited = errors.New("too many registration requests, try aga
 var ErrResendRateLimited = errors.New("too many otp resend requests, request a new registration")
 var ErrResendCooldownActive = errors.New("otp resend cooldown is active")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
+var ErrChallengeRequired = errors.New("challenge required")
+var ErrChallengeInvalid = errors.New("challenge verification failed")
 
 var defaultOTPPolicy = otp.Policy{
 	TTL:                 5 * time.Minute,
@@ -62,6 +65,8 @@ type Service struct {
 	ticketGenerator       func() (string, error)
 	usernameGenerator     func() (string, error)
 	passwordHasher        func(string) (string, error)
+	dexBotKiller          *dexbotkiller.Engine
+	challengeVerifier     dexbotkiller.ChallengeVerifier
 }
 
 func NewService(
@@ -94,6 +99,8 @@ func NewServiceWithSettings(
 		ticketGenerator:       generateRegisterTicket,
 		usernameGenerator:     generateUsername,
 		passwordHasher:        hashPassword,
+		dexBotKiller:          settings.DexBotKiller,
+		challengeVerifier:     settings.ChallengeVerifier,
 	}
 }
 
@@ -111,6 +118,9 @@ func (s *Service) Register(
 	}
 	if strings.TrimSpace(input.Password) == "" {
 		return nil, ErrPasswordRequired
+	}
+	if err := s.evaluateDexBotKiller(ctx, dexbotkiller.FlowActionStart, globalPhoneNumber, "", input.ChallengeToken); err != nil {
+		return nil, err
 	}
 	if err := s.enforceRegisterRateLimits(ctx, globalPhoneNumber); err != nil {
 		return nil, err
@@ -160,9 +170,11 @@ func (s *Service) Register(
 
 	message := RegisterOTPMessage(otpCode, s.otpPolicy.TTL)
 	if err := s.sender.SendOTP(ctx, phoneNumber.TelCode, phoneNumber.Number, message); err != nil {
+		s.recordDexBotKiller(ctx, dexbotkiller.FlowActionStart, globalPhoneNumber, ticketID, dexbotkiller.OutcomeSMSSendFailed)
 		_ = s.store.Delete(ctx, ticketID)
 		return nil, err
 	}
+	s.recordDexBotKiller(ctx, dexbotkiller.FlowActionStart, globalPhoneNumber, ticketID, dexbotkiller.OutcomeSMSSent)
 
 	return &RegisterResult{
 		TicketID:             ticketID,
@@ -204,6 +216,7 @@ func (s *Service) VerifyRegister(
 	}
 
 	if !matchRegisterOTP(pendingRegistration.OTPCodeHash, ticketID, otpCode) {
+		s.recordDexBotKiller(ctx, dexbotkiller.FlowActionVerify, phoneNumber, ticketID, dexbotkiller.OutcomeOTPInvalid)
 		attempts, err := s.store.IncrementCounter(ctx, verifyAttemptKey(ticketID), s.otpPolicy.VerifyAttemptWindow)
 		if err != nil {
 			return nil, err
@@ -261,6 +274,7 @@ func (s *Service) VerifyRegister(
 	if err := s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID)); err != nil {
 		return nil, err
 	}
+	s.recordDexBotKiller(ctx, dexbotkiller.FlowActionVerify, phoneNumber, ticketID, dexbotkiller.OutcomeOTPSuccess)
 
 	return userModel, nil
 }
@@ -289,6 +303,9 @@ func (s *Service) ResendRegisterOTP(
 		_ = s.store.Delete(ctx, ticketID)
 		_ = s.store.DeleteCounter(ctx, verifyAttemptKey(ticketID))
 		return nil, ErrPendingRegistrationInvalid
+	}
+	if err := s.evaluateDexBotKiller(ctx, dexbotkiller.FlowActionResend, pendingRegistration.PhoneNumber, ticketID, input.ChallengeToken); err != nil {
+		return nil, err
 	}
 
 	if _, err := s.users.GetByPhoneNumber(ctx, pendingRegistration.PhoneNumber); err == nil {
@@ -334,12 +351,14 @@ func (s *Service) ResendRegisterOTP(
 		return nil, err
 	}
 	if err := s.sender.SendOTP(ctx, parsedPhoneNumber.TelCode, parsedPhoneNumber.Number, message); err != nil {
+		s.recordDexBotKiller(ctx, dexbotkiller.FlowActionResend, pendingRegistration.PhoneNumber, ticketID, dexbotkiller.OutcomeSMSSendFailed)
 		if restoreErr := s.store.Save(ctx, &previousRegistration, previousTTL); restoreErr != nil {
 			return nil, restoreErr
 		}
 
 		return nil, err
 	}
+	s.recordDexBotKiller(ctx, dexbotkiller.FlowActionResend, pendingRegistration.PhoneNumber, ticketID, dexbotkiller.OutcomeSMSSent)
 
 	return &RegisterResult{
 		TicketID:             ticketID,
@@ -347,6 +366,58 @@ func (s *Service) ResendRegisterOTP(
 		ResendCooldown:       s.otpPolicy.ResendCooldown,
 		RemainingResendCount: s.otpPolicy.MaxResends - pendingRegistration.ResendCount,
 	}, nil
+}
+
+func (s *Service) evaluateDexBotKiller(ctx context.Context, action dexbotkiller.FlowAction, phoneNumber string, ticketID string, challengeToken string) error {
+	if s.dexBotKiller == nil {
+		return nil
+	}
+	clientContext, _ := dexbotkiller.ClientContextFromContext(ctx)
+	decision, err := s.dexBotKiller.Evaluate(ctx, dexbotkiller.Request{
+		Flow:        dexbotkiller.FlowRegister,
+		Action:      action,
+		Client:      clientContext,
+		PhoneNumber: phoneNumber,
+		TicketID:    ticketID,
+	})
+	if err != nil {
+		return nil
+	}
+	if decision.Action != dexbotkiller.ActionChallenge {
+		return nil
+	}
+	if strings.TrimSpace(challengeToken) == "" {
+		return &ChallengeRequiredError{Challenge: decision.Challenge}
+	}
+	if s.challengeVerifier == nil {
+		return &ChallengeRequiredError{Challenge: decision.Challenge}
+	}
+	if err := s.challengeVerifier.Verify(ctx, dexbotkiller.ChallengeVerification{
+		Provider: decision.Challenge.Provider,
+		Token:    challengeToken,
+		RemoteIP: clientContext.IP,
+	}); err != nil {
+		return ErrChallengeInvalid
+	}
+
+	return nil
+}
+
+func (s *Service) recordDexBotKiller(ctx context.Context, action dexbotkiller.FlowAction, phoneNumber string, ticketID string, outcome dexbotkiller.Outcome) {
+	if s.dexBotKiller == nil {
+		return
+	}
+	clientContext, _ := dexbotkiller.ClientContextFromContext(ctx)
+	_ = s.dexBotKiller.Record(ctx, dexbotkiller.Event{
+		Request: dexbotkiller.Request{
+			Flow:        dexbotkiller.FlowRegister,
+			Action:      action,
+			Client:      clientContext,
+			PhoneNumber: phoneNumber,
+			TicketID:    ticketID,
+		},
+		Outcome: outcome,
+	})
 }
 
 func (s *Service) enforceRegisterRateLimits(ctx context.Context, phoneNumber string) error {

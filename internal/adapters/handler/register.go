@@ -28,6 +28,8 @@ const (
 	codeResendRateLimited           = "resend_rate_limited"
 	codeResendCooldownActive        = "resend_cooldown_active"
 	codeVerifyRateLimited           = "verify_rate_limited"
+	codeChallengeRequired           = "challenge_required"
+	codeChallengeInvalid            = "challenge_invalid"
 	codePhoneAlreadyRegistered      = "phone_number_already_registered"
 	codeUsernameAlreadyRegistered   = "username_already_registered"
 	codePendingRegistrationNotFound = "pending_registration_not_found"
@@ -38,6 +40,7 @@ const (
 	messageRegisterOTPSent          = "otp sent successfully"
 	messageRegisterOTPResent        = "otp resent successfully"
 	messageRegisterVerified         = "registration completed successfully"
+	messageChallengeRequired        = "verification challenge required"
 )
 
 type RegisterHandler struct {
@@ -56,8 +59,9 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 	}
 
 	result, err := h.register.Register(c.Request.Context(), appregister.RegisterInput{
-		PhoneNumber: req.PhoneNumber,
-		Password:    req.Password,
+		PhoneNumber:    req.PhoneNumber,
+		Password:       req.Password,
+		ChallengeToken: req.TurnstileToken,
 	})
 	if err != nil {
 		handleRegisterError(c, err)
@@ -116,7 +120,8 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 	}
 
 	result, err := h.register.ResendRegisterOTP(c.Request.Context(), appregister.ResendRegisterOTPInput{
-		TicketID: req.TicketID,
+		TicketID:       req.TicketID,
+		ChallengeToken: req.TurnstileToken,
 	})
 	if err != nil {
 		handleRegisterError(c, err)
@@ -138,6 +143,11 @@ func (h *RegisterHandler) ResendOTP(c *gin.Context) {
 }
 
 func handleRegisterError(c *gin.Context, err error) {
+	if challenge, ok := appregister.ChallengeFromError(err); ok {
+		respondChallengeRequired(c, challenge)
+		return
+	}
+
 	switch {
 	case errors.Is(err, appregister.ErrPhoneNumberRequired),
 		errors.Is(err, appregister.ErrRegisterTicketRequired),
@@ -153,6 +163,8 @@ func handleRegisterError(c *gin.Context, err error) {
 		errors.Is(err, appregister.ErrResendCooldownActive),
 		errors.Is(err, appregister.ErrVerifyRateLimited):
 		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), registerErrorMessage(err))
+	case errors.Is(err, appregister.ErrChallengeInvalid):
+		respondError(c, http.StatusForbidden, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered),
 		errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		respondError(c, http.StatusConflict, registerErrorCode(err), registerErrorMessage(err))
@@ -163,6 +175,18 @@ func handleRegisterError(c *gin.Context, err error) {
 	default:
 		respondError(c, http.StatusInternalServerError, codeInternalServerError, registerErrorMessage(err))
 	}
+}
+
+func respondChallengeRequired(c *gin.Context, challenge appregister.Challenge) {
+	c.JSON(http.StatusForbidden, dto.ResChallenge{
+		Success: false,
+		Code:    codeChallengeRequired,
+		Message: messageChallengeRequired,
+		Data: dto.ResChallengeData{
+			Provider: challenge.Provider,
+			SiteKey:  challenge.SiteKey,
+		},
+	})
 }
 
 func respondError(c *gin.Context, statusCode int, code string, message string) {
@@ -197,6 +221,10 @@ func registerErrorCode(err error) string {
 		return codeResendCooldownActive
 	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return codeVerifyRateLimited
+	case errors.Is(err, appregister.ErrChallengeRequired):
+		return codeChallengeRequired
+	case errors.Is(err, appregister.ErrChallengeInvalid):
+		return codeChallengeInvalid
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return codePhoneAlreadyRegistered
 	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
@@ -236,6 +264,10 @@ func registerErrorMessage(err error) string {
 		return "please wait before requesting another otp"
 	case errors.Is(err, appregister.ErrVerifyRateLimited):
 		return "too many invalid otp attempts, please request a new code"
+	case errors.Is(err, appregister.ErrChallengeRequired):
+		return messageChallengeRequired
+	case errors.Is(err, appregister.ErrChallengeInvalid):
+		return "verification challenge failed"
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return "phone number is already registered"
 	case errors.Is(err, user.ErrUsernameAlreadyRegistered):

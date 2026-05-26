@@ -35,6 +35,7 @@ The service uses:
 - `redis` for pending registration state, password-reset state, OTP counters, login rate-limit counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
+- optional DexBotKiller passive registration abuse signal recording
 
 ## Documentation
 
@@ -59,6 +60,7 @@ cmd/app/                       Entry point and HTTP server wiring
 config/                        Config loading and default values
 db/init/                       Local PostgreSQL initialization scripts
 internal/application/register/ Registration use case
+internal/application/dexbotkiller/ Passive bot-risk scoring and HMAC keying
 internal/application/login/    Login and refresh use case
 internal/application/password/ Password reset and change-password use case
 internal/application/settings/ Current authenticated-user settings view and username update use case
@@ -67,7 +69,7 @@ internal/application/tokenmanager/ Raw refresh-token listing and revocation use 
 internal/application/jwks/     Signing-key and JWKS use case
 internal/domain/user/       User and registration domain models
 internal/domain/auth/          Auth tokens, sessions, and signing-key models
-internal/adapters/cache/       Redis client and registration store
+internal/adapters/cache/       Redis client, use-case stores, and DexBotKiller store
 internal/adapters/database/    PostgreSQL connection setup
 internal/adapters/repository/  GORM-backed repositories
 internal/adapters/token/       ES256 signing and JWK helpers
@@ -249,7 +251,7 @@ Configuration is loaded from:
 2. environment variables with the `DDONE_` prefix
 3. optional `.env`
 
-In `config/config.yaml`, security-related settings are grouped under the top-level `security:` section.
+In `config/config.yaml`, most security-related settings are grouped under `security:`. DexBotKiller uses its own top-level `dexbotkiller:` section because it has separate rollout and cookie settings.
 
 Common environment variables:
 
@@ -275,14 +277,29 @@ DDONE_CACHE_USER_TTL=5m
 DDONE_CACHE_USER_SESSION_LIST_TTL=1m
 DDONE_CACHE_SIGNING_KEYS_TTL=1m
 
+DDONE_DEXBOTKILLER_ENABLED=false
+DDONE_DEXBOTKILLER_MODE=passive
+DDONE_DEXBOTKILLER_REDIS_PREFIX=dbk:v1
+DDONE_DEXBOTKILLER_PEPPER=
+DDONE_DEXBOTKILLER_COUNTER_WINDOW=1m
+DDONE_DEXBOTKILLER_UNIQUE_WINDOW=15m
+DDONE_DEXBOTKILLER_SCORE_TTL=24h
+DDONE_DEXBOTKILLER_DELAY=500ms
+DDONE_DEXBOTKILLER_THRESHOLDS_DELAY_SCORE=3
+DDONE_DEXBOTKILLER_THRESHOLDS_CHALLENGE_SCORE=6
+DDONE_DEXBOTKILLER_THRESHOLDS_BLOCK_SCORE=10
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SITE_KEY=
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SECRET_KEY=
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_VERIFY_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
+DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_TIMEOUT=3s
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_NAME=ddone_device
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_MAX_AGE=720h
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_SECURE=false
+DDONE_DEXBOTKILLER_DEVICE_COOKIE_SAME_SITE=lax
+
 DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_LOGIN_MAX_ATTEMPTS=5
 DDONE_SECURITY_LOGIN_LOCKOUT_DURATION=15m
-
-DDONE_SECURITY_BOT_ENABLED=true
-DDONE_SECURITY_BOT_WINDOW=1m
-DDONE_SECURITY_BOT_MAX_REQUESTS=60
-DDONE_SECURITY_BOT_BLOCK_DURATION=5m
 
 DDONE_SECURITY_OTP_REGISTER_TTL=5m
 DDONE_SECURITY_OTP_REGISTER_PHONE_WINDOW=5m
@@ -300,23 +317,6 @@ DDONE_SECURITY_OTP_PASSWORD_RESET_VERIFY_ATTEMPT_WINDOW=5m
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_RESENDS=3
 DDONE_SECURITY_OTP_PASSWORD_RESET_MAX_VERIFY_ATTEMPTS=5
-DDONE_SECURITY_OTP_SPAM_ENABLED=true
-DDONE_SECURITY_OTP_SPAM_REGISTER_PHONE_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_REGISTER_IP_WINDOW=10m
-DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_PHONE_REQUESTS=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_MAX_IP_SCORE=20
-DDONE_SECURITY_OTP_SPAM_REGISTER_PENDING_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_RESEND_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_INVALID_VERIFY_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_REGISTER_SUCCESS_VERIFY_IP_SCORE=-1.5
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PHONE_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_IP_WINDOW=5m
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_PHONE_REQUESTS=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_MAX_IP_SCORE=20
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_PENDING_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_RESEND_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_INVALID_VERIFY_IP_SCORE=1
-DDONE_SECURITY_OTP_SPAM_PASSWORD_RESET_SUCCESS_VERIFY_IP_SCORE=-1.5
 
 DDONE_CORS_ALLOWED_ORIGINS=http://localhost:5173
 DDONE_CORS_ALLOWED_METHODS=GET,POST,OPTIONS
@@ -347,6 +347,8 @@ Safe defaults:
 - `security.auth.login_session_ttl` defaults to `720h`
 - `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured
 - `app.max_request_body_bytes` defaults to `1048576`
+- `dexbotkiller.enabled` defaults to `false`; when enabled, `DDONE_DEXBOTKILLER_PEPPER` is required and passive mode records registration abuse signals without changing responses
+- DexBotKiller `challenge` and `enforce` modes require Cloudflare Turnstile site and secret keys; clients resubmit challenged registration requests with `turnstileToken`
 - login rate limiting defaults to `5` failed attempts per `5m` window, followed by a `15m` account lock
 - OTP flow limits default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
@@ -381,7 +383,8 @@ Example body:
 ```json
 {
   "phoneNumber": "+8562012345678",
-  "password": "secretpass"
+  "password": "secretpass",
+  "turnstileToken": "optional-cloudflare-turnstile-token"
 }
 ```
 
@@ -393,7 +396,8 @@ Example body:
 
 ```json
 {
-  "ticketId": "reg_abc123"
+  "ticketId": "reg_abc123",
+  "turnstileToken": "optional-cloudflare-turnstile-token"
 }
 ```
 

@@ -38,6 +38,29 @@ cache:
   user_session_list_ttl: 1m
   signing_keys_ttl: 1m
 
+dexbotkiller:
+  enabled: false
+  mode: passive
+  redis_prefix: dbk:v1
+  pepper: ""
+  counter_window: 1m
+  unique_window: 15m
+  score_ttl: 24h
+  delay: 500ms
+  thresholds:
+    delay_score: 3
+    challenge_score: 6
+    block_score: 10
+  cloudflare_turnstile:
+    site_key: ""
+    secret_key: ""
+    verify_url: https://challenges.cloudflare.com/turnstile/v0/siteverify
+    timeout: 3s
+  device_cookie_name: ddone_device
+  device_cookie_max_age: 720h
+  device_cookie_secure: false
+  device_cookie_same_site: lax
+
 security:
   login:
     failed_attempt_window: 5m

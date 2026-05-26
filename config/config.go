@@ -17,12 +17,13 @@ type Config struct {
 		TrustedProxies      []string `mapstructure:"trusted_proxies"`
 		MaxRequestBodyBytes int64    `mapstructure:"max_request_body_bytes"`
 	}
-	Database  DatabaseConfig
-	Redis     RedisConfig
-	Cache     CacheConfig
-	Security  SecurityConfig
-	CORS      CORSConfig
-	WenovaAPI WenovaAPIConfig
+	Database     DatabaseConfig
+	Redis        RedisConfig
+	Cache        CacheConfig
+	DexBotKiller DexBotKillerConfig `mapstructure:"dexbotkiller"`
+	Security     SecurityConfig
+	CORS         CORSConfig
+	WenovaAPI    WenovaAPIConfig
 }
 
 type DatabaseConfig struct {
@@ -62,6 +63,36 @@ type CacheConfig struct {
 
 type WenovaAPIConfig struct {
 	Token string
+}
+
+type DexBotKillerConfig struct {
+	Enabled              bool
+	Mode                 string
+	RedisPrefix          string `mapstructure:"redis_prefix"`
+	Pepper               string
+	CounterWindow        time.Duration `mapstructure:"counter_window"`
+	UniqueWindow         time.Duration `mapstructure:"unique_window"`
+	ScoreTTL             time.Duration `mapstructure:"score_ttl"`
+	Delay                time.Duration
+	Thresholds           DexBotKillerThresholdsConfig
+	CloudflareTurnstile  CloudflareTurnstileConfig `mapstructure:"cloudflare_turnstile"`
+	DeviceCookieName     string                    `mapstructure:"device_cookie_name"`
+	DeviceCookieMaxAge   time.Duration             `mapstructure:"device_cookie_max_age"`
+	DeviceCookieSecure   bool                      `mapstructure:"device_cookie_secure"`
+	DeviceCookieSameSite string                    `mapstructure:"device_cookie_same_site"`
+}
+
+type DexBotKillerThresholdsConfig struct {
+	DelayScore     float64 `mapstructure:"delay_score"`
+	ChallengeScore float64 `mapstructure:"challenge_score"`
+	BlockScore     float64 `mapstructure:"block_score"`
+}
+
+type CloudflareTurnstileConfig struct {
+	SiteKey   string        `mapstructure:"site_key"`
+	SecretKey string        `mapstructure:"secret_key"`
+	VerifyURL string        `mapstructure:"verify_url"`
+	Timeout   time.Duration `mapstructure:"timeout"`
 }
 
 type SecurityConfig struct {
@@ -152,6 +183,22 @@ func Load() (*Config, error) {
 	viper.SetDefault("cache.user_ttl", "5m")
 	viper.SetDefault("cache.user_session_list_ttl", "1m")
 	viper.SetDefault("cache.signing_keys_ttl", "1m")
+	viper.SetDefault("dexbotkiller.enabled", false)
+	viper.SetDefault("dexbotkiller.mode", "passive")
+	viper.SetDefault("dexbotkiller.redis_prefix", "dbk:v1")
+	viper.SetDefault("dexbotkiller.counter_window", "1m")
+	viper.SetDefault("dexbotkiller.unique_window", "15m")
+	viper.SetDefault("dexbotkiller.score_ttl", "24h")
+	viper.SetDefault("dexbotkiller.delay", "500ms")
+	viper.SetDefault("dexbotkiller.thresholds.delay_score", 3)
+	viper.SetDefault("dexbotkiller.thresholds.challenge_score", 6)
+	viper.SetDefault("dexbotkiller.thresholds.block_score", 10)
+	viper.SetDefault("dexbotkiller.cloudflare_turnstile.verify_url", "https://challenges.cloudflare.com/turnstile/v0/siteverify")
+	viper.SetDefault("dexbotkiller.cloudflare_turnstile.timeout", "3s")
+	viper.SetDefault("dexbotkiller.device_cookie_name", "ddone_device")
+	viper.SetDefault("dexbotkiller.device_cookie_max_age", "720h")
+	viper.SetDefault("dexbotkiller.device_cookie_secure", true)
+	viper.SetDefault("dexbotkiller.device_cookie_same_site", "lax")
 	viper.SetDefault("security.login.failed_attempt_window", "5m")
 	viper.SetDefault("security.login.max_attempts", 5)
 	viper.SetDefault("security.login.lockout_duration", "15m")
@@ -229,6 +276,25 @@ func Load() (*Config, error) {
 		"DDONE_CACHE_ACCOUNT_SESSION_LIST_TTL",
 	)
 	viper.BindEnv("cache.signing_keys_ttl", "DDONE_CACHE_SIGNING_KEYS_TTL")
+	viper.BindEnv("dexbotkiller.enabled", "DDONE_DEXBOTKILLER_ENABLED")
+	viper.BindEnv("dexbotkiller.mode", "DDONE_DEXBOTKILLER_MODE")
+	viper.BindEnv("dexbotkiller.redis_prefix", "DDONE_DEXBOTKILLER_REDIS_PREFIX")
+	viper.BindEnv("dexbotkiller.pepper", "DDONE_DEXBOTKILLER_PEPPER")
+	viper.BindEnv("dexbotkiller.counter_window", "DDONE_DEXBOTKILLER_COUNTER_WINDOW")
+	viper.BindEnv("dexbotkiller.unique_window", "DDONE_DEXBOTKILLER_UNIQUE_WINDOW")
+	viper.BindEnv("dexbotkiller.score_ttl", "DDONE_DEXBOTKILLER_SCORE_TTL")
+	viper.BindEnv("dexbotkiller.delay", "DDONE_DEXBOTKILLER_DELAY")
+	viper.BindEnv("dexbotkiller.thresholds.delay_score", "DDONE_DEXBOTKILLER_THRESHOLDS_DELAY_SCORE")
+	viper.BindEnv("dexbotkiller.thresholds.challenge_score", "DDONE_DEXBOTKILLER_THRESHOLDS_CHALLENGE_SCORE")
+	viper.BindEnv("dexbotkiller.thresholds.block_score", "DDONE_DEXBOTKILLER_THRESHOLDS_BLOCK_SCORE")
+	viper.BindEnv("dexbotkiller.cloudflare_turnstile.site_key", "DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SITE_KEY")
+	viper.BindEnv("dexbotkiller.cloudflare_turnstile.secret_key", "DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_SECRET_KEY")
+	viper.BindEnv("dexbotkiller.cloudflare_turnstile.verify_url", "DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_VERIFY_URL")
+	viper.BindEnv("dexbotkiller.cloudflare_turnstile.timeout", "DDONE_DEXBOTKILLER_CLOUDFLARE_TURNSTILE_TIMEOUT")
+	viper.BindEnv("dexbotkiller.device_cookie_name", "DDONE_DEXBOTKILLER_DEVICE_COOKIE_NAME")
+	viper.BindEnv("dexbotkiller.device_cookie_max_age", "DDONE_DEXBOTKILLER_DEVICE_COOKIE_MAX_AGE")
+	viper.BindEnv("dexbotkiller.device_cookie_secure", "DDONE_DEXBOTKILLER_DEVICE_COOKIE_SECURE")
+	viper.BindEnv("dexbotkiller.device_cookie_same_site", "DDONE_DEXBOTKILLER_DEVICE_COOKIE_SAME_SITE")
 	viper.BindEnv("security.login.failed_attempt_window", "DDONE_SECURITY_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_FAILED_ATTEMPT_WINDOW", "DDONE_LOGIN_RATE_LIMIT_WINDOW")
 	viper.BindEnv("security.login.max_attempts", "DDONE_SECURITY_LOGIN_MAX_ATTEMPTS", "DDONE_LOGIN_MAX_ATTEMPTS")
 	viper.BindEnv("security.login.lockout_duration", "DDONE_SECURITY_LOGIN_LOCKOUT_DURATION", "DDONE_LOGIN_LOCKOUT_DURATION")
@@ -343,6 +409,9 @@ func (c *Config) validate() error {
 	if c.Cache.SigningKeysTTL < 0 {
 		return fmt.Errorf("cache.signing_keys_ttl must be greater than or equal to 0")
 	}
+	if err := validateDexBotKiller(c.DexBotKiller); err != nil {
+		return err
+	}
 	if c.Security.Login.FailedAttemptWindow <= 0 {
 		return fmt.Errorf("security.login.failed_attempt_window must be greater than 0")
 	}
@@ -427,6 +496,85 @@ func (c *Config) validate() error {
 	}
 	if strings.EqualFold(c.Security.Auth.SessionCookieSameSite, "none") && !c.Security.Auth.SessionCookieSecure {
 		return fmt.Errorf("security.auth.session_cookie_secure must be true when security.auth.session_cookie_same_site is none")
+	}
+
+	return nil
+}
+
+func validateDexBotKiller(cfg DexBotKillerConfig) error {
+	switch strings.ToLower(strings.TrimSpace(cfg.Mode)) {
+	case "passive", "delay", "challenge", "enforce":
+	default:
+		return fmt.Errorf("dexbotkiller.mode must be one of passive, delay, challenge, enforce")
+	}
+	if cfg.Enabled && strings.TrimSpace(cfg.Pepper) == "" {
+		return fmt.Errorf("dexbotkiller.pepper is required when dexbotkiller.enabled is true")
+	}
+	if strings.TrimSpace(cfg.RedisPrefix) == "" {
+		return fmt.Errorf("dexbotkiller.redis_prefix is required")
+	}
+	if cfg.CounterWindow <= 0 {
+		return fmt.Errorf("dexbotkiller.counter_window must be greater than 0")
+	}
+	if cfg.UniqueWindow <= 0 {
+		return fmt.Errorf("dexbotkiller.unique_window must be greater than 0")
+	}
+	if cfg.ScoreTTL <= 0 {
+		return fmt.Errorf("dexbotkiller.score_ttl must be greater than 0")
+	}
+	if cfg.Delay < 0 {
+		return fmt.Errorf("dexbotkiller.delay must be greater than or equal to 0")
+	}
+	if cfg.Thresholds.DelayScore <= 0 {
+		return fmt.Errorf("dexbotkiller.thresholds.delay_score must be greater than 0")
+	}
+	if cfg.Thresholds.ChallengeScore < cfg.Thresholds.DelayScore {
+		return fmt.Errorf("dexbotkiller.thresholds.challenge_score must be greater than or equal to dexbotkiller.thresholds.delay_score")
+	}
+	if cfg.Thresholds.BlockScore < cfg.Thresholds.ChallengeScore {
+		return fmt.Errorf("dexbotkiller.thresholds.block_score must be greater than or equal to dexbotkiller.thresholds.challenge_score")
+	}
+	if err := validateCloudflareTurnstile(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.DeviceCookieName) == "" {
+		return fmt.Errorf("dexbotkiller.device_cookie_name is required")
+	}
+	if cfg.DeviceCookieMaxAge <= 0 {
+		return fmt.Errorf("dexbotkiller.device_cookie_max_age must be greater than 0")
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.DeviceCookieSameSite)) {
+	case "lax", "strict", "none":
+	default:
+		return fmt.Errorf("dexbotkiller.device_cookie_same_site must be one of lax, strict, none")
+	}
+	if strings.EqualFold(cfg.DeviceCookieSameSite, "none") && !cfg.DeviceCookieSecure {
+		return fmt.Errorf("dexbotkiller.device_cookie_secure must be true when dexbotkiller.device_cookie_same_site is none")
+	}
+
+	return nil
+}
+
+func validateCloudflareTurnstile(cfg DexBotKillerConfig) error {
+	if cfg.CloudflareTurnstile.Timeout <= 0 {
+		return fmt.Errorf("dexbotkiller.cloudflare_turnstile.timeout must be greater than 0")
+	}
+	if strings.TrimSpace(cfg.CloudflareTurnstile.VerifyURL) == "" {
+		return fmt.Errorf("dexbotkiller.cloudflare_turnstile.verify_url is required")
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	if mode != "challenge" && mode != "enforce" {
+		return nil
+	}
+	if strings.TrimSpace(cfg.CloudflareTurnstile.SiteKey) == "" {
+		return fmt.Errorf("dexbotkiller.cloudflare_turnstile.site_key is required when challenge mode is enabled")
+	}
+	if strings.TrimSpace(cfg.CloudflareTurnstile.SecretKey) == "" {
+		return fmt.Errorf("dexbotkiller.cloudflare_turnstile.secret_key is required when challenge mode is enabled")
 	}
 
 	return nil

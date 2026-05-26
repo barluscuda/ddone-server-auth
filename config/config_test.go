@@ -88,6 +88,54 @@ func TestValidateRejectsNegativeMaxRequestBodyBytes(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsEnabledDexBotKillerWithoutPepper(t *testing.T) {
+	cfg := validConfig()
+	cfg.DexBotKiller.Enabled = true
+	cfg.DexBotKiller.Pepper = ""
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject enabled dexbotkiller without pepper")
+	}
+}
+
+func TestValidateAllowsEnabledDexBotKillerWithPepper(t *testing.T) {
+	cfg := validConfig()
+	cfg.DexBotKiller.Enabled = true
+	cfg.DexBotKiller.Pepper = "test-pepper"
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("expected validate to allow enabled dexbotkiller with pepper, got %v", err)
+	}
+}
+
+func TestValidateRejectsDexBotKillerChallengeModeWithoutTurnstileKeys(t *testing.T) {
+	cfg := validConfig()
+	cfg.DexBotKiller.Enabled = true
+	cfg.DexBotKiller.Mode = "challenge"
+	cfg.DexBotKiller.Pepper = "test-pepper"
+	cfg.DexBotKiller.CloudflareTurnstile.SiteKey = ""
+	cfg.DexBotKiller.CloudflareTurnstile.SecretKey = ""
+
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("expected validate to reject challenge mode without turnstile keys")
+	}
+}
+
+func TestValidateAllowsDexBotKillerChallengeModeWithTurnstileKeys(t *testing.T) {
+	cfg := validConfig()
+	cfg.DexBotKiller.Enabled = true
+	cfg.DexBotKiller.Mode = "challenge"
+	cfg.DexBotKiller.Pepper = "test-pepper"
+	cfg.DexBotKiller.CloudflareTurnstile.SiteKey = "site-key"
+	cfg.DexBotKiller.CloudflareTurnstile.SecretKey = "secret-key"
+
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("expected validate to allow challenge mode with turnstile keys, got %v", err)
+	}
+}
+
 func TestValidateRejectsTrustAllProxyCIDR(t *testing.T) {
 	cfg := validConfig()
 	cfg.App.TrustedProxies = []string{"0.0.0.0/0"}
@@ -150,6 +198,21 @@ func validConfig() Config {
 	cfg.Database.TimeZone = "UTC"
 	cfg.Redis.Host = "localhost"
 	cfg.Redis.Port = 6379
+	cfg.DexBotKiller.Mode = "passive"
+	cfg.DexBotKiller.RedisPrefix = "dbk:v1"
+	cfg.DexBotKiller.CounterWindow = time.Minute
+	cfg.DexBotKiller.UniqueWindow = 15 * time.Minute
+	cfg.DexBotKiller.ScoreTTL = 24 * time.Hour
+	cfg.DexBotKiller.Delay = 500 * time.Millisecond
+	cfg.DexBotKiller.Thresholds.DelayScore = 3
+	cfg.DexBotKiller.Thresholds.ChallengeScore = 6
+	cfg.DexBotKiller.Thresholds.BlockScore = 10
+	cfg.DexBotKiller.CloudflareTurnstile.VerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+	cfg.DexBotKiller.CloudflareTurnstile.Timeout = 3 * time.Second
+	cfg.DexBotKiller.DeviceCookieName = "ddone_device"
+	cfg.DexBotKiller.DeviceCookieMaxAge = 24 * time.Hour
+	cfg.DexBotKiller.DeviceCookieSecure = true
+	cfg.DexBotKiller.DeviceCookieSameSite = "lax"
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:5173"}
 	cfg.CORS.AllowedMethods = []string{"GET", "POST"}
 	cfg.CORS.AllowedHeaders = []string{"Origin", "Content-Type"}
