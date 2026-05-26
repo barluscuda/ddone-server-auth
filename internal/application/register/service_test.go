@@ -289,6 +289,69 @@ func TestRegisterServiceVerifiesCloudflareChallengeBeforeSendingSMS(t *testing.T
 	}
 }
 
+func TestRegisterServiceDelaysRiskyRegistrationBeforeSendingSMS(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	delay := 5 * time.Millisecond
+	service := newDexBotKillerRegisterService(t, repo, store, sender, dexbotkiller.Policy{
+		Mode:  dexbotkiller.ModeDelay,
+		Delay: delay,
+		Thresholds: dexbotkiller.Thresholds{
+			DelayScore:     1,
+			ChallengeScore: 2,
+			BlockScore:     3,
+		},
+	})
+	service.otpGenerator = func(int) (string, error) { return "123456", nil }
+	service.ticketGenerator = func() (string, error) { return "reg_fixed123", nil }
+	service.usernameGenerator = func() (string, error) { return "user_fixed123", nil }
+
+	startedAt := time.Now()
+	_, err := service.Register(clientContext(), RegisterInput{
+		PhoneNumber: "8562012345678",
+		Password:    "secretpass",
+	})
+	if err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	if elapsed := time.Since(startedAt); elapsed < delay {
+		t.Fatalf("expected request to be delayed by at least %s, got %s", delay, elapsed)
+	}
+	if !sender.called {
+		t.Fatal("expected sms to be sent after delay")
+	}
+}
+
+func TestRegisterServiceBlocksRiskyRegistrationBeforeSendingSMS(t *testing.T) {
+	repo := &fakeUserRepository{}
+	store := &fakeRegistrationStore{}
+	sender := &fakeOTPSender{}
+	service := newDexBotKillerRegisterService(t, repo, store, sender, dexbotkiller.Policy{
+		Mode: dexbotkiller.ModeEnforce,
+		Thresholds: dexbotkiller.Thresholds{
+			DelayScore:     1,
+			ChallengeScore: 1,
+			BlockScore:     1,
+		},
+	})
+
+	_, err := service.Register(clientContext(), RegisterInput{
+		PhoneNumber: "8562012345678",
+		Password:    "secretpass",
+	})
+	if !errors.Is(err, ErrDexBotKillerBlocked) {
+		t.Fatalf("expected dexbotkiller blocked error, got %v", err)
+	}
+	if sender.called {
+		t.Fatal("expected sms not to be sent for blocked registration")
+	}
+	if len(store.values) != 0 {
+		t.Fatalf("expected no registration to be saved, got %d", len(store.values))
+	}
+}
+
 func newChallengeRegisterService(
 	t *testing.T,
 	repo *fakeUserRepository,
@@ -318,6 +381,25 @@ func newChallengeRegisterService(
 	return NewServiceWithSettings(repo, store, sender, Settings{
 		DexBotKiller:      engine,
 		ChallengeVerifier: verifier,
+	})
+}
+
+func newDexBotKillerRegisterService(
+	t *testing.T,
+	repo *fakeUserRepository,
+	store *fakeRegistrationStore,
+	sender *fakeOTPSender,
+	policy dexbotkiller.Policy,
+) *Service {
+	t.Helper()
+
+	hasher, err := dexbotkiller.NewHasher("test-pepper")
+	if err != nil {
+		t.Fatalf("new hasher: %v", err)
+	}
+
+	return NewServiceWithSettings(repo, store, sender, Settings{
+		DexBotKiller: dexbotkiller.NewEngine(dexbotkiller.NoopStore{}, policy, hasher),
 	})
 }
 

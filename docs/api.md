@@ -98,7 +98,9 @@ Challenge `403 Forbidden`:
 }
 ```
 
-Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `400 password_required`, `403 challenge_required`, `403 challenge_invalid`, `409 phone_number_already_registered`, `429 register_rate_limited`.
+DexBotKiller delay mode can intentionally wait before returning the normal response. Enforce mode can return `403 register_blocked`.
+
+Common errors: `400 invalid_request_body`, `400 phone_number_required`, `400 invalid_phone_number`, `400 unsupported_tel_code`, `400 password_required`, `403 challenge_required`, `403 challenge_invalid`, `403 register_blocked`, `409 phone_number_already_registered`, `429 register_rate_limited`.
 
 ### `POST /registrations/resend`
 
@@ -130,7 +132,9 @@ Success `202 Accepted`:
 }
 ```
 
-Common errors: `400 ticket_id_required`, `400 pending_registration_not_found`, `400 pending_registration_invalid`, `403 challenge_required`, `403 challenge_invalid`, `409 phone_number_already_registered`, `429 resend_cooldown_active`, `429 resend_rate_limited`.
+DexBotKiller delay mode can intentionally wait before returning the normal response. Enforce mode can return `403 register_blocked`.
+
+Common errors: `400 ticket_id_required`, `400 pending_registration_not_found`, `400 pending_registration_invalid`, `403 challenge_required`, `403 challenge_invalid`, `403 register_blocked`, `409 phone_number_already_registered`, `429 resend_cooldown_active`, `429 resend_rate_limited`.
 
 ### `POST /registrations/verify`
 

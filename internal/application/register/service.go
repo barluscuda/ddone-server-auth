@@ -38,6 +38,7 @@ var ErrResendCooldownActive = errors.New("otp resend cooldown is active")
 var ErrVerifyRateLimited = errors.New("too many invalid otp attempts, request a new code")
 var ErrChallengeRequired = errors.New("challenge required")
 var ErrChallengeInvalid = errors.New("challenge verification failed")
+var ErrDexBotKillerBlocked = errors.New("registration blocked")
 
 var defaultOTPPolicy = otp.Policy{
 	TTL:                 5 * time.Minute,
@@ -383,7 +384,13 @@ func (s *Service) evaluateDexBotKiller(ctx context.Context, action dexbotkiller.
 	if err != nil {
 		return nil
 	}
-	if decision.Action != dexbotkiller.ActionChallenge {
+	switch decision.Action {
+	case dexbotkiller.ActionDelay:
+		return s.delayDexBotKiller(ctx, decision.RetryAfter)
+	case dexbotkiller.ActionChallenge:
+	case dexbotkiller.ActionBlock:
+		return ErrDexBotKillerBlocked
+	default:
 		return nil
 	}
 	if strings.TrimSpace(challengeToken) == "" {
@@ -401,6 +408,22 @@ func (s *Service) evaluateDexBotKiller(ctx context.Context, action dexbotkiller.
 	}
 
 	return nil
+}
+
+func (s *Service) delayDexBotKiller(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s *Service) recordDexBotKiller(ctx context.Context, action dexbotkiller.FlowAction, phoneNumber string, ticketID string, outcome dexbotkiller.Outcome) {

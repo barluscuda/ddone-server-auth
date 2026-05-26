@@ -12,7 +12,7 @@ The service is moving toward hexagonal architecture:
 
 - `internal/domain` holds persistence-free business types and domain errors.
 - `internal/application` holds use cases, orchestration, and ports.
-- `internal/application/dexbotkiller` holds optional passive bot-risk scoring policy and keying.
+- `internal/application/dexbotkiller` holds optional bot-risk scoring policy and keying.
 - `internal/adapters` holds HTTP, PostgreSQL, Redis, SMS, DTO, middleware, and token codec adapters.
 - `cmd/app` is the composition root and process entrypoint.
 
@@ -30,7 +30,7 @@ The service is moving toward hexagonal architecture:
 - Revoke refresh tokens and login sessions after password reset or password change.
 - Publish public ES256 JWK sets at `/.well-known/jwks.json`.
 - Run request body limits, CORS, request logging, panic recovery, auth, session, no-route, and no-method middleware.
-- Optionally run DexBotKiller client-context extraction and registration abuse signal recording in passive mode.
+- Optionally run DexBotKiller client-context extraction, registration risk decisions, and abuse signal recording.
 
 ## 3. Main Dependencies
 
@@ -108,7 +108,7 @@ Owns phone registration:
 - Store pending registrations in Redis through a port.
 - Send OTP through an SMS port.
 - Create users after successful OTP verification.
-- When configured, passively evaluates registration start/resend requests and records SMS and OTP outcomes through DexBotKiller without changing registration responses.
+- When configured, evaluates registration start/resend requests through DexBotKiller, applies the configured allow/delay/challenge/block decision, and records SMS and OTP outcomes.
 
 ### `internal/application/dexbotkiller`
 
@@ -117,7 +117,7 @@ Owns optional application-layer bot-risk scoring:
 - Builds HMAC-SHA256 Redis keys and set members so raw phone numbers and device identifiers are not used as DexBotKiller Redis identifiers.
 - Scores client quality, request velocity, unique target behavior, and recorded outcomes.
 - Uses Cloudflare Turnstile for challenge responses and server-side token verification.
-- Supports allow, delay, challenge, and block decisions, with current startup wiring intended for passive mode first.
+- Supports allow, delay, challenge, and block decisions for configured registration start/resend requests.
 - Defines a store port implemented by the Redis adapter.
 
 ### `internal/application/login`
@@ -312,7 +312,7 @@ Downstream verification guidance lives in `docs/jwt.md`.
 ### DexBotKiller
 
 - DexBotKiller is optional and disabled by default.
-- The current rollout is Phase 1 passive mode: registration requests are evaluated and SMS/OTP outcomes are recorded, but requests are not delayed, challenged, or blocked.
+- Registration start/resend requests are evaluated and SMS/OTP outcomes are recorded. Passive mode only observes; delay mode waits before continuing; challenge mode returns Cloudflare Turnstile challenges; enforce mode can block high-risk requests.
 - Enabling it requires `dexbotkiller.enabled=true` and a non-empty HMAC pepper through `DDONE_DEXBOTKILLER_PEPPER`.
 - HTTP middleware extracts client IP, subnet, normalized user-agent, accept-language, content-type, and a signed `HttpOnly` device cookie into request context.
 - DexBotKiller Redis keys use HMAC-SHA256 hashed identifiers instead of raw phone numbers, IP addresses, or device IDs.
@@ -574,7 +574,7 @@ Several legacy env aliases are still accepted for auth, OTP, login, and cache se
 5. Run GORM auto-migration.
 6. Create Wenova SMS client.
 7. Build repositories and Redis cache decorators.
-8. If enabled, build DexBotKiller HMAC hasher, Redis store, and passive engine.
+8. If enabled, build DexBotKiller HMAC hasher, Redis store, and configured policy engine.
 9. Build ES256 token codec.
 10. Build JWKS service and ensure an active signing key exists.
 11. Build JWT service.

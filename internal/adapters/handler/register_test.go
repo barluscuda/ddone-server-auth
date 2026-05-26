@@ -459,6 +459,35 @@ func TestHandleRegisterErrorReturnsCloudflareChallenge(t *testing.T) {
 	}
 }
 
+func TestHandleRegisterErrorReturnsDexBotKillerBlocked(t *testing.T) {
+	t.Setenv("GIN_MODE", gin.TestMode)
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	handleRegisterError(c, appregister.ErrDexBotKillerBlocked)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, recorder.Code)
+	}
+
+	var res dto.ResMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if res.Success {
+		t.Fatal("expected error response")
+	}
+	if res.Code != "register_blocked" {
+		t.Fatalf("expected code %q, got %q", "register_blocked", res.Code)
+	}
+	if res.Message != "registration blocked" {
+		t.Fatalf("expected message %q, got %q", "registration blocked", res.Message)
+	}
+}
+
 func stringPtr(value string) *string {
 	return &value
 }

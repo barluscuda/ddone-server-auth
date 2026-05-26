@@ -30,6 +30,7 @@ const (
 	codeVerifyRateLimited           = "verify_rate_limited"
 	codeChallengeRequired           = "challenge_required"
 	codeChallengeInvalid            = "challenge_invalid"
+	codeRegisterBlocked             = "register_blocked"
 	codePhoneAlreadyRegistered      = "phone_number_already_registered"
 	codeUsernameAlreadyRegistered   = "username_already_registered"
 	codePendingRegistrationNotFound = "pending_registration_not_found"
@@ -165,6 +166,8 @@ func handleRegisterError(c *gin.Context, err error) {
 		respondError(c, http.StatusTooManyRequests, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, appregister.ErrChallengeInvalid):
 		respondError(c, http.StatusForbidden, registerErrorCode(err), registerErrorMessage(err))
+	case errors.Is(err, appregister.ErrDexBotKillerBlocked):
+		respondError(c, http.StatusForbidden, registerErrorCode(err), registerErrorMessage(err))
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered),
 		errors.Is(err, user.ErrUsernameAlreadyRegistered):
 		respondError(c, http.StatusConflict, registerErrorCode(err), registerErrorMessage(err))
@@ -225,6 +228,8 @@ func registerErrorCode(err error) string {
 		return codeChallengeRequired
 	case errors.Is(err, appregister.ErrChallengeInvalid):
 		return codeChallengeInvalid
+	case errors.Is(err, appregister.ErrDexBotKillerBlocked):
+		return codeRegisterBlocked
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return codePhoneAlreadyRegistered
 	case errors.Is(err, user.ErrUsernameAlreadyRegistered):
@@ -268,6 +273,8 @@ func registerErrorMessage(err error) string {
 		return messageChallengeRequired
 	case errors.Is(err, appregister.ErrChallengeInvalid):
 		return "verification challenge failed"
+	case errors.Is(err, appregister.ErrDexBotKillerBlocked):
+		return "registration blocked"
 	case errors.Is(err, user.ErrPhoneNumberAlreadyRegistered):
 		return "phone number is already registered"
 	case errors.Is(err, user.ErrUsernameAlreadyRegistered):

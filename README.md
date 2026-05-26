@@ -35,7 +35,7 @@ The service uses:
 - `redis` for pending registration state, password-reset state, OTP counters, login rate-limit counters, and read-through caches
 - Wenova SMS for OTP delivery
 - `zap` for logging
-- optional DexBotKiller passive registration abuse signal recording
+- optional DexBotKiller registration abuse scoring with passive, delay, challenge, and enforce modes
 
 ## Documentation
 
@@ -355,7 +355,8 @@ Safe defaults:
 - `app.trusted_proxies` defaults to empty, so forwarded client-IP headers are ignored unless explicit proxy CIDRs are configured
 - `app.max_request_body_bytes` defaults to `1048576`
 - `dexbotkiller.enabled` defaults to `false`; when enabled, `DDONE_DEXBOTKILLER_PEPPER` is required and passive mode records registration abuse signals without changing responses
-- DexBotKiller `challenge` and `enforce` modes require Cloudflare Turnstile site and secret keys; clients resubmit challenged registration requests with `turnstileToken`
+- DexBotKiller `delay` mode holds risky registration start/resend requests before continuing; `challenge` and `enforce` modes require Cloudflare Turnstile site and secret keys; `enforce` mode can block high-risk registration requests
+- Clients resubmit challenged registration requests with `turnstileToken`
 - login rate limiting defaults to `5` failed attempts per `5m` window, followed by a `15m` account lock
 - OTP flow limits default to the values shown in `config/config.yaml`
 - cache TTLs default to short read-through values for user, session-list, and signing-key lookups
